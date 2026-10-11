@@ -1,0 +1,11 @@
+# Variables de entorno y secretos
+.env
+
+# Archivos generados por Java y Maven
+**/target/
+**/out/
+*.class
+
+# Configuración local del IDE
+.idea/
+*.iml
