@@ -9,7 +9,7 @@ public record MovementResponse(String updatedFen, String turn, String outcome, S
     public static MovementResponse of(Board board){
         String turn = board.getSideToMove() == Side.WHITE ? "WHITE" : "BLACK";
         String outcome = "IN_PROGRESS";
-        String reason = null;
+        String reason = "IN_PROGRESS";
 
         if(board.isMated()){
             //Quien tiene el turno es quien quedó en jaque mate

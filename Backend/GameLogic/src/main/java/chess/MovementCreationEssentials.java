@@ -16,5 +16,5 @@ public class MovementCreationEssentials{
         this(boardFenBeforeMove);
         this.coordinateNotation = coordinateNotation;
         this.playerId = playerId;
-    } 
+    }
 }

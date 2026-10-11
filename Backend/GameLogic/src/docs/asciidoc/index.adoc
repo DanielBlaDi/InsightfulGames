@@ -46,3 +46,32 @@ include::{snippets}/obtainMatchByPlayerId/http-response.adoc[]
 
 .response-fields
 include::{snippets}/obtainMatchByPlayerId/response-fields.adoc[]
+
+== PATCH | Perform a move in the Match if valid
+
+This is an example output for the ability to perform a move in the Match if it (the move) is valid, offered by the API:
+
+=== Case for a valid move
+
+.request
+include::{snippets}/updateWithValidMove/http-request.adoc[]
+
+Here, -1 is used to indicate the request is a test, however, in practice, only positive values should be used.
+
+.response
+include::{snippets}/updateWithValidMove/http-response.adoc[]
+
+.response-fields
+include::{snippets}/updateWithValidMove/response-fields.adoc[]
+
+=== Case for an invalid move
+
+.request
+include::{snippets}/attemptWithInvalidMove/http-request.adoc[]
+
+Here, -1 is used to indicate the request is a test, however, in practice, only positive values should be used.
+
+.response
+include::{snippets}/attemptWithInvalidMove/http-response.adoc[]
+
+The response is an HTTP 400 error, with a message describes the request and says it's invalid.
