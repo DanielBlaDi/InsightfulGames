@@ -4,6 +4,7 @@ import java.util.LinkedList;
 import java.util.List;
 
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.PersistenceCreator;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 @Document
@@ -14,10 +15,19 @@ public class Match{
     private Long blackPlayerId;
     private List<Movement> movements;
 
+    public Match(){}
+
+    @PersistenceCreator
     public Match(Long whitePlayerId, Long blackPlayerId){
+        this();
         this.whitePlayerId = whitePlayerId;
         this.blackPlayerId = blackPlayerId;
         this.movements = new LinkedList<>();
+    }
+
+    public Match(String id, Long whitePlayerId, Long blackPlayerId){
+        this(whitePlayerId, blackPlayerId);
+        this.id = id;
     }
 
     public void addMovement(Movement newMovement){

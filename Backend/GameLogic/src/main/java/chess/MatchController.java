@@ -50,7 +50,12 @@ public class MatchController{
     @GetMapping("/players/{id}/matches/")
     CollectionModel<EntityModel<Match>> getMatchesByPlayerId(@PathVariable Long id){
         List<EntityModel<Match>> matches = repository.findByWhitePlayerId(id).stream().map(assembler::toModel).collect(Collectors.toList());
-        matches.addAll(repository.findByBlackPlayerId(id).stream().map(assembler::toModel).collect(Collectors.toList()));
+        List<EntityModel<Match>> matchesByBlackPlayerId = repository.findByBlackPlayerId(id).stream().map(assembler::toModel).collect(Collectors.toList());
+        
+        //Avoiding duplicates when the match has the same white player as black player
+        matchesByBlackPlayerId.removeAll(matches);
+        matches.addAll(matchesByBlackPlayerId);
+
         return CollectionModel.of(matches, linkTo(methodOn(MatchController.class).getMatchesByPlayerId(id)).withSelfRel());
     }
 
