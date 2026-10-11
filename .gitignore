@@ -1,0 +1,36 @@
+# === Secrets / Environment ===
+.env
+
+# === Python ===
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# === TypeScript / Node ===
+node_modules/
+dist/
+*.tsbuildinfo
+.npm/
+
+# === Java ===
+*.class
+*.jar
+*.war
+target/
+.gradle/
+
+# === Build (genérico) ===
+build/
+out/
+
+# === IDE / Editor ===
+.idea/
+.vscode/
+*.iml
+.classpath
+.project
+.settings/
