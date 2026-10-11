@@ -65,6 +65,9 @@ public class ChessApplicationHTTPTests{
 						fieldWithPath("whitePlayerId").description("The identifier for the white player of the created match."),
 						fieldWithPath("blackPlayerId").description("The identifier for the black player of the created match."),
 						fieldWithPath("movements").description("A list of the movements that have been made during this match."),
+						fieldWithPath("createdAt").description("The date and time in which this match started."),
+						fieldWithPath("result").description("String that describes the end result of this match. Takes one of four values: \"WHITE_WINS\" | \"BLACK_WINS\" | \"DRAW\" | Null (in the case that the Match hasn't ended)"),
+						fieldWithPath("resultReason").description("String that describes the reason for the end result of this match. Takes one of five values: \"CHECKMATE\" | \"STALEMATE\" | \"DRAW_RULE\" | \"RESIGNATION\" | Null (in the case that the Match hasn't ended)"),
 						subsectionWithPath("_links").description("Links related to this match.")
 					)
 				)
@@ -84,6 +87,9 @@ public class ChessApplicationHTTPTests{
 						fieldWithPath("whitePlayerId").description("The identifier for the white player of the requested match."),
 						fieldWithPath("blackPlayerId").description("The identifier for the black player of the requested match."),
 						fieldWithPath("movements").description("A list of the movements that have been made during this match."),
+						fieldWithPath("createdAt").description("The date and time in which this match started."),
+						fieldWithPath("result").description("String that describes the end result of this match, since the match was only just created, it takes the value Null."),
+						fieldWithPath("resultReason").description("String that describes the reason for the end result of this match, since the match was only just created, it takes the value Null."),
 						subsectionWithPath("_links").description("Links related to this match.")
 					)	
 				)
@@ -113,6 +119,9 @@ public class ChessApplicationHTTPTests{
 						fieldWithPath("_embedded.matchList[].whitePlayerId").description("The identifier for the white player of each of the returned matches."),
 						fieldWithPath("_embedded.matchList[].blackPlayerId").description("The identifier for the black player of each of the returned matches."),
 						fieldWithPath("_embedded.matchList[].movements").description("A list of the movements that have been made during each of the returned matches."),
+						fieldWithPath("_embedded.matchList[].createdAt").description("The date and time in which each of the returned matches started."),
+						fieldWithPath("_embedded.matchList[].result").description("String that describes the end result of each of the returned matches. Takes one of four values: \"WHITE_WINS\" | \"BLACK_WINS\" | \"DRAW\" | Null (in the case that the Match hasn't ended)"),
+						fieldWithPath("_embedded.matchList[].resultReason").description("String that describes the reason for the end result of each of the returned matches. Takes one of five values: \"CHECKMATE\" | \"STALEMATE\" | \"DRAW_RULE\" | \"RESIGNATION\" | Null (in the case that the Match hasn't ended)"),
 						subsectionWithPath("_embedded.matchList[]._links").description("Links related to each of the returned matches."),
 						subsectionWithPath("_links").description("Links related to this request.")
 					)	

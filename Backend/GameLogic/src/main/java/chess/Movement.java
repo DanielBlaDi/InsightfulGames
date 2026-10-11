@@ -6,8 +6,6 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.PersistenceCreator;
 import org.springframework.data.mongodb.core.mapping.Document;
 
-import com.github.bhlangonijr.chesslib.*;
-
 @Document
 public class Movement{
     @Id 
@@ -15,7 +13,6 @@ public class Movement{
     private String boardFenBeforeMove;
     private String boardFenAfterMove;
     private String coordinateNotation;
-    private String boardStatusAfterMove;
     private Long playerId;
     private LocalDateTime dateTime;
 
@@ -24,25 +21,8 @@ public class Movement{
         this.boardFenBeforeMove = boardFenBeforeMove;
         this.boardFenAfterMove = boardFenAfterMove;
         this.coordinateNotation = coordinateNotation;
-        this.determineBoardStatusAfterMove();
         this.playerId = playerId;
         this.dateTime = dateTime;
-    }
-
-    private void determineBoardStatusAfterMove(){
-        Board board = new Board();
-        board.loadFromFen(boardFenAfterMove);
-
-        // Jaque mate primero: en un mate el rey tambien esta atacado
-        if(board.isMated()){
-            boardStatusAfterMove = (board.getSideToMove() == Side.WHITE ? "White" : "Black") + " is in checkmate";
-        }else if(board.isKingAttacked()){
-            boardStatusAfterMove = (board.getSideToMove() == Side.WHITE ? "White" : "Black") + " is in check";
-        }else if(board.isStaleMate() || board.isDraw()){
-            boardStatusAfterMove = "Draw";
-        }else{
-            boardStatusAfterMove = "Normal";
-        }
     }
 
     public String getBoardFenBeforeMove(){
@@ -55,10 +35,6 @@ public class Movement{
 
     public String getCoordinateNotation(){
         return coordinateNotation;
-    }
-
-    public String getBoardStatusAfterMove(){
-        return boardStatusAfterMove;
     }
 
     public Long getPlayerId(){

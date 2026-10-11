@@ -3,16 +3,16 @@ package chess;
 import com.github.bhlangonijr.chesslib.Board;
 import com.github.bhlangonijr.chesslib.Side;
 
-/** Respuesta JSON de PATCH /matches/{id}/movements. */
-public record MovementResponse(String updatedFen, String matchStatus, String turn, String outcome, String reason){
+/** Respuesta JSON de PATCH /matches/{id}/movements */
+public record MovementResponse(String updatedFen, String turn, String outcome, String reason){
 
-    public static MovementResponse of(Board board, String matchStatus){
+    public static MovementResponse of(Board board){
         String turn = board.getSideToMove() == Side.WHITE ? "WHITE" : "BLACK";
         String outcome = "IN_PROGRESS";
         String reason = null;
 
         if(board.isMated()){
-            // quien tiene el turno es quien quedo en jaque mate
+            //Quien tiene el turno es quien quedó en jaque mate
             outcome = board.getSideToMove() == Side.WHITE ? "BLACK_WINS" : "WHITE_WINS";
             reason = "CHECKMATE";
         }else if(board.isStaleMate()){
@@ -23,6 +23,6 @@ public record MovementResponse(String updatedFen, String matchStatus, String tur
             reason = "DRAW_RULE";
         }
 
-        return new MovementResponse(board.getFen(), matchStatus, turn, outcome, reason);
+        return new MovementResponse(board.getFen(), turn, outcome, reason);
     }
 }

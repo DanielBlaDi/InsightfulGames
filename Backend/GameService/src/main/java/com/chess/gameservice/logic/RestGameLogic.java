@@ -26,7 +26,7 @@ public class RestGameLogic implements GameLogic {
     public record MoveRequest(String boardFenBeforeMove, String coordinateNotation, Long playerId) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record MoveResponse(String updatedFen, String matchStatus, String turn, String outcome, String reason) {}
+    public record MoveResponse(String updatedFen, String turn, String outcome, String reason) {}
 
     public record ResultRequest(String result, String reason) {}
 
