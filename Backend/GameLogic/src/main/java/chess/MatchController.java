@@ -17,7 +17,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.hateoas.CollectionModel;
 import org.springframework.hateoas.EntityModel;
 import org.springframework.hateoas.IanaLinkRelations;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
 import com.github.bhlangonijr.chesslib.*;
@@ -47,7 +46,8 @@ public class MatchController{
         return ResponseEntity.created(matchEntityModel.getRequiredLink(IanaLinkRelations.SELF).toUri()).body(matchEntityModel);
     }
 
-    @GetMapping("/players/{id}/matches/")
+    // Se aceptan con y sin barra final (Spring 6+ las trata como rutas distintas)
+    @GetMapping({"/players/{id}/matches", "/players/{id}/matches/"})
     CollectionModel<EntityModel<Match>> getMatchesByPlayerId(@PathVariable Long id){
         List<EntityModel<Match>> matches = repository.findByWhitePlayerId(id).stream().map(assembler::toModel).collect(Collectors.toList());
         List<EntityModel<Match>> matchesByBlackPlayerId = repository.findByBlackPlayerId(id).stream().map(assembler::toModel).collect(Collectors.toList());
@@ -59,27 +59,52 @@ public class MatchController{
         return CollectionModel.of(matches, linkTo(methodOn(MatchController.class).getMatchesByPlayerId(id)).withSelfRel());
     }
 
-    @PatchMapping("/matches/{id}/movements/")
-    ResponseEntity<String> addMovement(@PathVariable String id, @RequestBody MovementCreationEssentials movement){
+    @PatchMapping({"/matches/{id}/movements", "/matches/{id}/movements/"})
+    ResponseEntity<MovementResponse> addMovement(@PathVariable String id, @RequestBody MovementCreationEssentials movement){
         Match modifiedMatch = repository.findById(id).orElseThrow(() -> new MatchNotFoundException(id));
-        Movement newMovement = null;
 
         Board board = new Board();
         board.loadFromFen(movement.boardFenBeforeMove);
 
-        if(board.isMoveLegal(new Move(movement.coordinateNotation, board.getSideToMove()), true)){
-            board.doMove(new Move(movement.coordinateNotation, board.getSideToMove()));
-            String boardFenAfterMove = board.getFen();
-            newMovement = new Movement(movement.boardFenBeforeMove, boardFenAfterMove, movement.coordinateNotation, movement.playerId, LocalDateTime.now());
-            
-            modifiedMatch.addMovement(newMovement);
-        }else{
+        Move move = null;
+        boolean legal = false;
+        try{
+            Move requested = new Move(movement.coordinateNotation, board.getSideToMove());
+            // isMoveLegal(move, true) no revisa la geometria de la pieza (dejaba pasar e2e5),
+            // por eso se compara contra la lista de jugadas legales de la posicion.
+            for(Move candidate : board.legalMoves()){
+                if(candidate.getFrom() == requested.getFrom()
+                        && candidate.getTo() == requested.getTo()
+                        && candidate.getPromotion() == requested.getPromotion()){
+                    move = candidate;
+                    legal = true;
+                    break;
+                }
+            }
+        }catch(RuntimeException e){
+            legal = false; // notacion mal formada
+        }
+
+        if(!legal){
             throw new MovementNotValidException(movement.boardFenBeforeMove, movement.coordinateNotation);
         }
 
+        board.doMove(move);
+        Movement newMovement = new Movement(movement.boardFenBeforeMove, board.getFen(), movement.coordinateNotation, movement.playerId, LocalDateTime.now());
+
+        modifiedMatch.addMovement(newMovement);
         repository.save(modifiedMatch);
 
-        return ResponseEntity.status(HttpStatus.OK).body("{updatedFen: \"" + newMovement.getBoardFenAfterMove() + "\", matchStatus: " + newMovement.getBoardStatusAfterMove() + "}");
+        return ResponseEntity.ok(MovementResponse.of(board, newMovement.getBoardStatusAfterMove()));
+    }
+
+    /** Cierra la partida y guarda su resultado (mate, tablas o abandono). */
+    @PatchMapping({"/matches/{id}/result", "/matches/{id}/result/"})
+    ResponseEntity<EntityModel<Match>> finishMatch(@PathVariable String id, @RequestBody MatchResultRequest body){
+        Match match = repository.findById(id).orElseThrow(() -> new MatchNotFoundException(id));
+        match.finish(body.result(), body.reason());
+
+        return ResponseEntity.ok(assembler.toModel(repository.save(match)));
     }
 
     @DeleteMapping("/matches/{id}")

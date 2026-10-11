@@ -1,5 +1,6 @@
 package chess;
 
+import java.time.LocalDateTime;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -14,6 +15,9 @@ public class Match{
     private Long whitePlayerId;
     private Long blackPlayerId;
     private List<Movement> movements;
+    private LocalDateTime createdAt;
+    private String result;       // WHITE_WINS | BLACK_WINS | DRAW; null mientras la partida sigue
+    private String resultReason; // CHECKMATE | STALEMATE | DRAW_RULE | RESIGNATION
 
     public Match(){}
 
@@ -23,6 +27,7 @@ public class Match{
         this.whitePlayerId = whitePlayerId;
         this.blackPlayerId = blackPlayerId;
         this.movements = new LinkedList<>();
+        this.createdAt = LocalDateTime.now();
     }
 
     public Match(String id, Long whitePlayerId, Long blackPlayerId){
@@ -32,6 +37,23 @@ public class Match{
 
     public void addMovement(Movement newMovement){
         this.movements.add(newMovement);
+    }
+
+    public void finish(String result, String resultReason){
+        this.result = result;
+        this.resultReason = resultReason;
+    }
+
+    public LocalDateTime getCreatedAt(){
+        return createdAt;
+    }
+
+    public String getResult(){
+        return result;
+    }
+
+    public String getResultReason(){
+        return resultReason;
     }
 
     public String getId(){

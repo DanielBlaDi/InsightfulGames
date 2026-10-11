@@ -1,0 +1,14 @@
+server:
+  port: 8083
+
+botcito:
+  url: ${BOTCITO_URL:http://botcito:8000}
+
+gamelogic:
+  url: ${GAMELOGIC_URL:http://localhost:8082}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
