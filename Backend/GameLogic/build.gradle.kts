@@ -33,6 +33,7 @@ dependencies {
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
 	implementation("com.github.bhlangonijr:chesslib:1.3.7")
+	implementation("com.fasterxml.jackson.core:jackson-databind:2.15.2")
 }
 
 tasks.withType<Test> {
@@ -46,4 +47,6 @@ tasks.test {
 tasks.asciidoctor {
 	inputs.dir(project.extra["snippetsDir"]!!)
 	dependsOn(tasks.test)
+
+	attributes(mapOf("snippets" to project.extra["snippetsDir"]!!))
 }

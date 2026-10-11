@@ -7,6 +7,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -40,7 +41,8 @@ public class MatchController{
 
     @PostMapping("/matches")
     ResponseEntity<EntityModel<Match>> newMatch(@RequestBody Match newMatch){
-        EntityModel<Match> matchEntityModel = assembler.toModel(repository.save(newMatch));
+        repository.save(newMatch);
+        EntityModel<Match> matchEntityModel = assembler.toModel(newMatch);
 
         return ResponseEntity.created(matchEntityModel.getRequiredLink(IanaLinkRelations.SELF).toUri()).body(matchEntityModel);
     }
@@ -73,5 +75,12 @@ public class MatchController{
         repository.save(modifiedMatch);
 
         return ResponseEntity.status(HttpStatus.OK).body("{updatedFen: \"" + newMovement.getBoardFenAfterMove() + "\", matchStatus: " + newMovement.getBoardStatusAfterMove() + "}");
+    }
+
+    @DeleteMapping("/matches/{id}")
+    ResponseEntity<?> deleteMatch(@PathVariable String id){
+        repository.deleteById(id);
+
+        return ResponseEntity.noContent().build();
     }
 }
