@@ -7,6 +7,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -39,7 +40,8 @@ public class MatchController{
 
     @PostMapping("/matches")
     ResponseEntity<EntityModel<Match>> newMatch(@RequestBody Match newMatch){
-        EntityModel<Match> matchEntityModel = assembler.toModel(repository.save(newMatch));
+        repository.save(newMatch);
+        EntityModel<Match> matchEntityModel = assembler.toModel(newMatch);
 
         return ResponseEntity.created(matchEntityModel.getRequiredLink(IanaLinkRelations.SELF).toUri()).body(matchEntityModel);
     }
@@ -48,7 +50,12 @@ public class MatchController{
     @GetMapping({"/players/{id}/matches", "/players/{id}/matches/"})
     CollectionModel<EntityModel<Match>> getMatchesByPlayerId(@PathVariable Long id){
         List<EntityModel<Match>> matches = repository.findByWhitePlayerId(id).stream().map(assembler::toModel).collect(Collectors.toList());
-        matches.addAll(repository.findByBlackPlayerId(id).stream().map(assembler::toModel).collect(Collectors.toList()));
+        List<EntityModel<Match>> matchesByBlackPlayerId = repository.findByBlackPlayerId(id).stream().map(assembler::toModel).collect(Collectors.toList());
+        
+        //Avoiding duplicates when the match has the same white player as black player
+        matchesByBlackPlayerId.removeAll(matches);
+        matches.addAll(matchesByBlackPlayerId);
+
         return CollectionModel.of(matches, linkTo(methodOn(MatchController.class).getMatchesByPlayerId(id)).withSelfRel());
     }
 
@@ -98,5 +105,39 @@ public class MatchController{
         match.finish(body.result(), body.reason());
 
         return ResponseEntity.ok(assembler.toModel(repository.save(match)));
+    }
+
+    @DeleteMapping("/matches/{id}")
+    ResponseEntity<?> deleteMatch(@PathVariable String id){
+        repository.deleteById(id);
+
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/movements/{coordinate}")
+    ResponseEntity<String> getAvailableMovesBForPosition(@PathVariable String coordinate, @RequestBody MovementCreationEssentials movement){
+        Board board = new Board();
+        board.loadFromFen(movement.boardFenBeforeMove);
+
+        String responseBody = "{availableDestinationCoordinates: {";
+        int availableMovesCounter = 1;
+        boolean isFirstAvailableMove = true;
+
+        List<Move> availableMovesForSpecificCoordinate = board.legalMoves();
+
+        for(Move move : availableMovesForSpecificCoordinate){
+            if(move.getFrom().value().equalsIgnoreCase(coordinate)){
+                if(isFirstAvailableMove){
+                    isFirstAvailableMove = false;
+                }else{
+                    responseBody += ", ";
+                }
+                responseBody += availableMovesCounter++ + ": \"" + move.getTo().value() + "\"";
+            }
+        }
+
+        responseBody += "}}";
+
+        return ResponseEntity.status(HttpStatus.OK).body(responseBody);
     }
 }

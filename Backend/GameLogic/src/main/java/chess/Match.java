@@ -5,6 +5,7 @@ import java.util.LinkedList;
 import java.util.List;
 
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.PersistenceCreator;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 @Document
@@ -18,11 +19,20 @@ public class Match{
     private String result;       // WHITE_WINS | BLACK_WINS | DRAW; null mientras la partida sigue
     private String resultReason; // CHECKMATE | STALEMATE | DRAW_RULE | RESIGNATION
 
+    public Match(){}
+
+    @PersistenceCreator
     public Match(Long whitePlayerId, Long blackPlayerId){
+        this();
         this.whitePlayerId = whitePlayerId;
         this.blackPlayerId = blackPlayerId;
         this.movements = new LinkedList<>();
         this.createdAt = LocalDateTime.now();
+    }
+
+    public Match(String id, Long whitePlayerId, Long blackPlayerId){
+        this(whitePlayerId, blackPlayerId);
+        this.id = id;
     }
 
     public void addMovement(Movement newMovement){
