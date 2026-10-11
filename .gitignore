@@ -1,5 +1,7 @@
 # Variables de entorno y secretos
 .env
+.env.*
+!.env.example
 
 # Archivos generados por Java y Maven
 **/target/
@@ -9,3 +11,20 @@
 # Configuración local del IDE
 .idea/
 *.iml
+
+# Logs
+
+*.log
+logs/
+
+# Sistema operativo
+
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Archivos temporales
+
+*.tmp
+*.bak
+*~
