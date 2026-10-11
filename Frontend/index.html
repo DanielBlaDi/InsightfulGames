@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="es" class="scroll-smooth">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Insightful Games — Ajedrez, Go y Shogi con Tutor IA</title>
+    <link href="https://fonts.googleapis.com" rel="preconnect">
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-secondary-fixed": "#131f0b",
+              "background": "#fff8f6",
+              "on-tertiary-container": "#fffbff",
+              "error-container": "#ffdad6",
+              "secondary-fixed-dim": "#bdcbad",
+              "tertiary-fixed-dim": "#f1be74",
+              "surface-container-highest": "#eae1de",
+              "on-secondary": "#ffffff",
+              "surface-variant": "#eae1de",
+              "surface-container-low": "#fbf2ef",
+              "surface-container-high": "#efe6e4",
+              "surface": "#fff8f6",
+              "secondary": "#55624a",
+              "on-primary-fixed": "#390c00",
+              "surface-bright": "#fff8f6",
+              "surface-tint": "#a93808",
+              "on-tertiary-fixed": "#291800",
+              "on-surface-variant": "#58423a",
+              "on-surface": "#1f1b1a",
+              "tertiary-container": "#976d2b",
+              "tertiary": "#7b5414",
+              "surface-container": "#f5ecea",
+              "secondary-fixed": "#d9e8c8",
+              "on-error-container": "#93000a",
+              "primary-fixed-dim": "#ffb59c",
+              "inverse-primary": "#ffb59c",
+              "on-error": "#ffffff",
+              "primary-container": "#c74e1f",
+              "error": "#ba1a1a",
+              "surface-dim": "#e1d8d6",
+              "on-tertiary": "#ffffff",
+              "on-background": "#1f1b1a",
+              "outline-variant": "#e0c0b6",
+              "on-secondary-container": "#5b694f",
+              "on-primary-fixed-variant": "#832700",
+              "primary": "#a53605",
+              "inverse-on-surface": "#f8efed",
+              "on-secondary-fixed-variant": "#3e4b33",
+              "on-primary-container": "#fffbff",
+              "inverse-surface": "#342f2e",
+              "on-primary": "#ffffff",
+              "tertiary-fixed": "#ffddb2",
+              "surface-container-lowest": "#ffffff",
+              "on-tertiary-fixed-variant": "#624000",
+              "secondary-container": "#d9e8c8",
+              "primary-fixed": "#ffdbcf",
+              "outline": "#8c7169"
+            },
+            borderRadius: {
+              "DEFAULT": "0.25rem",
+              "lg": "0.5rem",
+              "xl": "0.75rem",
+              "full": "9999px"
+            },
+            spacing: {
+              "space-xs": "0.375rem",
+              "gutter-mobile": "1rem",
+              "space-md": "1.25rem",
+              "space-sm": "0.75rem",
+              "space-lg": "2rem",
+              "margin": "3rem",
+              "margin-mobile": "1.25rem",
+              "space-xl": "3.5rem",
+              "gutter": "1.5rem"
+            },
+            fontFamily: {
+              "headline-md": ["Playfair Display", "serif"],
+              "body-sm": ["Plus Jakarta Sans", "sans-serif"],
+              "label-md": ["Plus Jakarta Sans", "sans-serif"],
+              "body-lg": ["Plus Jakarta Sans", "sans-serif"],
+              "label-sm": ["Plus Jakarta Sans", "sans-serif"],
+              "body-md": ["Plus Jakarta Sans", "sans-serif"],
+              "headline-lg-mobile": ["Playfair Display", "serif"],
+              "headline-xl": ["Playfair Display", "serif"],
+              "label-lg": ["Plus Jakarta Sans", "sans-serif"],
+              "headline-lg": ["Playfair Display", "serif"],
+              "headline-xl-mobile": ["Playfair Display", "serif"],
+              "headline-sm": ["Playfair Display", "serif"]
+            },
+            fontSize: {
+              "headline-md": ["26px", { "lineHeight": "34px", "fontWeight": "600" }],
+              "body-sm": ["13px", { "lineHeight": "20px", "fontWeight": "400" }],
+              "label-md": ["12px", { "lineHeight": "16px", "fontWeight": "600" }],
+              "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+              "label-sm": ["11px", { "lineHeight": "14px", "fontWeight": "700" }],
+              "body-md": ["15px", { "lineHeight": "24px", "fontWeight": "400" }],
+              "headline-lg-mobile": ["28px", { "lineHeight": "36px", "fontWeight": "600" }],
+              "headline-xl": ["48px", { "lineHeight": "56px", "fontWeight": "700" }],
+              "label-lg": ["14px", { "lineHeight": "20px", "fontWeight": "600" }],
+              "headline-lg": ["36px", { "lineHeight": "44px", "fontWeight": "600" }],
+              "headline-xl-mobile": ["34px", { "lineHeight": "42px", "fontWeight": "700" }],
+              "headline-sm": ["20px", { "lineHeight": "28px", "fontWeight": "600" }]
+            }
+          }
+        }
+      };
+    </script>
+  </head>
+  <body class="bg-background font-body-md text-on-surface antialiased selection:bg-primary-fixed selection:text-on-primary-fixed">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
