@@ -33,10 +33,11 @@ public class Movement{
         Board board = new Board();
         board.loadFromFen(boardFenAfterMove);
 
-        if(board.isKingAttacked()){
-            boardStatusAfterMove = (board.getSideToMove() == Side.WHITE ? "White" : "Black") + " is in check";
-        }else if(board.isMated()){
+        // Jaque mate primero: en un mate el rey tambien esta atacado
+        if(board.isMated()){
             boardStatusAfterMove = (board.getSideToMove() == Side.WHITE ? "White" : "Black") + " is in checkmate";
+        }else if(board.isKingAttacked()){
+            boardStatusAfterMove = (board.getSideToMove() == Side.WHITE ? "White" : "Black") + " is in check";
         }else if(board.isStaleMate() || board.isDraw()){
             boardStatusAfterMove = "Draw";
         }else{
