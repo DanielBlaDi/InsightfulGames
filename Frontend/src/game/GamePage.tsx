@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useEffectEvent, useState } from 'react';
 import ChessBoard from './ChessBoard';
+import { CLOSE_GAME_NOT_FOUND, CLOSE_UNAUTHORIZED } from './session';
 import type { GameSession } from './session';
 import type { Color, EndReason, GameState } from './types';
 
@@ -19,19 +20,35 @@ function describeResult(state: GameState): string {
   return `${outcome} ${reason}`.trim();
 }
 
-interface GamePageProps {
-  session: GameSession;
+function describeClose(code: number | null): string {
+  if (code === CLOSE_UNAUTHORIZED) return 'Tu sesión venció. Inicia sesión de nuevo.';
+  if (code === CLOSE_GAME_NOT_FOUND) return 'La partida no existe o no te pertenece.';
+  return 'Se perdió la conexión con la partida.';
 }
 
-export default function GamePage({ session }: GamePageProps) {
-  const { state, lastMove, botThinking, rejection, sendMove, resign } = session;
+interface GamePageProps {
+  session: GameSession;
+  /** El contrato pide volver al login ante un token inválido; la navegación la decide quien monta la pantalla. */
+  onUnauthorized?: () => void;
+}
+
+export default function GamePage({ session, onUnauthorized }: GamePageProps) {
+  const { connection, closeCode, state, lastMove, botThinking, awaitingReply, rejection, sendMove, resign } =
+    session;
   const [flipped, setFlipped] = useState(false);
   const [confirmingResign, setConfirmingResign] = useState(false);
+  const disconnected = connection === 'closed';
+
+  // Una sola llamada por cierre, aunque quien monta la pantalla pase un callback nuevo en cada render.
+  const notifyUnauthorized = useEffectEvent(() => onUnauthorized?.());
+  useEffect(() => {
+    if (closeCode === CLOSE_UNAUTHORIZED) notifyUnauthorized();
+  }, [closeCode]);
 
   if (!state) {
     return (
-      <div className="w-full min-h-screen bg-background flex items-center justify-center font-body-md text-body-md text-on-surface-variant">
-        Conectando con la partida…
+      <div className="w-full min-h-screen bg-background flex items-center justify-center px-gutter-mobile text-center font-body-md text-body-md text-on-surface-variant">
+        {disconnected ? describeClose(closeCode) : 'Conectando con la partida…'}
       </div>
     );
   }
@@ -64,7 +81,7 @@ export default function GamePage({ session }: GamePageProps) {
             legalMoves={state.legalMoves}
             orientation={orientation}
             lastMove={lastMove}
-            disabled={finished || botTurn || botThinking}
+            disabled={finished || botTurn || botThinking || awaitingReply || connection !== 'open'}
             onMove={sendMove}
           />
           <button
@@ -115,6 +132,15 @@ export default function GamePage({ session }: GamePageProps) {
               {vsBot && state.playerColor && <> · Juegas con {COLOR_LABEL[state.playerColor].toLowerCase()}</>}
             </p>
 
+            {disconnected && !finished && (
+              <div
+                role="alert"
+                className="p-space-sm rounded-xl bg-error-container text-on-error-container font-body-sm text-body-sm"
+              >
+                {describeClose(closeCode)}
+              </div>
+            )}
+
             {rejection && (
               <div
                 role="alert"
@@ -145,6 +171,7 @@ export default function GamePage({ session }: GamePageProps) {
           </div>
 
           {!finished &&
+            !disconnected &&
             (confirmingResign ? (
               <div className="flex gap-space-xs">
                 <button

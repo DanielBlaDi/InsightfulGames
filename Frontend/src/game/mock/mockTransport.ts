@@ -131,10 +131,13 @@ export function createMockTransport(scenario: MockScenario): GameTransport {
   };
 
   return {
-    connect(onMessage) {
+    connect({ onOpen, onMessage }) {
       listener = onMessage;
       // Al conectarse, el servidor envía un `state` completo sin lastMove.
-      later(() => emit({ type: 'state', state: snapshot() }), 0);
+      later(() => {
+        onOpen();
+        emit({ type: 'state', state: snapshot() });
+      }, 0);
     },
     send(message: ClientMessage) {
       if (message.type === 'move') handleMove(message.uci);
