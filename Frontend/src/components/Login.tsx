@@ -49,7 +49,7 @@ export default function Login() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-[#443831] mb-1.5">Email o Usuario</label>
-                <input required type="text" placeholder="erfan@insightfulgames.com" className="w-full pl-10 pr-3.5 py-2.5 bg-white border border-[#E5DCD0] rounded-xl text-sm text-[#231D19] placeholder-[#988A80] focus:outline-none focus:border-[#D85A2B] focus:ring-2 focus:ring-[#D85A2B]/15 transition-all shadow-sm" />
+                <input required type="text" placeholder="hola@ejemplo.com" className="w-full pl-10 pr-3.5 py-2.5 bg-white border border-[#E5DCD0] rounded-xl text-sm text-[#231D19] placeholder-[#988A80] focus:outline-none focus:border-[#D85A2B] focus:ring-2 focus:ring-[#D85A2B]/15 transition-all shadow-sm" />
               </div>
               <div>
                 <label className="block text-xs font-semibold text-[#443831] mb-1.5">Contraseña</label>
@@ -64,8 +64,8 @@ export default function Login() {
             </form>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-3.5">
-              <div><label className="block text-xs font-semibold text-[#443831] mb-1">Nombre Completo</label><input required type="text" placeholder="Erfán" className="w-full px-3 py-2.5 bg-white border border-[#E5DCD0] rounded-xl text-sm text-[#231D19] placeholder-[#988A80] focus:outline-none focus:border-[#D85A2B] focus:ring-2 focus:ring-[#D85A2B]/15 transition-all shadow-sm" /></div>
-              <div><label className="block text-xs font-semibold text-[#443831] mb-1">Email</label><input required type="email" placeholder="erfan@insightfulgames.com" className="w-full px-3 py-2.5 bg-white border border-[#E5DCD0] rounded-xl text-sm text-[#231D19] placeholder-[#988A80] focus:outline-none focus:border-[#D85A2B] focus:ring-2 focus:ring-[#D85A2B]/15 transition-all shadow-sm" /></div>
+              <div><label className="block text-xs font-semibold text-[#443831] mb-1">Nombre Completo</label><input required type="text" placeholder="Pepito perez" className="w-full px-3 py-2.5 bg-white border border-[#E5DCD0] rounded-xl text-sm text-[#231D19] placeholder-[#988A80] focus:outline-none focus:border-[#D85A2B] focus:ring-2 focus:ring-[#D85A2B]/15 transition-all shadow-sm" /></div>
+              <div><label className="block text-xs font-semibold text-[#443831] mb-1">Email</label><input required type="email" placeholder="pepito@ejemplo.com" className="w-full px-3 py-2.5 bg-white border border-[#E5DCD0] rounded-xl text-sm text-[#231D19] placeholder-[#988A80] focus:outline-none focus:border-[#D85A2B] focus:ring-2 focus:ring-[#D85A2B]/15 transition-all shadow-sm" /></div>
               <div className="grid grid-cols-2 gap-3"><input required type="password" placeholder="Contraseña" className="w-full px-3 py-2.5 bg-white border border-[#E5DCD0] rounded-xl text-sm text-[#231D19] placeholder-[#988A80] focus:outline-none focus:border-[#D85A2B] focus:ring-2 focus:ring-[#D85A2B]/15 transition-all shadow-sm" /><input required type="password" placeholder="Confirmar" className="w-full px-3 py-2.5 bg-white border border-[#E5DCD0] rounded-xl text-sm text-[#231D19] placeholder-[#988A80] focus:outline-none focus:border-[#D85A2B] focus:ring-2 focus:ring-[#D85A2B]/15 transition-all shadow-sm" /></div>
               <button type="submit" disabled={loading || success} className="w-full py-2.5 px-4 bg-[#D85A2B] hover:bg-[#BF4C22] text-white text-sm font-semibold rounded-xl shadow-md shadow-[#D85A2B]/25 flex items-center justify-center gap-2 transition-all duration-200 active:scale-[0.99] mt-2">Registrarse</button>
             </form>
