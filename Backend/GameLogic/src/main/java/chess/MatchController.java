@@ -83,4 +83,31 @@ public class MatchController{
 
         return ResponseEntity.noContent().build();
     }
+
+    @PostMapping("/movements/{coordinate}")
+    ResponseEntity<String> getAvailableMovesBForPosition(@PathVariable String coordinate, @RequestBody MovementCreationEssentials movement){
+        Board board = new Board();
+        board.loadFromFen(movement.boardFenBeforeMove);
+
+        String responseBody = "{availableDestinationCoordinates: {";
+        int availableMovesCounter = 1;
+        boolean isFirstAvailableMove = true;
+
+        List<Move> availableMovesForSpecificCoordinate = board.legalMoves();
+
+        for(Move move : availableMovesForSpecificCoordinate){
+            if(move.getFrom().value().equalsIgnoreCase(coordinate)){
+                if(isFirstAvailableMove){
+                    isFirstAvailableMove = false;
+                }else{
+                    responseBody += ", ";
+                }
+                responseBody += availableMovesCounter++ + ": \"" + move.getTo().value() + "\"";
+            }
+        }
+
+        responseBody += "}}";
+
+        return ResponseEntity.status(HttpStatus.OK).body(responseBody);
+    }
 }
