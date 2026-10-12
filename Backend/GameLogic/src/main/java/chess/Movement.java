@@ -1,48 +1,45 @@
 package chess;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.util.Objects;
 
-import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.PersistenceCreator;
-import org.springframework.data.mongodb.core.mapping.Document;
 
-@Document
+/** Una jugada ya hecha, guardada dentro del documento de la partida (elemento de "moves" en el contrato). */
 public class Movement{
-    @Id 
-    private String id;
-    private String boardFenBeforeMove;
-    private String boardFenAfterMove;
-    private String coordinateNotation;
-    private Long playerId;
-    private LocalDateTime dateTime;
+    private int ply;            // número de jugada, desde 1 (media jugada)
+    private String san;         // notación para mostrar al usuario, p. ej. "e4"
+    private String uci;         // notación UCI, p. ej. "e2e4" (con promoción: "e7e8q")
+    private String fenAfter;    // posición después de la jugada
+    private Instant timestamp;
 
     @PersistenceCreator
-    public Movement(String boardFenBeforeMove, String boardFenAfterMove, String coordinateNotation, Long playerId, LocalDateTime dateTime){
-        this.boardFenBeforeMove = boardFenBeforeMove;
-        this.boardFenAfterMove = boardFenAfterMove;
-        this.coordinateNotation = coordinateNotation;
-        this.playerId = playerId;
-        this.dateTime = dateTime;
+    public Movement(int ply, String san, String uci, String fenAfter, Instant timestamp){
+        this.ply = ply;
+        this.san = san;
+        this.uci = uci;
+        this.fenAfter = fenAfter;
+        this.timestamp = timestamp;
     }
 
-    public String getBoardFenBeforeMove(){
-        return boardFenBeforeMove;
+    public int getPly(){
+        return ply;
     }
 
-    public String getBoardFenAfterMove(){
-        return boardFenAfterMove;
+    public String getSan(){
+        return san;
     }
 
-    public String getCoordinateNotation(){
-        return coordinateNotation;
+    public String getUci(){
+        return uci;
     }
 
-    public Long getPlayerId(){
-        return playerId;
+    public String getFenAfter(){
+        return fenAfter;
     }
 
-    public LocalDateTime getDateTime(){
-        return dateTime;
+    public Instant getTimestamp(){
+        return timestamp;
     }
 
     @Override public boolean equals(Object other){
@@ -53,9 +50,17 @@ public class Movement{
         }else{
             Movement otherMovement = (Movement)other;
 
-            return this.boardFenAfterMove.equals(otherMovement.boardFenAfterMove) &&
-                this.coordinateNotation.equals(otherMovement.coordinateNotation) &&
-                this.playerId == otherMovement.playerId;
+            return this.ply == otherMovement.ply &&
+                Objects.equals(this.uci, otherMovement.uci) &&
+                Objects.equals(this.fenAfter, otherMovement.fenAfter);
         }
+    }
+
+    @Override public int hashCode(){
+        return Objects.hash(ply, uci, fenAfter);
+    }
+
+    @Override public String toString(){
+        return ply + ". " + san + " (" + uci + ")";
     }
 }

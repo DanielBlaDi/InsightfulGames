@@ -1,81 +1,154 @@
 package chess;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
 
 import org.springframework.data.annotation.Id;
-import org.springframework.data.annotation.PersistenceCreator;
 import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.data.mongodb.core.mapping.Field;
 
-@Document
+/**
+ * Una partida. Es el documento de la colección "games" (contrato, sección 3.8): el mismo GameState
+ * con _id = gameId y el campo extra initialFen. legalMoves no se guarda, se calcula al responder
+ * (ver MatchAssembler).
+ */
+@Document(collection = "games")
 public class Match{
-    @Id 
-    private String id;
-    private Long whitePlayerId;
-    private Long blackPlayerId;
-    private List<Movement> movements;
-    private LocalDateTime createdAt;
-    private String result;       // WHITE_WINS | BLACK_WINS | DRAW | null (if the match isn't over yet)
-    private String resultReason; // CHECKMATE | STALEMATE | DRAW_RULE | RESIGNATION | null (if the match isn't over yet)
+    public static final String MODE_LOCAL = "local";
+    public static final String MODE_VS_BOT = "vs_bot";
 
-    public Match(){}
+    public static final String STATUS_IN_PROGRESS = "in_progress";
+    public static final String STATUS_FINISHED = "finished";
 
-    @PersistenceCreator
-    public Match(Long whitePlayerId, Long blackPlayerId){
-        this();
-        this.whitePlayerId = whitePlayerId;
-        this.blackPlayerId = blackPlayerId;
+    @Id
+    private String id;                  // gameId: UUID v4 en texto
+    private String userId;              // UUID v4 en texto
+    private String mode;                // local | vs_bot
+    private Integer botLevel;           // 1 a 20; solo en vs_bot, null en local
+    private String playerColor;         // white | black; solo en vs_bot, null en local
+    private String status;              // in_progress | finished
+    private String turn;                // white | black
+    private String fen;                 // posición actual
+    private String initialFen;          // posición con la que empezó la partida
+    @Field("moves")
+    private List<Movement> movements;   // en Mongo y en el JSON del contrato el campo se llama "moves"
+    private String result;              // white | black | draw | null (si la partida sigue)
+    private String endReason;           // checkmate | stalemate | resignation | draw | null (si la partida sigue)
+    private Instant createdAt;
+    private Instant finishedAt;         // null mientras la partida sigue
+
+    /** Lo usa Spring Data para reconstruir la partida desde Mongo. */
+    public Match(){
         this.movements = new LinkedList<>();
-        this.createdAt = LocalDateTime.now();
     }
 
-    protected Match(String id, Long whitePlayerId, Long blackPlayerId){
-        this(whitePlayerId, blackPlayerId);
-        this.id = id;
+    /** Crea una partida nueva en la posición inicial. Game Logic genera gameId y createdAt. */
+    public Match(String userId, String mode, Integer botLevel, String playerColor){
+        this();
+        this.id = UUID.randomUUID().toString();
+        this.userId = userId;
+        this.mode = mode;
+        this.botLevel = botLevel;
+        this.playerColor = playerColor;
+        this.status = STATUS_IN_PROGRESS;
+        this.turn = "white";
+        this.initialFen = ChessRules.START_FEN;
+        this.fen = ChessRules.START_FEN;
+        this.createdAt = now();
     }
 
-    protected Match(String id, Long whitePlayerId, Long blackPlayerId, String result, String resultReason){
-        this(id, whitePlayerId, blackPlayerId);
-        this.result = result;
-        this.resultReason = resultReason;
+    /** Mongo guarda las fechas en milisegundos; se trunca aquí para que lo guardado y lo devuelto coincidan. */
+    private static Instant now(){
+        return Instant.now().truncatedTo(ChronoUnit.MILLIS);
     }
 
-    public void addMovement(Movement newMovement){
+    /** Registra una jugada ya validada: actualiza la lista de jugadas, el FEN actual y el turno. */
+    public void addMovement(Movement newMovement, String turnAfterMove){
         this.movements.add(newMovement);
+        this.fen = newMovement.getFenAfter();
+        this.turn = turnAfterMove;
     }
 
-    public void finish(String result, String resultReason){
+    /** Cierra la partida (jaque mate, ahogado, tablas o abandono). */
+    public void finish(String result, String endReason){
+        this.status = STATUS_FINISHED;
         this.result = result;
-        this.resultReason = resultReason;
+        this.endReason = endReason;
+        this.finishedAt = now();
     }
 
-    public LocalDateTime getCreatedAt(){
-        return createdAt;
+    public boolean isFinished(){
+        return STATUS_FINISHED.equals(status);
     }
 
-    public String getResult(){
-        return result;
-    }
-
-    public String getResultReason(){
-        return resultReason;
+    /** Las jugadas ya hechas en UCI, en orden. Con ellas y initialFen se reconstruye la posición. */
+    public List<String> playedUciMoves(){
+        List<String> uciMoves = new ArrayList<>();
+        for(Movement movement : movements){
+            uciMoves.add(movement.getUci());
+        }
+        return uciMoves;
     }
 
     public String getId(){
         return id;
     }
 
-    public Long getWhitePlayerId(){
-        return whitePlayerId;
+    public String getUserId(){
+        return userId;
     }
 
-    public Long getBlackPlayerId(){
-        return blackPlayerId;
+    public String getMode(){
+        return mode;
+    }
+
+    public Integer getBotLevel(){
+        return botLevel;
+    }
+
+    public String getPlayerColor(){
+        return playerColor;
+    }
+
+    public String getStatus(){
+        return status;
+    }
+
+    public String getTurn(){
+        return turn;
+    }
+
+    public String getFen(){
+        return fen;
+    }
+
+    public String getInitialFen(){
+        return initialFen;
     }
 
     public List<Movement> getMovements(){
         return movements;
+    }
+
+    public String getResult(){
+        return result;
+    }
+
+    public String getEndReason(){
+        return endReason;
+    }
+
+    public Instant getCreatedAt(){
+        return createdAt;
+    }
+
+    public Instant getFinishedAt(){
+        return finishedAt;
     }
 
     @Override public boolean equals(Object other){
@@ -86,13 +159,15 @@ public class Match{
         }else{
             Match otherMatch = (Match)other;
 
-            return this.id.equals(otherMatch.id) && 
-                this.whitePlayerId == otherMatch.whitePlayerId &&
-                this.blackPlayerId == otherMatch.blackPlayerId;
+            return Objects.equals(this.id, otherMatch.id) && Objects.equals(this.userId, otherMatch.userId);
         }
     }
 
+    @Override public int hashCode(){
+        return Objects.hash(id, userId);
+    }
+
     @Override public String toString(){
-        return "{id: " + id + ", whitePlayerId: " + whitePlayerId + ", blackPlayerId: " + blackPlayerId + "movements: " + movements + "}";
+        return "{id: " + id + ", userId: " + userId + ", mode: " + mode + ", status: " + status + ", movements: " + movements + "}";
     }
 }

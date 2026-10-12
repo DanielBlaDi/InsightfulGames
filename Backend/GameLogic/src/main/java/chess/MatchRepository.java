@@ -9,6 +9,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface MatchRepository extends MongoRepository<Match, String>{
     Optional<Match> findById(String id);
-    List<Match> findByWhitePlayerId(Long playerId);
-    List<Match> findByBlackPlayerId(Long playerId);
+    /** Las partidas de un usuario, la más reciente primero. */
+    List<Match> findByUserIdOrderByCreatedAtDesc(String userId);
 }

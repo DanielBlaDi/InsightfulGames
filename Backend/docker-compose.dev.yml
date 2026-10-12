@@ -1,16 +1,17 @@
 ﻿# Solo para probar el backend en local. El compose oficial lo mantiene Infra (tarea 1).
+# Los nombres de servicio siguen el contrato (sección 2).
 services:
-  mongo:
+  mongo-component:
     image: mongo:7
     ports:
       - "27017:27017"
 
-  game-logic:
+  game-logic-component:
     build: ./GameLogic
     environment:
-      MONGODB_URI: mongodb://mongo:27017/chess
+      MONGO_URL: mongodb://mongo-component:27017/games
     depends_on:
-      - mongo
+      - mongo-component
     ports:
       - "8082:8082"
 
@@ -24,6 +25,6 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway" # necesario en Linux; en Windows y Mac ya existe
     depends_on:
-      - game-logic
+      - game-logic-component
     ports:
       - "8083:8083"

@@ -1,5 +1,13 @@
 package chess;
 
-/** Cuerpo de PATCH /matches/{id}/result: result = WHITE_WINS | BLACK_WINS | DRAW. */
-public record MatchResultRequest(String result, String reason){
+/** Cuerpo de POST /logic/games/{id}/resign: { "side": "white" }. Es el bando que se rinde. */
+public class MatchResultRequest{
+    public String side;
+
+    public MatchResultRequest(){}
+
+    public MatchResultRequest(String side){
+        this();
+        this.side = side;
+    }
 }
