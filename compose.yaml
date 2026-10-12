@@ -37,15 +37,17 @@ services:
       USE_MOCK: "False"
       # <--- for testing with curl
 
-      AUTH_SERVICE_URL: http://auth-component:${AUTH_PORT}
-      GAME_SERVICE_URL: http://single-player-component:${SINGLE_PLAYER_PORT}
-      
+      AUTH_URL: http://auth-component:${AUTH_PORT}
+      SINGLE_PLAYER_URL: http://single-player-component:${SINGLE_PLAYER_PORT}
+      BOTSITO_COMPONENT_URL: http://botsito-component:${BOTSITO_PORT}
+      HTTP_TIMEOUT: 15
+      LOG_LEVEL: INFO
+      CORS_ORIGINS: http://localhost:80,http://localhost:5173,http://localhost:3000
       JWT_SECRET: "${JWT_SECRET:-}"
       JWT_ALGORITHM: "${JWT_ALGORITHM}"
 
       # MULTIPLAYER_COMPONENT_URL: http://multiplayer-component:${MULTIPLAYER_PORT}
       # TUTOR_COMPONENT_URL: http://tutor-component:${TUTOR_PORT}
-      BOTSITO_COMPONENT_URL: http://botsito-component:${BOTSITO_PORT}
     depends_on:
       - auth-component
       - single-player-component
