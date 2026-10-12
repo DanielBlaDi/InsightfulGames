@@ -18,7 +18,7 @@ public class WebSocketConfig implements WebSocketConfigurer {
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
-        // El tráfico llega a través del API Gateway, que ya aplica CORS y JWT.
-        registry.addHandler(handler, "/ws/game").setAllowedOrigins("*");
+        // El tráfico llega a través del API Gateway, que ya aplica CORS y valida el JWT.
+        registry.addHandler(handler, "/ws/games/*").setAllowedOrigins("*");
     }
 }

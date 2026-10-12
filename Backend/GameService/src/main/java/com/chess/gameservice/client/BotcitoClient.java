@@ -1,49 +1,47 @@
 package com.chess.gameservice.client;
 
+import com.chess.gameservice.error.ApiException;
+import com.chess.gameservice.model.BestMove;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.time.Duration;
 
-/**
- * Cliente REST de Botcito (tarea 8, Python + Stockfish).
- * Contrato propuesto (confirmar con el dueño de la tarea 8):
- *   POST /best-move   {"fen": "...", "level": 1-20}   ->   {"move": "e7e5"}
- */
+/** Cliente de Botcito. Según el contrato (3.4) se llama a través del Gateway: POST /engine/best-move. */
 @Component
 public class BotcitoClient {
 
-    public record BestMoveRequest(String fen, int level) {}
+    private static final String NAME = "Botcito";
 
-    public record BestMoveResponse(String move) {}
-
-    private final RestClient http;
-    private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
-
-    public BotcitoClient(@Value("${botcito.url}") String baseUrl) {
-        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(3000);
-        factory.setReadTimeout(15000);
-        this.http = RestClient.builder().baseUrl(baseUrl).requestFactory(factory).build();
+    public record BestMoveRequest(String fen, int level) {
     }
 
-    public CompletableFuture<String> bestMove(String fen, int level) {
-        return CompletableFuture.supplyAsync(() -> {
-            BestMoveResponse response = http.post()
-                    .uri("/best-move")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(new BestMoveRequest(fen, level))
-                    .retrieve()
-                    .body(BestMoveResponse.class);
-            if (response == null || response.move() == null) {
-                throw new IllegalStateException("Respuesta vacía de Botcito");
-            }
-            return response.move();
-        }, executor);
+    private final RestClient http;
+
+    public BotcitoClient(@Value("${gateway.internal-url}") String gatewayUrl) {
+        this.http = RestClients.create(gatewayUrl, Duration.ofSeconds(15));
+    }
+
+    public BestMove bestMove(String fen, int level) {
+        BestMove move = RestClients.call(NAME, () -> http.post()
+                .uri("/engine/best-move")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(new BestMoveRequest(fen, level))
+                .retrieve()
+                .onStatus(status -> status.isError(), (req, res) -> {
+                    ApiException e = RestClients.toApiException(NAME, res.getStatusCode().value(), res.getBody());
+                    // INVALID_FEN y NO_LEGAL_MOVES son errores de Botcito, no de quien llamó a este servicio
+                    throw new ApiException(HttpStatus.BAD_GATEWAY, "BOT_UNAVAILABLE",
+                            "Botcito no pudo calcular la jugada (" + e.code() + "): " + e.getMessage());
+                })
+                .body(BestMove.class));
+
+        if (move == null || move.uci() == null || move.uci().isBlank()) {
+            throw new ApiException(HttpStatus.BAD_GATEWAY, "BOT_UNAVAILABLE", "Botcito devolvió una respuesta vacía");
+        }
+        return move;
     }
 }
