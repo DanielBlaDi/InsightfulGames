@@ -1,5 +1,7 @@
 # === Secrets / Environment ===
 .env
+.env.*
+!.env.example
 
 # === Python ===
 __pycache__/
@@ -35,3 +37,14 @@ out/
 .classpath
 .project
 .settings/
+
+# Sistema operativo
+
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Archivos temporales
+
+*.tmp
+*.bak
