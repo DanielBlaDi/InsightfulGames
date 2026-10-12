@@ -1,4 +1,4 @@
-﻿# Solo para probar el backend en local. El compose oficial lo mantiene Infra (tarea 1).
+# Solo para probar el backend en local. El compose oficial lo mantiene Infra (tarea 1).
 services:
   mongo:
     image: mongo:7
@@ -24,6 +24,9 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway" # necesario en Linux; en Windows y Mac ya existe
     depends_on:
-      - game-logic
+      game-logic:
+        condition: service_started
+      botcito:
+        condition: service_healthy
     ports:
       - "8083:8083"

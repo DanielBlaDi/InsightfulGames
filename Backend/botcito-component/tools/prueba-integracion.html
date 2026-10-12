@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="es">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Prueba de integración de Botcito</title>
+<style>
+  body {font:17px/1.6 system-ui,sans-serif;background:#f3f6fa;color:#182538;margin:0;padding:32px 20px}
+  main {max-width:850px;margin:auto;background:white;padding:32px;border-radius:16px}
+  h1 {line-height:1.2;margin-top:0} button {font:inherit;background:#185adb;color:white;border:0;border-radius:8px;padding:12px 20px;cursor:pointer}
+  button:disabled {opacity:.5;cursor:wait} #status {padding:16px;background:#eef2f7;border-radius:8px;font-weight:600}
+  pre {white-space:pre-wrap;overflow-wrap:anywhere;font:14px/1.5 monospace;background:#142034;color:#e4edf9;padding:20px;border-radius:8px;min-height:100px}
+  small {color:#54657a} .ok {color:#13733c} .error {color:#b42318}
+</style>
+<main>
+  <h1>Prueba de integración de Botcito</h1>
+  <p>Esta prueba se conecta a Single Player en tu computador, crea una partida contra
+  el bot en nivel 10 y mueve el peón blanco de e2 a e4. Después espera la respuesta del bot.</p>
+  <p><small>Requiere los cuatro servicios del Compose de desarrollo encendidos.
+  Se creará una partida de prueba en la base de datos. Tras recibir la jugada del bot,
+  se enviará un abandono para terminarla. Esta página no es el frontend del proyecto.</small></p>
+  <button id="run">Probar integración</button>
+  <p id="status" role="status">Lista para comenzar.</p>
+  <p>Destino: <code>ws://localhost:8083/ws/game</code></p>
+  <h2>Registro de la prueba</h2>
+  <pre id="log" aria-live="polite">Aquí aparecerán los mensajes recibidos.</pre>
+</main>
+<script>
+  const button = document.getElementById('run');
+  const statusBox = document.getElementById('status');
+  const output = document.getElementById('log');
+  let socket;
+  function log(label, data) {
+    output.textContent += label + (data === undefined ? '' : '\n' + JSON.stringify(data, null, 2)) + '\n\n';
+  }
+  button.onclick = () => {
+    button.disabled = true;
+    output.textContent = '';
+    statusBox.className = '';
+    statusBox.textContent = 'Conectando con Single Player…';
+    let phase = 'connecting';
+    let finished = false;
+    let botMove = null;
+    let timer;
+    function finish(ok, message) {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      statusBox.textContent = message;
+      statusBox.className = ok ? 'ok' : 'error';
+      button.disabled = false;
+      socket.close();
+    }
+    function send(data) {
+      log('ENVIADO', data);
+      socket.send(JSON.stringify(data));
+    }
+    try {
+      socket = new WebSocket('ws://localhost:8083/ws/game');
+    } catch (error) {
+      button.disabled = false;
+      statusBox.className = 'error';
+      statusBox.textContent = 'No se pudo abrir la conexión: ' + error.message;
+      return;
+    }
+    timer = setTimeout(() => finish(false,
+      botMove ? 'El bot respondió, pero no se confirmó el cierre de la partida. Revisa el registro.'
+              : 'La prueba superó 30 segundos. Comparte este registro para revisar el problema.'), 30000);
+    socket.onopen = () => {
+      phase = 'creating';
+      statusBox.textContent = 'Conectado. Creando la partida de prueba…';
+      send({type:'create_game', mode:'BOT', difficulty:10, color:'WHITE'});
+    };
+    socket.onmessage = event => {
+      if (finished) return;
+      let message;
+      try { message = JSON.parse(event.data); }
+      catch (_) { log('RESPUESTA NO JSON', event.data); finish(false, 'Llegó una respuesta inesperada.'); return; }
+      log('RECIBIDO', message);
+      if (message.type === 'error') {
+        finish(false, 'El servicio informó un error: ' + message.message);
+      } else if (message.type === 'game_created' && phase === 'creating') {
+        if (message.mode !== 'BOT' || message.turn !== 'WHITE') {
+          finish(false, 'La partida creada no coincide con la prueba solicitada.'); return;
+        }
+        phase = 'human_move';
+        statusBox.textContent = 'Partida creada. Enviando e2e4…';
+        send({type:'move', move:'e2e4'});
+      } else if (message.type === 'game_state' && phase === 'human_move') {
+        if (message.lastMove !== 'e2e4' || message.turn !== 'BLACK') {
+          finish(false, 'El servidor no confirmó el movimiento e2e4 como se esperaba.'); return;
+        }
+        phase = 'bot_move';
+        statusBox.textContent = 'Movimiento aceptado. Esperando a Botcito…';
+      } else if (message.type === 'game_state' && phase === 'bot_move') {
+        if (!message.lastMove || message.lastMove === 'e2e4' || message.turn !== 'WHITE') {
+          finish(false, 'La respuesta del bot no coincide con el turno esperado.'); return;
+        }
+        botMove = message.lastMove;
+        phase = 'closing';
+        statusBox.textContent = 'Botcito respondió ' + botMove + '. Terminando la partida de prueba…';
+        send({type:'resign'});
+      } else if (message.type === 'game_over' && phase === 'closing') {
+        finish(true, 'PRUEBA CORRECTA: e2e4 fue aceptado y Botcito respondió ' + botMove + '. Partida de prueba terminada.');
+      }
+    };
+    socket.onerror = () => finish(false, 'No se pudo comunicar con Single Player en localhost:8083. Revisa que esté iniciado.');
+    socket.onclose = () => {
+      if (!finished) finish(false, 'La conexión se cerró antes de completar la prueba. Revisa el registro.');
+    };
+  };
+</script>
+</html>
