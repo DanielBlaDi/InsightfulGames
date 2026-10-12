@@ -1,11 +1,13 @@
-"""Botcito falso para probar el modo BOT sin Stockfish.
+"""Botcito falso para probar el modo vs_bot sin Stockfish (también hace de Gateway).
 
 Uso:
     pip install chess
     python fake_botcito.py          # escucha en el puerto 8000
 
-Contrato (el mismo que debe cumplir el Botcito real):
-    POST /best-move   {"fen": "...", "level": 1-20}   ->   {"move": "e7e5"}
+Contrato (sección 3.6), el mismo que debe cumplir el Botcito real:
+    POST /engine/best-move   {"fen": "...", "level": 1-20}
+      -> 200 {"uci": "e7e5", "san": "e5", "evaluation": {"type": "cp", "value": 0}}
+      -> 400 INVALID_FEN | 422 NO_LEGAL_MOVES   (con la forma { "error": { "code", "message" } })
 """
 import json
 import random
@@ -26,7 +28,7 @@ class Handler(BaseHTTPRequestHandler):
                     self.rfile.readline()  # CRLF final
                     break
                 data += self.rfile.read(size)
-                self.rfile.readline()  # CRLF despues de cada trozo
+                self.rfile.readline()  # CRLF después de cada trozo
             return data
         return self.rfile.read(int(self.headers.get("Content-Length", 0)))
 
@@ -38,26 +40,36 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(out)
 
+    def error(self, status, code, message):
+        self.reply(status, {"error": {"code": code, "message": message}})
+
+    def do_GET(self):
+        if self.path.rstrip("/") == "/health":
+            self.reply(200, {"status": "ok"})
+        else:
+            self.error(404, "NOT_FOUND", "ruta no encontrada")
+
     def do_POST(self):
-        if self.path.rstrip("/") != "/best-move":
-            self.reply(404, {"error": "ruta no encontrada"})
+        if self.path.rstrip("/") != "/engine/best-move":
+            self.error(404, "NOT_FOUND", "ruta no encontrada")
             return
         raw = self.read_body()
         try:
             body = json.loads(raw)
             board = chess.Board(body["fen"])
         except Exception as e:
-            print(f"PETICION INVALIDA ({e}). Headers: {dict(self.headers)} Cuerpo: {raw!r}")
-            self.reply(400, {"error": "peticion invalida"})
+            print(f"PETICION INVALIDA ({e}). Cuerpo: {raw!r}")
+            self.error(400, "INVALID_FEN", "FEN mal formada")
             return
 
         legal = list(board.legal_moves)
         if not legal:
-            self.reply(409, {"error": "no hay jugadas legales"})
+            self.error(422, "NO_LEGAL_MOVES", "No hay jugadas posibles")
             return
-        move = random.choice(legal).uci()  # el nivel se ignora en este falso
-        print(f"level={body.get('level')} fen={body['fen']} -> {move}")
-        self.reply(200, {"move": move})
+        move = random.choice(legal)  # el nivel se ignora en este falso
+        san = board.san(move)
+        print(f"level={body.get('level')} fen={body['fen']} -> {move.uci()} ({san})")
+        self.reply(200, {"uci": move.uci(), "san": san, "evaluation": {"type": "cp", "value": 0}})
 
 
 if __name__ == "__main__":

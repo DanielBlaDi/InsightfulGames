@@ -1,14 +1,10 @@
 server:
   port: 8083
 
-botcito:
-  url: ${BOTCITO_URL:http://botcito:8000}
-
+# Contrato, sección 7
 gamelogic:
-  url: ${GAMELOGIC_URL:http://localhost:8082}
+  url: ${GAME_LOGIC_URL:http://localhost:8082}
 
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health
+gateway:
+  # Botcito se llama a través del Gateway: POST {GATEWAY_INTERNAL_URL}/engine/best-move
+  internal-url: ${GATEWAY_INTERNAL_URL:http://localhost:8080}
