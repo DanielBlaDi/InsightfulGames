@@ -1,8 +1,7 @@
 import asyncio
-import json
+import logging
 import os
 from typing import Literal
-from urllib.parse import urlencode
 
 import httpx
 import jwt
@@ -11,6 +10,11 @@ from fastapi import FastAPI, Header, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+)
+logger = logging.getLogger("arquis oft.gateway".replace(" ", ""))
 
 app = FastAPI(title="ArquiSoft API Gateway")
 
@@ -26,9 +30,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-USE_MOCK = os.getenv("USE_MOCK", "True").lower() == "true"
 AUTH_SERVICE_URL = os.getenv("AUTH_SERVICE_URL", "http://auth-component:8081")
+# Game Service / Single Player is documented on port 8083 (not Game Logic's 8082).
 GAME_SERVICE_URL = os.getenv("GAME_SERVICE_URL", "http://game-service:8083")
+# Configure this with the same signing secret/algorithm as Auth before relying on JWT identity.
 JWT_SECRET = os.getenv("JWT_SECRET", "")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 
@@ -44,6 +49,7 @@ class LoginData(BaseModel):
 
 
 class CreateGameData(BaseModel):
+    # Legacy HTTP shape retained for compatibility with the existing frontend.
     mode: Literal["local", "vs_bot"]
     level: int | None = Field(None, ge=1, le=20)
     playerColor: Literal["white", "black"] | None = None
@@ -72,10 +78,12 @@ def _user_id_from_jwt(raw_token: str | None) -> str | None:
     """Return a user ID only after signature verification; never trust a client-supplied X-User-Id."""
     if not raw_token or not JWT_SECRET:
         return None
+
     try:
         claims = jwt.decode(raw_token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
     except jwt.PyJWTError:
         return None
+
     value = claims.get("userId", claims.get("user_id", claims.get("sub")))
     return str(value) if value is not None else None
 
@@ -95,14 +103,22 @@ async def _proxy_websocket(
     authorization: str | None = None,
     token: str | None = None,
 ):
+    logger.info("WebSocket: iniciando proxy hacia %s", upstream_path)
     raw_token = _jwt_from_request(authorization, token)
     user_id = _user_id_from_jwt(raw_token)
+    logger.info(
+        "WebSocket: identidad %s",
+        "verificada" if user_id is not None else "no disponible",
+    )
 
+    # The browser controls its own headers; only this server creates X-User-Id,
+    # and only from a JWT whose signature was verified.
     upstream_headers = []
     if user_id is not None:
         upstream_headers.append(("X-User-Id", user_id))
 
     upstream_url = _websocket_upstream_url(upstream_path)
+    logger.info("WebSocket: conectando con Game Service en %s", upstream_url)
     await client_ws.accept()
 
     try:
@@ -113,24 +129,34 @@ async def _proxy_websocket(
             close_timeout=3,
             max_size=2**20,
         ) as upstream:
+            logger.info("WebSocket: conexión con Game Service establecida")
 
             async def browser_to_service():
                 try:
                     while True:
                         message = await client_ws.receive_text()
+                        logger.debug("WebSocket: mensaje recibido del navegador")
+                        # Preserve the Single Player JSON protocol exactly.
                         await upstream.send(message)
                 except (WebSocketDisconnect, asyncio.CancelledError):
+                    logger.info("WebSocket: navegador desconectado")
                     raise
                 except Exception:
+                    logger.exception("WebSocket: error reenviando mensaje al servicio")
                     return
 
             async def service_to_browser():
                 try:
                     async for message in upstream:
+                        # Game Service sends JSON text messages: game_created,
+                        # game_state, game_over, and error.
+                        logger.debug("WebSocket: mensaje recibido de Game Service")
                         await client_ws.send_text(message)
                 except (WebSocketDisconnect, asyncio.CancelledError):
+                    logger.info("WebSocket: cliente desconectado durante el envío")
                     raise
                 except Exception:
+                    logger.exception("WebSocket: error enviando mensaje al navegador")
                     return
 
             tasks = [
@@ -144,6 +170,7 @@ async def _proxy_websocket(
                 task.cancel()
             await asyncio.gather(*pending, return_exceptions=True)
             for task in done:
+                # Consume exceptions to avoid "Task exception was never retrieved".
                 try:
                     task.result()
                 except (WebSocketDisconnect, asyncio.CancelledError):
@@ -151,8 +178,12 @@ async def _proxy_websocket(
                 except Exception:
                     pass
     except WebSocketDisconnect:
-        pass
+        logger.info("WebSocket: conexión cerrada por el cliente")
     except Exception:
+        logger.exception(
+            "WebSocket: no fue posible conectar o mantener la conexión con Game Service"
+        )
+        # Avoid leaking internal service details to the browser.
         try:
             await client_ws.send_json(
                 {
@@ -167,32 +198,25 @@ async def _proxy_websocket(
 
 @app.get("/health")
 def health_check():
+    logger.info("HTTP GET /health")
     return {
         "status": "Gateway is running",
-        "mode": "Mock" if USE_MOCK else "Production",
         "gameServiceUrl": GAME_SERVICE_URL,
     }
 
 
 @app.post("/auth/register", status_code=status.HTTP_201_CREATED)
 async def register(data: RegisterData):
-    if USE_MOCK:
-        if data.username == "existente":
-            return custom_error_response(
-                409, "USERNAME_TAKEN", "El nombre de usuario ya existe"
-            )
-        return {
-            "userId": "123e4567-e89b-12d3-a456-426614174000",
-            "username": data.username,
-        }
-
+    logger.info("HTTP POST /auth/register: iniciando registro")
     async with httpx.AsyncClient() as client:
         try:
             res = await client.post(
-                f"{AUTH_SERVICE_URL}/auth/register", json=data.dict()
+                f"{AUTH_SERVICE_URL}/auth/register", json=data.model_dump()
             )
+            logger.info("Auth Service: registro respondió con HTTP %s", res.status_code)
             return JSONResponse(status_code=res.status_code, content=_json_or_text(res))
         except httpx.RequestError:
+            logger.exception("Auth Service: error de conexión durante el registro")
             return custom_error_response(
                 503, "SERVICE_UNAVAILABLE", "Auth Service no disponible"
             )
@@ -200,23 +224,12 @@ async def register(data: RegisterData):
 
 @app.post("/auth/login")
 async def login(data: LoginData):
-    if USE_MOCK:
-        if data.password == "wrong":
-            return custom_error_response(
-                401, "INVALID_CREDENTIALS", "Usuario o contraseña incorrectos"
-            )
-        return {
-            "accessToken": "mocked_jwt_token_12345",
-            "expiresIn": 3600,
-            "user": {
-                "userId": "123e4567-e89b-12d3-a456-426614174000",
-                "username": data.username,
-            },
-        }
-
+    logger.info("HTTP POST /auth/login: iniciando inicio de sesión")
     async with httpx.AsyncClient() as client:
         try:
-            res = await client.post(f"{AUTH_SERVICE_URL}/auth/login", json=data.dict())
+            res = await client.post(
+                f"{AUTH_SERVICE_URL}/auth/login", json=data.model_dump()
+            )
             return JSONResponse(status_code=res.status_code, content=_json_or_text(res))
         except httpx.RequestError:
             return custom_error_response(
@@ -231,93 +244,54 @@ def _json_or_text(response: httpx.Response):
         return {"message": response.text}
 
 
+# Legacy HTTP routes remain for compatibility, but Single Player's documented
+# contract is WebSocket-first. Do not simulate game operations over HTTP.
 @app.post("/games", status_code=status.HTTP_201_CREATED)
 async def create_game(data: CreateGameData, authorization: str | None = Header(None)):
-    if USE_MOCK:
-        moves = []
-        if data.mode == "vs_bot" and data.playerColor == "black":
-            moves.append({"from": "e2", "to": "e4", "by": "bot"})
-        return {
-            "gameId": "game_mock_999",
-            "mode": data.mode,
-            "level": data.level,
-            "playerColor": data.playerColor,
-            "status": "IN_PROGRESS",
-            "moves": moves,
-            "createdAt": "2026-10-11T14:00:00Z",
-        }
+    logger.warning("HTTP POST /games: operación no disponible en el contrato HTTP")
     return custom_error_response(
-        400,
-        "WEBSOCKET_PROTOCOL_REQUIRED",
-        "Crea la partida mediante el mensaje create_game en /ws/game.",
+        501,
+        "HTTP_GAME_API_NOT_IN_CONTRACT",
+        "Single Player expone el protocolo WebSocket /ws/game; esta ruta HTTP requiere un contrato confirmado.",
     )
 
 
 @app.get("/games")
 async def list_games(authorization: str | None = Header(None)):
-    if USE_MOCK:
-        return [
-            {
-                "gameId": "game_mock_999",
-                "mode": "vs_bot",
-                "status": "IN_PROGRESS",
-                "result": None,
-                "createdAt": "2026-10-11T14:00:00Z",
-            },
-            {
-                "gameId": "game_mock_888",
-                "mode": "local",
-                "status": "FINISHED",
-                "result": "white_win",
-                "createdAt": "2026-10-10T10:00:00Z",
-            },
-        ]
+    logger.warning("HTTP GET /games: operación no disponible en el contrato HTTP")
     return custom_error_response(
         501,
-        "ENDPOINT_NOT_SUPPORTED",
-        "Game Service no documenta un endpoint HTTP para listar partidas.",
+        "HTTP_GAME_API_NOT_IN_CONTRACT",
+        "Single Player no documenta una ruta HTTP para listar partidas.",
     )
 
 
 @app.get("/games/{game_id}")
 async def get_game(game_id: str, authorization: str | None = Header(None)):
-    if USE_MOCK:
-        if game_id == "404":
-            return custom_error_response(404, "GAME_NOT_FOUND", "La partida no existe")
-        return {
-            "gameId": game_id,
-            "mode": "vs_bot",
-            "status": "IN_PROGRESS",
-            "result": None,
-            "moves": [{"from": "e2", "to": "e4"}],
-            "createdAt": "2026-10-11T14:00:00Z",
-        }
+    logger.warning(
+        "HTTP GET /games/%s: operación no disponible en el contrato HTTP", game_id
+    )
     return custom_error_response(
         501,
-        "ENDPOINT_NOT_SUPPORTED",
-        "Game Service no documenta un endpoint HTTP para consultar partidas.",
+        "HTTP_GAME_API_NOT_IN_CONTRACT",
+        "Single Player no documenta una ruta HTTP para consultar partidas.",
     )
 
 
 @app.post("/games/{game_id}/resign")
 async def resign_game(
-    game_id: str, data: ResignData, authorization: str | None = Header(None)
+    game_id: str,
+    data: ResignData,
+    authorization: str | None = Header(None),
 ):
-    if USE_MOCK:
-        if game_id == "finished":
-            return custom_error_response(
-                422, "GAME_FINISHED", "La partida ya ha finalizado"
-            )
-        return {
-            "gameId": game_id,
-            "status": "FINISHED",
-            "result": "resigned",
-            "resignedSide": data.side,
-        }
+    logger.warning(
+        "HTTP POST /games/%s/resign: operación no disponible en el contrato HTTP",
+        game_id,
+    )
     return custom_error_response(
-        400,
-        "WEBSOCKET_PROTOCOL_REQUIRED",
-        "Abandona la partida enviando el mensaje resign por /ws/game.",
+        501,
+        "HTTP_GAME_API_NOT_IN_CONTRACT",
+        "El abandono se envía por WebSocket con el mensaje type=resign.",
     )
 
 

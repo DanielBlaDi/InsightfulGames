@@ -34,7 +34,7 @@ services:
     environment:
       PORT: "${API_GATEWAY_PORT}"
 
-      # USE_MOCK: "True"
+      USE_MOCK: "False"
       # <--- for testing with curl
 
       AUTH_SERVICE_URL: http://auth-component:${AUTH_PORT}
