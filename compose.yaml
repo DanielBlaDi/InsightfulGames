@@ -95,6 +95,8 @@ services:
   game-logic-component:
     ports:
       - "${GAME_LOGIC_PORT}:${GAME_LOGIC_PORT}" #  <--- for testing with curl
+
+
     container_name: game-logic-component
     restart: unless-stopped
     build:
@@ -117,6 +119,8 @@ services:
   single-player-component:
     ports:
       - "${SINGLE_PLAYER_PORT}:${SINGLE_PLAYER_PORT}" # <--- for testing with curl
+
+
     container_name: single-player-component
     restart: unless-stopped
     build:
@@ -127,9 +131,14 @@ services:
       - "${SINGLE_PLAYER_PORT}"
     environment:
       PORT: "${SINGLE_PLAYER_PORT}"
-      GATEWAY_URL: http://api-gateway-component:${API_GATEWAY_PORT}
-      GAMELOGIC_URL: http://game-logic-component:${GAME_LOGIC_PORT}
-      # BOTCITO_URL: http://host.docker.internal:8000 # el modo BOT necesita que Botcito exista  <--- for testing with curl
+      GAME_LOGIC_URL: http://game-logic-component:${GAME_LOGIC_PORT}
+
+      # El modo vs_bot llama a {GATEWAY_INTERNAL_URL}/engine/best-move.
+      # Aquí apunta al Botcito falso que corre en tu máquina (GameService/tools/fake_botcito.py, puerto 8000).
+
+      GATEWAY_INTERNAL_URL: http://host.docker.internal:8000 # el modo BOT necesita que Botcito exista  <--- for testing with curl
+    extra_hosts:
+      - "host.docker.internal:host-gateway" # necesario en Linux; en Windows y Mac ya existe    
     depends_on:
       - game-logic-component
     networks:
