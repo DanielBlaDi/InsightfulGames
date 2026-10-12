@@ -24,7 +24,7 @@ const turnOf = (fen: string): Color => (fen.split(' ')[1] === 'b' ? 'black' : 'w
  * Sustituto de Single Player: responde con los mensajes del contrato siguiendo un guion.
  * Una jugada fuera del guion se rechaza con `move_rejected`, aunque estuviera resaltada.
  */
-export function createMockTransport(scenario: MockScenario): GameTransport {
+export function createMockTransport(scenario: MockScenario, gameId = `mock-${scenario.id}`): GameTransport {
   let listener: ((message: ServerMessage) => void) | null = null;
   const timers = new Set<ReturnType<typeof setTimeout>>();
 
@@ -50,7 +50,7 @@ export function createMockTransport(scenario: MockScenario): GameTransport {
   };
 
   const snapshot = (): GameState => ({
-    gameId: `mock-${scenario.id}`,
+    gameId,
     userId: 'mock-user',
     mode: scenario.mode,
     botLevel: scenario.botLevel,
@@ -129,6 +129,10 @@ export function createMockTransport(scenario: MockScenario): GameTransport {
     emit({ type: 'state', state: snapshot() });
     emitGameOver();
   };
+
+  // Contrato, sección 6: si el jugador lleva negras, la partida se crea con la primera jugada del bot.
+  const opening = scenario.plies[0];
+  if (opening?.by === 'bot') applyPly(opening, opening.uci);
 
   return {
     connect({ onOpen, onMessage }) {

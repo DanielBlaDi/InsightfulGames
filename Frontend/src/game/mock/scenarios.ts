@@ -208,7 +208,110 @@ const vsBot: MockScenario = {
   ],
 };
 
-const KING_C3 = ['b2', 'b3', 'b4', 'c2', 'c4', 'd2', 'd3', 'd4'];
+// El jugador lleva negras: la primera jugada del guion es del bot y ya viene hecha al crear la partida.
+const vsBotBlack: MockScenario = {
+  id: 'vs-bot-black',
+  label: 'Contra Botcito · con negras (apertura española)',
+  mode: 'vs_bot',
+  botLevel: 8,
+  playerColor: 'black',
+  initialFen: START_FEN,
+  initialLegalMoves: WHITE_START,
+  plies: [
+    {
+      by: 'bot',
+      uci: 'e2e4',
+      san: 'e4',
+      fenAfter: 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1',
+      legalMovesAfter: BLACK_START,
+    },
+    {
+      uci: 'e7e5',
+      san: 'e5',
+      fenAfter: 'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2',
+      legalMovesAfter: {
+        ...pawnPushes(2, 'abcdfgh'),
+        b1: ['a3', 'c3'],
+        g1: ['e2', 'f3', 'h3'],
+        f1: ['e2', 'd3', 'c4', 'b5', 'a6'],
+        d1: ['e2', 'f3', 'g4', 'h5'],
+        e1: ['e2'],
+      },
+    },
+    {
+      by: 'bot',
+      uci: 'g1f3',
+      san: 'Nf3',
+      fenAfter: 'rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2',
+      legalMovesAfter: {
+        ...pawnPushes(7, 'abcdfgh'),
+        b8: ['a6', 'c6'],
+        g8: ['e7', 'f6', 'h6'],
+        f8: ['e7', 'd6', 'c5', 'b4', 'a3'],
+        d8: ['e7', 'f6', 'g5', 'h4'],
+        e8: ['e7'],
+      },
+    },
+    {
+      uci: 'b8c6',
+      san: 'Nc6',
+      fenAfter: 'r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3',
+      legalMovesAfter: {
+        ...pawnPushes(2, 'abcdgh'),
+        b1: ['a3', 'c3'],
+        f3: ['d4', 'e5', 'g5', 'h4', 'g1'],
+        f1: ['e2', 'd3', 'c4', 'b5', 'a6'],
+        d1: ['e2'],
+        e1: ['e2'],
+        h1: ['g1'],
+      },
+    },
+    {
+      by: 'bot',
+      uci: 'f1b5',
+      san: 'Bb5',
+      fenAfter: 'r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3',
+      legalMovesAfter: {
+        ...pawnPushes(7, 'adfgh'),
+        b7: ['b6'],
+        c6: ['b8', 'e7', 'a5', 'b4', 'd4'],
+        g8: ['e7', 'f6', 'h6'],
+        f8: ['e7', 'd6', 'c5', 'b4', 'a3'],
+        d8: ['e7', 'f6', 'g5', 'h4'],
+        e8: ['e7'],
+        a8: ['b8'],
+      },
+    },
+    {
+      uci: 'a7a6',
+      san: 'a6',
+      fenAfter: 'r1bqkbnr/1ppp1ppp/p1n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 4',
+      legalMovesAfter: {
+        b5: ['a4', 'c4', 'd3', 'e2', 'f1', 'a6', 'c6'],
+        e1: ['e2', 'f1', 'g1'],
+        b1: ['a3', 'c3'],
+      },
+    },
+    {
+      by: 'bot',
+      uci: 'b5a4',
+      san: 'Ba4',
+      fenAfter: 'r1bqkbnr/1ppp1ppp/p1n5/4p3/B3P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 1 4',
+      legalMovesAfter: {
+        ...pawnPushes(7, 'bdfgh'),
+        a6: ['a5'],
+        c6: ['b8', 'e7', 'a5', 'b4', 'd4', 'a7'],
+        g8: ['e7', 'f6', 'h6'],
+        f8: ['e7', 'd6', 'c5', 'b4', 'a3'],
+        d8: ['e7', 'f6', 'g5', 'h4'],
+        e8: ['e7'],
+        a8: ['a7', 'b8'],
+      },
+    },
+  ],
+};
+
+const KING_C3 =['b2', 'b3', 'b4', 'c2', 'c4', 'd2', 'd3', 'd4'];
 
 const promotion: MockScenario = {
   id: 'promotion',
@@ -236,4 +339,7 @@ const promotion: MockScenario = {
   ],
 };
 
-export const SCENARIOS: MockScenario[] = [vsBot, foolsMate, promotion];
+export const SCENARIOS: MockScenario[] = [vsBot, vsBotBlack, foolsMate, promotion];
+
+/** Guiones que usa el simulador de POST /games según la configuración elegida. */
+export const SCENARIO_FOR = { local: foolsMate, white: vsBot, black: vsBotBlack };

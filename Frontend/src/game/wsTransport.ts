@@ -1,3 +1,5 @@
+import { gatewayBaseUrl } from './config';
+import { isRecord } from './guards';
 import type { GameTransport } from './session';
 import type { ServerMessage } from './types';
 
@@ -5,20 +7,12 @@ const CLOSE_ABNORMAL = 1006;
 
 /**
  * URL del WebSocket de una partida: /ws/games/{id}?token=<jwt>, siempre en el API Gateway.
- * La base sale de VITE_WS_URL (p. ej. ws://localhost:8080; también admite http/https);
- * si no está definida se usa el mismo host que sirve el frontend.
  * El contrato exige el token en la URL del socket: no registrar esta cadena en consola ni en logs.
  */
 export function gameSocketUrl(gameId: string, token: string): string {
-  const configured: string | undefined = import.meta.env.VITE_WS_URL;
-  const base = configured
-    ? configured.replace(/\/+$/, '').replace(/^http/i, 'ws')
-    : `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`;
+  const base = gatewayBaseUrl().replace(/^http/i, 'ws');
   return `${base}/ws/games/${encodeURIComponent(gameId)}?token=${encodeURIComponent(token)}`;
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /** Descarta lo que no tenga la forma mínima que la pantalla necesita para no romperse. */
 function parseServerMessage(data: unknown): ServerMessage | null {

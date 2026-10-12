@@ -30,9 +30,14 @@ interface GamePageProps {
   session: GameSession;
   /** El contrato pide volver al login ante un token inválido; la navegación la decide quien monta la pantalla. */
   onUnauthorized?: () => void;
+  /** Si se pasa, se ofrece salir de la partida. Salir no la abandona: sigue en curso en el servidor. */
+  onExit?: () => void;
 }
 
-export default function GamePage({ session, onUnauthorized }: GamePageProps) {
+const EXIT_BUTTON =
+  'py-space-xs px-space-md rounded-lg bg-surface-container-high text-on-surface font-label-lg text-label-lg hover:bg-surface-container-highest transition-colors flex items-center justify-center gap-1 cursor-pointer';
+
+export default function GamePage({ session, onUnauthorized, onExit }: GamePageProps) {
   const { connection, closeCode, state, lastMove, botThinking, awaitingReply, rejection, sendMove, resign } =
     session;
   const [flipped, setFlipped] = useState(false);
@@ -47,8 +52,14 @@ export default function GamePage({ session, onUnauthorized }: GamePageProps) {
 
   if (!state) {
     return (
-      <div className="w-full min-h-screen bg-background flex items-center justify-center px-gutter-mobile text-center font-body-md text-body-md text-on-surface-variant">
+      <div className="w-full min-h-screen bg-background flex flex-col items-center justify-center gap-space-md px-gutter-mobile text-center font-body-md text-body-md text-on-surface-variant">
         {disconnected ? describeClose(closeCode) : 'Conectando con la partida…'}
+        {onExit && (
+          <button type="button" onClick={onExit} className={EXIT_BUTTON}>
+            <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+            Volver a la configuración
+          </button>
+        )}
       </div>
     );
   }
@@ -199,6 +210,13 @@ export default function GamePage({ session, onUnauthorized }: GamePageProps) {
                 Abandonar{vsBot ? '' : ` (${COLOR_LABEL[state.turn].toLowerCase()})`}
               </button>
             ))}
+
+          {onExit && (
+            <button type="button" onClick={onExit} className={EXIT_BUTTON}>
+              <span className="material-symbols-outlined text-[18px]">{finished ? 'add' : 'arrow_back'}</span>
+              {finished ? 'Nueva partida' : 'Volver a la configuración'}
+            </button>
+          )}
         </aside>
       </div>
     </div>

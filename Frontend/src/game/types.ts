@@ -36,6 +36,14 @@ export interface GameState {
   finishedAt: string | null;
 }
 
+// POST /games (sección 3.4): level y playerColor solo se envían en vs_bot.
+export type CreateGameRequest =
+  | { mode: 'local' }
+  | { mode: 'vs_bot'; level: number; playerColor: Color };
+
+export const MIN_BOT_LEVEL = 1;
+export const MAX_BOT_LEVEL = 20;
+
 // WebSocket /ws/games/{id}?token=<jwt>
 
 export type ClientMessage =
