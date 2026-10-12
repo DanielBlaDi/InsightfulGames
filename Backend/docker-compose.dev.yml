@@ -1,4 +1,4 @@
-﻿# Solo para probar el backend en local. El compose oficial lo mantiene Infra (tarea 1).
+# Solo para probar el backend en local. El compose oficial lo mantiene Infra (tarea 1).
 services:
   mongo:
     image: mongo:7
@@ -18,8 +18,16 @@ services:
     build: ./GameService
     environment:
       GAMELOGIC_URL: http://game-logic:8082
-      BOTCITO_URL: http://host.docker.internal:8000 # el modo BOT necesita que Botcito exista
+      BOTCITO_URL: http://botcito:8086
     depends_on:
-      - game-logic
+      game-logic:
+        condition: service_started
+      botcito:
+        condition: service_healthy
     ports:
       - "8083:8083"
+
+  botcito:
+    build: ./botcito-component
+    ports:
+      - "8086:8086"
