@@ -21,7 +21,7 @@ export async function createGame(
   token: string,
   signal?: AbortSignal,
 ): Promise<GameState> {
-  const response = await fetch(`${gatewayBaseUrl()}/games`, {
+  const response = await fetch(`${gatewayBaseUrl()}/api/games`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify(request),
