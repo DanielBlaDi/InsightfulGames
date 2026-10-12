@@ -14,11 +14,69 @@ interface AuthResponse {
   };
 }
 
-interface ErrorResponse {
-  error: {
-    code: string;
-    message: string;
-  };
+const FIELD_NAMES: Record<string, string> = {
+  password: 'Contraseña',
+  username: 'Usuario',
+  email: 'Correo electrónico',
+  fullName: 'Nombre de usuario',
+  confirmPassword: 'Confirmar contraseña',
+};
+
+const MSG_TRANSLATIONS: Record<string, string> = {
+  'String should have at least 8 characters': 'La contraseña debe tener al menos 8 caracteres',
+  'String should have at least 1 character': 'La cadena debe tener al menos 1 carácter',
+  'String should have at most 100 characters': 'La cadena debe tener como máximo 100 caracteres',
+  'Field required': 'Campo requerido',
+  'value is not a valid email address': 'No es una dirección de correo válida',
+  'Input should be a valid email': 'No es una dirección de correo válida',
+  'value is not a valid integer': 'Debe ser un número entero',
+  'value is not a valid string': 'Cadena no válida',
+};
+
+function translateMessage(msg: string): string {
+  return MSG_TRANSLATIONS[msg] || msg;
+}
+
+function formatValidationItem(item: unknown): string {
+  if (!item || typeof item !== 'object') return '';
+  const it = item as Record<string, unknown>;
+  const loc = Array.isArray(it.loc) ? it.loc.map(String) : [];
+  const field = loc.length ? loc[loc.length - 1] : '';
+  const msg = typeof it.msg === 'string' ? it.msg : '';
+  const fieldLabel = field && FIELD_NAMES[field] ? FIELD_NAMES[field] : field;
+  const translated = msg ? translateMessage(msg) : '';
+  if (fieldLabel && translated) return `${fieldLabel}: ${translated}`;
+  return translated || fieldLabel || '';
+}
+
+/**
+ * Extrae un mensaje legible del cuerpo de un error HTTP.
+ * Soporta la forma del contrato `{ error: { code, message } }` y la forma
+ * de validación de FastAPI/Pydantic `{ detail: [ { type, loc, msg }, ... ] }`.
+ */
+function parseErrorMessage(data: unknown, fallback: string): string {
+  if (data && typeof data === 'object') {
+    const obj = data as Record<string, unknown>;
+
+    // Contrato: { error: { code, message } }
+    if (obj.error && typeof obj.error === 'object') {
+      const err = obj.error as Record<string, unknown>;
+      if (typeof err.message === 'string' && err.message) {
+        return err.message;
+      }
+    }
+
+    // FastAPI/Pydantic: { detail: [ ... ] }
+    if (Array.isArray(obj.detail)) {
+      const messages = obj.detail
+        .map((item) => formatValidationItem(item))
+        .filter(Boolean) as string[];
+      if (messages.length > 0) {
+        return messages.join(' ');
+      }
+    }
+  }
+  return fallback;
 }
 
 interface LoginForm {
@@ -78,8 +136,7 @@ export default function Login({ onLoginSuccess, onBack }: LoginProps) {
       const data = await res.json();
 
       if (!res.ok) {
-        const err = data as ErrorResponse;
-        throw new Error(err.error?.message || 'Credenciales inválidas');
+        throw new Error(parseErrorMessage(data, 'Credenciales inválidas'));
       }
 
       const authData = data as AuthResponse;
@@ -115,8 +172,7 @@ export default function Login({ onLoginSuccess, onBack }: LoginProps) {
       const data = await res.json();
 
       if (!res.ok) {
-        const err = data as ErrorResponse;
-        throw new Error(err.error?.message || 'Error al registrarse');
+        throw new Error(parseErrorMessage(data, 'Error al registrarse'));
       }
 
       // Login automático tras registrarse
@@ -132,8 +188,7 @@ export default function Login({ onLoginSuccess, onBack }: LoginProps) {
       const loginData = await loginRes.json();
 
       if (!loginRes.ok) {
-        const err = loginData as ErrorResponse;
-        throw new Error(err.error?.message || 'Registro OK pero fallo al iniciar sesión');
+        throw new Error(parseErrorMessage(loginData, 'Registro OK pero fallo al iniciar sesión'));
       }
 
       onLoginSuccess(loginData.accessToken, loginData.user);
@@ -221,7 +276,7 @@ export default function Login({ onLoginSuccess, onBack }: LoginProps) {
                   name="username"
                   required
                   type="text"
-                  placeholder="lina"
+                  placeholder="Pepito"
                   value={loginForm.username}
                   onChange={handleLoginInputChange}
                   className="w-full pl-10 pr-3.5 py-2.5 bg-white border border-[#E5DCD0] rounded-xl text-sm text-[#231D19] placeholder-[#988A80] focus:outline-none focus:border-[#D85A2B] focus:ring-2 focus:ring-[#D85A2B]/15 transition-all shadow-sm"
@@ -265,7 +320,7 @@ export default function Login({ onLoginSuccess, onBack }: LoginProps) {
                   name="fullName"
                   required
                   type="text"
-                  placeholder="Erfán"
+                  placeholder="Pepito Pérez"
                   value={signupForm.fullName}
                   onChange={handleSignupInputChange}
                   className="w-full px-3 py-2.5 bg-white border border-[#E5DCD0] rounded-xl text-sm text-[#231D19] placeholder-[#988A80] focus:outline-none focus:border-[#D85A2B] focus:ring-2 focus:ring-[#D85A2B]/15 transition-all shadow-sm"
@@ -277,7 +332,7 @@ export default function Login({ onLoginSuccess, onBack }: LoginProps) {
                   name="email"
                   required
                   type="email"
-                  placeholder="erfan@insightfulgames.com"
+                  placeholder="pepito@insightfulgames.com"
                   value={signupForm.email}
                   onChange={handleSignupInputChange}
                   className="w-full px-3 py-2.5 bg-white border border-[#E5DCD0] rounded-xl text-sm text-[#231D19] placeholder-[#988A80] focus:outline-none focus:border-[#D85A2B] focus:ring-2 focus:ring-[#D85A2B]/15 transition-all shadow-sm"
