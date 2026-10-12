@@ -102,3 +102,13 @@ Here, -1 on the player Id is used to indicate the request is a test, however, in
 include::{snippets}/attemptMoveOnFinishedMatch/http-response.adoc[]
 
 The response is an HTTP 400 error, with a message saying the match is finished and thus, no moves are available.
+
+== DELETE a Match given its Id
+
+This is an example output for the ability to delete a Match given its Id, offered by the API:
+
+.request
+include::{snippets}/deleteMatch/http-request.adoc[]
+
+.response
+include::{snippets}/deleteMatch/http-response.adoc[]

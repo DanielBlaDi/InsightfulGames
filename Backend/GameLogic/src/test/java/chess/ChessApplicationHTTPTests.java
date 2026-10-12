@@ -17,6 +17,7 @@ import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.document;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -208,5 +209,15 @@ public class ChessApplicationHTTPTests{
 		this.mockMvc.perform(patch("/matches/" + testMatchId + "/movements/").contentType(MediaType.APPLICATION_JSON).content(requestBody))
 			.andExpect(status().isBadRequest())
 			.andDo(document("attemptMoveOnFinishedMatch"));
+	}
+
+	@Test public void shouldBeAbleToDeleteMatch() throws Exception{
+		String testMatchId = "testId";
+
+		when(repository.findById(testMatchId)).thenReturn(Optional.of(new Match(testMatchId, Long.valueOf(-1), Long.valueOf(-1))));
+
+		this.mockMvc.perform(delete("/matches/" + testMatchId))
+			.andExpect(status().isNoContent())
+			.andDo(document("deleteMatch"));
 	}
 }
