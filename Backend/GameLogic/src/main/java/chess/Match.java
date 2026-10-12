@@ -16,8 +16,8 @@ public class Match{
     private Long blackPlayerId;
     private List<Movement> movements;
     private LocalDateTime createdAt;
-    private String result;       // WHITE_WINS | BLACK_WINS | DRAW; null mientras la partida sigue
-    private String resultReason; // CHECKMATE | STALEMATE | DRAW_RULE | RESIGNATION
+    private String result;       // WHITE_WINS | BLACK_WINS | DRAW | null (if the match isn't over yet)
+    private String resultReason; // CHECKMATE | STALEMATE | DRAW_RULE | RESIGNATION | null (if the match isn't over yet)
 
     public Match(){}
 

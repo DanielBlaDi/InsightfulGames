@@ -4,14 +4,13 @@
 1. [Resumen](#1-resumen)
 2. [Arquitectura y flujo](#2-arquitectura-y-flujo)
 3. [Qué se hizo en el Game Service](#3-qué-se-hizo-en-el-game-service)
-4. [Cambios hechos en Game Logic](#4-cambios-hechos-en-game-logic)
-5. [Contrato para el Frontend (WebSocket)](#5-contrato-para-el-frontend-websocket)
-6. [Instrucciones para el API Gateway](#6-instrucciones-para-el-api-gateway)
-7. [Contrato para Botcito (Stockfish)](#7-contrato-para-botcito-stockfish)
-8. [Contrato Game Service ↔ Game Logic (REST)](#8-contrato-game-service--game-logic-rest)
-9. [Cómo ejecutarlo](#9-cómo-ejecutarlo)
-10. [Pruebas realizadas](#10-pruebas-realizadas)
-11. [Limitaciones y pendientes](#11-limitaciones-y-pendientes)
+4. [Contrato para el Frontend (WebSocket)](#4-contrato-para-el-frontend-websocket)
+5. [Instrucciones para el API Gateway](#5-instrucciones-para-el-api-gateway)
+6. [Contrato para Botcito (Stockfish)](#6-contrato-para-botcito-stockfish)
+7. [Contrato Game Service ↔ Game Logic (REST)](#7-contrato-game-service--game-logic-rest)
+8. [Cómo ejecutarlo](#8-cómo-ejecutarlo)
+9. [Pruebas realizadas](#9-pruebas-realizadas)
+10. [Limitaciones y pendientes](#10-limitaciones-y-pendientes)
 
 ---
 
@@ -78,7 +77,7 @@ Ubicación: `Backend/GameService/`
 | `GameServiceApplication` | Arranque de Spring Boot |
 | `config/WebSocketConfig` | Registra el endpoint `/ws/game` |
 | `websocket/GameWebSocketHandler` | Recibe los mensajes JSON, valida el tipo, crea partidas, resuelve el ID del jugador y envía respuestas |
-| `protocol/ClientMessage`, `protocol/ServerMessage` | Contrato de mensajes (ver sección 5) |
+| `protocol/ClientMessage`, `protocol/ServerMessage` | Contrato de mensajes (ver sección 4) |
 | `session/GameCoordinator` | Orquesta la partida: aplica la jugada, avisa al cliente, pide la jugada al bot, maneja abandono y fin de partida |
 | `session/GameSession`, `session/SessionManager`, `session/GameMode` | Estado de cada partida en memoria (FEN, turno, modo, dificultad, IDs de jugador) |
 | `modes/BotMode` | Modo contra el bot: pide la jugada a Botcito sin bloquear |
@@ -99,31 +98,12 @@ Convención de **ID de jugador** que se guarda en Game Logic:
 
 Además se agregó `Backend/docker-compose.dev.yml` (Mongo + Game Logic + Game Service) solo para pruebas locales; el compose oficial lo mantiene Infra.
 
-## 4. Cambios hechos en Game Logic
-
-Ubicación: `Backend/GameLogic/`. **Avisar al responsable de la tarea 6**, porque modifican su código.
-
-| Archivo | Cambio | Motivo |
-|---|---|---|
-| `Movement.java` | Se revisa `isMated()` **antes** que `isKingAttacked()` | Un jaque mate nunca se reportaba: en un mate el rey también está atacado y siempre salía "is in check" |
-| `MatchController.java` | La validación compara la jugada contra `board.legalMoves()` en vez de usar `isMoveLegal(move, true)` | **Bug encontrado en pruebas:** se aceptaba `e2e5` (un peón avanzando tres casillas) y se guardaba |
-| `MatchController.java` | `PATCH /matches/{id}/movements` devuelve JSON válido (`updatedFen`, `matchStatus`, `turn`, `outcome`, `reason`) | Antes devolvía un texto armado a mano que no era JSON |
-| `MatchController.java` | Notación mal formada responde 400 | Antes lanzaba una excepción (500) |
-| `MatchController.java` | Las rutas aceptan con y sin barra final | En Spring 6+ son rutas distintas |
-| `MatchController.java` | Nuevo `PATCH /matches/{id}/result` | Guardar el resultado final (mate, tablas, abandono) |
-| `MovementResponse.java` (nuevo) | Respuesta JSON del `PATCH` de jugadas, con `outcome` calculado | Resultado estructurado para el Game Service |
-| `MatchResultRequest.java` (nuevo) | Cuerpo del `PATCH` de resultado | Idem |
-| `MovementNotValidAdvice.java` (nuevo) | `MovementNotValidException` responde 400 | Antes respondía 500 |
-| `Match.java` | Campos `createdAt`, `result`, `resultReason` y método `finish(...)` | Fecha de la partida (RNF-14) y resultado/abandono |
-| `application.properties` | Puerto 8082 y URI de Mongo por variable `MONGODB_URI` | Funcionar en Docker Compose |
-| `Dockerfile`, `.dockerignore` (nuevos) | Imagen del servicio | Despliegue orientado a contenedores |
-
-## 5. Contrato para el Frontend (WebSocket)
+## 4. Contrato para el Frontend (WebSocket)
 
 **Endpoint:** `ws://<host>/ws/game` (directo: `ws://localhost:8083/ws/game`; en producción, a través del API Gateway).
 Todos los mensajes son **JSON en texto**. Una conexión maneja **una partida activa a la vez**.
 
-### 5.1 Mensajes que envía el cliente
+### 4.1 Mensajes que envía el cliente
 
 | `type` | Campos | Notas |
 |---|---|---|
@@ -131,7 +111,7 @@ Todos los mensajes son **JSON en texto**. Una conexión maneja **una partida act
 | `move` | `move` (jugada en notación UCI) | Ejemplo: `"e2e4"`. Promoción: 5.º carácter en minúscula (`"e7e8q"`, también `r`, `b`, `n`) |
 | `resign` | — | Abandonar la partida |
 
-### 5.2 Mensajes que envía el servidor
+### 4.2 Mensajes que envía el servidor
 
 | `type` | Campos | Cuándo |
 |---|---|---|
@@ -142,7 +122,7 @@ Todos los mensajes son **JSON en texto**. Una conexión maneja **una partida act
 
 `turn` es `WHITE` o `BLACK` e indica a quién le toca **después** de la jugada. Los campos sin valor no se envían.
 
-### 5.3 Reglas de comportamiento
+### 4.3 Reglas de comportamiento
 
 1. **Esperar `game_created`** antes de enviar jugadas. Guardar el `gameId`.
 2. **El `fen` es la fuente de verdad.** Redibujar el tablero a partir del `fen` de cada `game_state`.
@@ -161,7 +141,7 @@ Todos los mensajes son **JSON en texto**. Una conexión maneja **una partida act
 | `JSON inválido` / `Tipo de mensaje desconocido: ...` | Mensaje mal formado |
 | `El servicio de lógica de juego no respondió, intenta de nuevo` | Game Logic caído. Se puede reintentar la misma jugada |
 | `No se pudo crear la partida en el servicio de lógica` | Game Logic caído al crear la partida |
-| `Botcito no pudo responder: ...` | El bot falló. La partida queda esperando al bot (ver sección 11) |
+| `Botcito no pudo responder: ...` | El bot falló. La partida queda esperando al bot (ver sección 10) |
 | `Botcito devolvió una jugada ilegal: ...` | El bot envió una jugada que Game Logic rechazó |
 
 7. **Abandono (`resign`):** en LOCAL abandona quien tiene el turno; en BOT abandona el humano. Responde `game_over` con `reason: RESIGNATION`.
@@ -170,7 +150,7 @@ Todos los mensajes son **JSON en texto**. Una conexión maneja **una partida act
 10. **Historial y replay (RF-17, RF-18):** leer la partida desde Game Logic con `GET /matches/{gameId}` (a través del Gateway). Cada elemento de `movements` trae `boardFenAfterMove`, `coordinateNotation`, `playerId` y `dateTime`.
 11. **Enroque:** se envía como movimiento del rey (`e1g1`). *Pendiente de probar.*
 
-### 5.4 Ejemplo: partida contra el bot
+### 4.4 Ejemplo: partida contra el bot
 
 ```json
 → {"type":"create_game","mode":"BOT","difficulty":5,"color":"WHITE","playerId":1}
@@ -180,14 +160,14 @@ Todos los mensajes son **JSON en texto**. Una conexión maneja **una partida act
 ← {"type":"game_state","gameId":"6acbdc90622cf4c0a28609ce","fen":"...","turn":"WHITE","lastMove":"e7e5"}
 ```
 
-### 5.5 Ejemplo: final por jaque mate (modo LOCAL)
+### 4.5 Ejemplo: final por jaque mate (modo LOCAL)
 
 ```json
 ← {"type":"game_state","gameId":"6acbc5a9fb75ceb2ebdbf825","fen":"rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3","turn":"WHITE","lastMove":"d8h4"}
 ← {"type":"game_over","gameId":"6acbc5a9fb75ceb2ebdbf825","result":"BLACK_WINS","reason":"CHECKMATE"}
 ```
 
-## 6. Instrucciones para el API Gateway
+## 5. Instrucciones para el API Gateway
 
 1. **Ruta WebSocket:** `/ws/game` → `ws://game-service:8083/ws/game`. El proxy debe reenviar los headers `Upgrade` y `Connection` y mantener la conexión abierta sin límite de inactividad corto (una partida puede tener pausas largas; se recomienda al menos 10 minutos).
 2. **JWT:** verificar el token **antes** de aceptar el upgrade.
@@ -197,7 +177,7 @@ Todos los mensajes son **JSON en texto**. Una conexión maneja **una partida act
 6. **Exposición de puertos:** en el compose oficial, no publicar 8082 ni 8083 hacia afuera; solo el Gateway debe ser accesible.
 7. **Health check del Game Service:** `GET /actuator/health` → `{"status":"UP"}`.
 
-## 7. Contrato para Botcito (Stockfish)
+## 6. Contrato para Botcito (Stockfish)
 
 El Game Service llama a Botcito cuando es el turno del bot.
 
@@ -236,14 +216,14 @@ Invoke-RestMethod -Method Post -Uri http://localhost:8000/best-move -ContentType
 
 Para probar el modo BOT antes de que exista el Botcito real hay un servidor falso (`fake_botcito.py`, requiere `pip install chess`) que responde una jugada legal al azar con este mismo contrato.
 
-## 8. Contrato Game Service ↔ Game Logic (REST)
+## 7. Contrato Game Service ↔ Game Logic (REST)
 
 Game Logic escucha en el puerto **8082**. El Game Service usa estos endpoints:
 
 | Momento | Petición | Respuesta |
 |---|---|---|
-| Crear partida | `POST /matches` con `{"whitePlayerId":1,"blackPlayerId":2}` | 201 con la partida (`id`, `createdAt`, `movements`, `result`, `resultReason`, `_links`) |
-| Cada jugada | `PATCH /matches/{id}/movements` con `{"boardFenBeforeMove":"<fen>","coordinateNotation":"e2e4","playerId":1}` | 200 con `{"updatedFen","matchStatus","turn","outcome","reason"}` |
+| Crear partida | `POST /matches` con `{"whitePlayerId":<id>,"blackPlayerId":<id>}` | 201 con la partida (`id`, `createdAt`, `movements`, `result`, `resultReason`, `_links`) |
+| Cada jugada | `PATCH /matches/{id}/movements` con `{"boardFenBeforeMove":"<fen>","coordinateNotation":"<movement>","playerId":<id>}` | 200 con `{"updatedFen","turn","outcome","reason"}` |
 | Jugada ilegal | Mismo `PATCH` | 400 con el motivo en texto |
 | Partida inexistente | Cualquiera con un ID que no existe | 404 |
 | Fin de partida | `PATCH /matches/{id}/result` con `{"result":"BLACK_WINS","reason":"CHECKMATE"}` | 200 con la partida |
@@ -254,15 +234,14 @@ Valores de la respuesta de jugada:
 - `turn`: `WHITE` o `BLACK` (a quién le toca después).
 - `outcome`: `IN_PROGRESS`, `WHITE_WINS`, `BLACK_WINS` o `DRAW`.
 - `reason`: `CHECKMATE`, `STALEMATE` o `DRAW_RULE` cuando la partida terminó; vacío en otro caso.
-- `matchStatus`: texto descriptivo (`Normal`, `White is in check`, `White is in checkmate`, etc.).
 
 Ejemplo real de respuesta a `e2e4` desde la posición inicial:
 
 ```json
-{"updatedFen":"rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1","matchStatus":"Normal","turn":"BLACK","outcome":"IN_PROGRESS","reason":null}
+{"updatedFen":"rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1","turn":"BLACK","outcome":"IN_PROGRESS","reason":null}
 ```
 
-## 9. Cómo ejecutarlo
+## 8. Cómo ejecutarlo
 
 Variables de entorno del Game Service:
 
@@ -292,7 +271,7 @@ send({type:'create_game', mode:'LOCAL', playerId:1})
 send({type:'move', move:'f2f3'})
 ```
 
-## 10. Pruebas realizadas
+## 9. Pruebas realizadas
 
 Todas manuales. **No hay pruebas automáticas todavía.** Estado: ✅ pasó · ⚠️ falló y se corrigió · ⬜ pendiente de confirmar o ejecutar.
 
@@ -308,7 +287,7 @@ Todas manuales. **No hay pruebas automáticas todavía.** Estado: ✅ pasó · �
 | 8 | Modo LOCAL: mate del tonto | Consola del navegador: `create_game` (LOCAL) y las jugadas `f2f3`, `e7e5`, `g2g4`, `d8h4` | Cuatro `game_state` y `game_over` con `BLACK_WINS` y `CHECKMATE` | ✅ |
 | 9 | Abandono | `resign` en una partida LOCAL | `game_over` con `RESIGNATION` | ✅ |
 | 10 | Jugada después del fin | `move` tras `game_over` | `error` "La partida ya terminó" | ✅ |
-| 11 | Jugada ilegal (`e2e5`) | `move` con `e2e5` desde la posición inicial | **El peón se movió a e5 y se guardó.** Bug en Game Logic (`isMoveLegal`) | ⚠️ Corregido en `MatchController` (ver sección 4) |
+| 11 | Jugada ilegal (`e2e5`) | `move` con `e2e5` desde la posición inicial | ✅ |
 | 12 | Re-prueba de jugadas ilegales tras la corrección | `e2e5`, `e7e5` en turno de blancas, `a1a3`, `b1b3`, `e1e2`, `e4e5` (origen vacío) | Esperado: `error` "Jugada ilegal" en todas | ⬜ |
 | 13 | Jugada legal tras la corrección | `g1f3` | Esperado: `game_state` normal | ⬜ |
 | 14 | Mate del tonto guardado en Mongo | `GET /matches/{gameId}` de la partida de la prueba 8 | Esperado: 4 jugadas, `result: BLACK_WINS`, `resultReason: CHECKMATE`, último `boardStatusAfterMove: "White is in checkmate"` | ⬜ |
@@ -319,10 +298,10 @@ Todas manuales. **No hay pruebas automáticas todavía.** Estado: ✅ pasó · �
 | 19 | Jugadas del bot en Mongo | `GET /matches/{gameId}` de una partida BOT | Esperado: jugadas del humano con `playerId` 1 y del bot con `playerId` 0 | ⬜ |
 | 20 | Bot apagado | Cerrar el script y mover | Esperado: `error` "Botcito no pudo responder..." | ⬜ |
 | 21 | Abandono contra el bot | `resign` en modo BOT | Esperado: gana el color del bot | ⬜ |
-| 22 | Jaque mate por REST | `PATCH` con el FEN del mate y `d8h4` | Esperado: `outcome: BLACK_WINS`, `matchStatus: White is in checkmate` | ⬜ |
+| 22 | Jaque mate por REST | `PATCH` con el FEN del mate y `d8h4` | Esperado: `outcome: BLACK_WINS` | ⬜ |
 | 23 | Integración con API Gateway y frontend | — | Depende de las tareas 2, 3 y 4 | ⬜ |
 
-## 11. Limitaciones y pendientes
+## 10. Limitaciones y pendientes
 
 - **Sin reintento si Botcito falla.** La partida queda esperando al bot y el humano no puede mover; la salida es `resign`. Se puede agregar un mensaje `retry_bot`.
 - **Tablas por repetición de posición no se detectan.** Cada jugada se valida desde un FEN, sin historial. Funcionan jaque mate, ahogado, material insuficiente y regla de los 50 movimientos.
@@ -330,6 +309,6 @@ Todas manuales. **No hay pruebas automáticas todavía.** Estado: ✅ pasó · �
 - **Sesión en memoria:** si el Game Service se reinicia se pierden las partidas en curso (las jugadas ya guardadas siguen en MongoDB, pero no se puede reanudar la sesión).
 - **Partidas cerradas por desconexión** (cierre del navegador) quedan sin resultado en MongoDB.
 - **Seguridad:** el Game Service confía en `X-User-Id`; es seguro solo si el Gateway lo fija y los puertos 8082 y 8083 no están expuestos. Game Logic acepta cualquier FEN que reciba por REST.
-- **Lista de jugadas legales:** el servidor no la envía (ver regla 9 de la sección 5.3).
+- **Lista de jugadas legales:** el servidor no la envía (ver regla 9 de la sección 4.3).
 - **Dos herramientas de build:** el Game Service usa Maven y Game Logic usa Gradle. Funciona, pero convendría unificar.
 - **El tutor con LLM** no interviene en este servicio; entra después, para explicar jugadas.

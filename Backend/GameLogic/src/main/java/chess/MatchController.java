@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.hateoas.CollectionModel;
 import org.springframework.hateoas.EntityModel;
 import org.springframework.hateoas.IanaLinkRelations;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
 import com.github.bhlangonijr.chesslib.*;
@@ -32,13 +33,13 @@ public class MatchController{
         this.assembler = assembler;
     }
 
-    @GetMapping("/matches/{id}")
+    @GetMapping({"/matches/{id}", "/matches/{id}/"})
     EntityModel<Match> getMatchById(@PathVariable String id){
         Match foundMatch = repository.findById(id).orElseThrow(() -> new MatchNotFoundException(id));
         return assembler.toModel(foundMatch);
     }
 
-    @PostMapping("/matches")
+    @PostMapping({"/matches", "/matches/"})
     ResponseEntity<EntityModel<Match>> newMatch(@RequestBody Match newMatch){
         repository.save(newMatch);
         EntityModel<Match> matchEntityModel = assembler.toModel(newMatch);
@@ -46,7 +47,6 @@ public class MatchController{
         return ResponseEntity.created(matchEntityModel.getRequiredLink(IanaLinkRelations.SELF).toUri()).body(matchEntityModel);
     }
 
-    // Se aceptan con y sin barra final (Spring 6+ las trata como rutas distintas)
     @GetMapping({"/players/{id}/matches", "/players/{id}/matches/"})
     CollectionModel<EntityModel<Match>> getMatchesByPlayerId(@PathVariable Long id){
         List<EntityModel<Match>> matches = repository.findByWhitePlayerId(id).stream().map(assembler::toModel).collect(Collectors.toList());
@@ -67,25 +67,24 @@ public class MatchController{
         board.loadFromFen(movement.boardFenBeforeMove);
 
         Move move = null;
-        boolean legal = false;
+        boolean isLegal = false;
+
         try{
             Move requested = new Move(movement.coordinateNotation, board.getSideToMove());
-            // isMoveLegal(move, true) no revisa la geometria de la pieza (dejaba pasar e2e5),
-            // por eso se compara contra la lista de jugadas legales de la posicion.
             for(Move candidate : board.legalMoves()){
                 if(candidate.getFrom() == requested.getFrom()
                         && candidate.getTo() == requested.getTo()
                         && candidate.getPromotion() == requested.getPromotion()){
                     move = candidate;
-                    legal = true;
+                    isLegal = true;
                     break;
                 }
             }
         }catch(RuntimeException e){
-            legal = false; // notacion mal formada
+            isLegal = false; //Notación mal formada
         }
 
-        if(!legal){
+        if(!isLegal){
             throw new MovementNotValidException(movement.boardFenBeforeMove, movement.coordinateNotation);
         }
 
@@ -95,7 +94,7 @@ public class MatchController{
         modifiedMatch.addMovement(newMovement);
         repository.save(modifiedMatch);
 
-        return ResponseEntity.ok(MovementResponse.of(board, newMovement.getBoardStatusAfterMove()));
+        return ResponseEntity.ok(MovementResponse.of(board));
     }
 
     /** Cierra la partida y guarda su resultado (mate, tablas o abandono). */
@@ -107,19 +106,19 @@ public class MatchController{
         return ResponseEntity.ok(assembler.toModel(repository.save(match)));
     }
 
-    @DeleteMapping("/matches/{id}")
+    @DeleteMapping({"/matches/{id}", "/matches/{id}/"})
     ResponseEntity<?> deleteMatch(@PathVariable String id){
         repository.deleteById(id);
 
         return ResponseEntity.noContent().build();
     }
 
-    @PostMapping("/movements/{coordinate}")
-    ResponseEntity<String> getAvailableMovesBForPosition(@PathVariable String coordinate, @RequestBody MovementCreationEssentials movement){
+    @PostMapping({"/movements/{coordinate}", "/movements/{coordinate}/"})
+    ResponseEntity<String> getAvailableMovesForPosition(@PathVariable String coordinate, @RequestBody MovementCreationEssentials movement){
         Board board = new Board();
         board.loadFromFen(movement.boardFenBeforeMove);
 
-        String responseBody = "{availableDestinationCoordinates: {";
+        String responseBody = "{\"availableDestinationCoordinates\": {";
         int availableMovesCounter = 1;
         boolean isFirstAvailableMove = true;
 
@@ -132,7 +131,7 @@ public class MatchController{
                 }else{
                     responseBody += ", ";
                 }
-                responseBody += availableMovesCounter++ + ": \"" + move.getTo().value() + "\"";
+                responseBody += "\"" + availableMovesCounter++ + "\": \"" + move.getTo().value() + "\"";
             }
         }
 
