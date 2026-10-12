@@ -41,8 +41,7 @@ public class MatchController{
 
     @PostMapping({"/matches", "/matches/"})
     ResponseEntity<EntityModel<Match>> newMatch(@RequestBody Match newMatch){
-        repository.save(newMatch);
-        EntityModel<Match> matchEntityModel = assembler.toModel(newMatch);
+        EntityModel<Match> matchEntityModel = assembler.toModel(repository.save(newMatch));
 
         return ResponseEntity.created(matchEntityModel.getRequiredLink(IanaLinkRelations.SELF).toUri()).body(matchEntityModel);
     }
@@ -63,38 +62,42 @@ public class MatchController{
     ResponseEntity<MovementResponse> addMovement(@PathVariable String id, @RequestBody MovementCreationEssentials movement){
         Match modifiedMatch = repository.findById(id).orElseThrow(() -> new MatchNotFoundException(id));
 
-        Board board = new Board();
-        board.loadFromFen(movement.boardFenBeforeMove);
+        if(modifiedMatch.getResult() == null){
+            Board board = new Board();
+            board.loadFromFen(movement.boardFenBeforeMove);
 
-        Move move = null;
-        boolean isLegal = false;
-
-        try{
-            Move requested = new Move(movement.coordinateNotation, board.getSideToMove());
-            for(Move candidate : board.legalMoves()){
-                if(candidate.getFrom() == requested.getFrom()
-                        && candidate.getTo() == requested.getTo()
-                        && candidate.getPromotion() == requested.getPromotion()){
-                    move = candidate;
-                    isLegal = true;
-                    break;
+            Move move = null;
+            boolean isLegal = false;
+        
+            try{
+                Move requested = new Move(movement.coordinateNotation, board.getSideToMove());
+                for(Move candidate : board.legalMoves()){
+                    if(candidate.getFrom() == requested.getFrom()
+                            && candidate.getTo() == requested.getTo()
+                            && candidate.getPromotion() == requested.getPromotion()){
+                        move = candidate;
+                        isLegal = true;
+                        break;
+                    }
                 }
+            }catch(RuntimeException e){
+                isLegal = false; //Notación mal formada
             }
-        }catch(RuntimeException e){
-            isLegal = false; //Notación mal formada
+
+            if(!isLegal){
+                throw new MovementNotValidException(movement.boardFenBeforeMove, movement.coordinateNotation);
+            }
+
+            board.doMove(move);
+            Movement newMovement = new Movement(movement.boardFenBeforeMove, board.getFen(), movement.coordinateNotation, movement.playerId, LocalDateTime.now());
+
+            modifiedMatch.addMovement(newMovement);
+            repository.save(modifiedMatch);
+
+            return ResponseEntity.ok(MovementResponse.of(board));
+        }else{
+            throw new MovementNotValidException("The match is already finished, no more moves can be done.");
         }
-
-        if(!isLegal){
-            throw new MovementNotValidException(movement.boardFenBeforeMove, movement.coordinateNotation);
-        }
-
-        board.doMove(move);
-        Movement newMovement = new Movement(movement.boardFenBeforeMove, board.getFen(), movement.coordinateNotation, movement.playerId, LocalDateTime.now());
-
-        modifiedMatch.addMovement(newMovement);
-        repository.save(modifiedMatch);
-
-        return ResponseEntity.ok(MovementResponse.of(board));
     }
 
     /** Cierra la partida y guarda su resultado (mate, tablas o abandono). */

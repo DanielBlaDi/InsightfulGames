@@ -30,9 +30,15 @@ public class Match{
         this.createdAt = LocalDateTime.now();
     }
 
-    public Match(String id, Long whitePlayerId, Long blackPlayerId){
+    protected Match(String id, Long whitePlayerId, Long blackPlayerId){
         this(whitePlayerId, blackPlayerId);
         this.id = id;
+    }
+
+    protected Match(String id, Long whitePlayerId, Long blackPlayerId, String result, String resultReason){
+        this(id, whitePlayerId, blackPlayerId);
+        this.result = result;
+        this.resultReason = resultReason;
     }
 
     public void addMovement(Movement newMovement){

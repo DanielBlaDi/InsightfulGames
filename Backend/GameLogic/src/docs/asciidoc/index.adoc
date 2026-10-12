@@ -7,7 +7,7 @@ This is an example output for the ability to create a new Match of chess, offere
 .request
 include::{snippets}/createMatch/http-request.adoc[]
 
-Here, -1 is used to indicate the request is a test, however, in practice, only positive values should be used.
+Here, -1 on the player Ids is used to indicate the request is a test, however, in practice, only positive values should be used.
 
 .response
 include::{snippets}/createMatch/http-response.adoc[]
@@ -47,16 +47,31 @@ include::{snippets}/obtainMatchByPlayerId/http-response.adoc[]
 .response-fields
 include::{snippets}/obtainMatchByPlayerId/response-fields.adoc[]
 
+== PATCH | Finishing a Match given its Id
+
+This is an example output for the ability to finish a Match given its Id, offered by the API:
+
+.request
+include::{snippets}/finishMatch/http-request.adoc[]
+
+.response
+include::{snippets}/finishMatch/http-response.adoc[]
+
+Here, -1 on the player Ids is used to indicate the request is a test, however, in practice, only positive values should be used.
+
+.response-fields
+include::{snippets}/finishMatch/response-fields.adoc[]
+
 == PATCH | Perform a move in the Match if valid
 
-This is an example output for the ability to perform a move in the Match if it (the move) is valid, offered by the API:
+This is an example output for the ability to perform a move in the Match if the action is valid, offered by the API:
 
 === Case for a valid move
 
 .request
 include::{snippets}/updateWithValidMove/http-request.adoc[]
 
-Here, -1 is used to indicate the request is a test, however, in practice, only positive values should be used.
+Here, -1 on the player Id is used to indicate the request is a test, however, in practice, only positive values should be used.
 
 .response
 include::{snippets}/updateWithValidMove/http-response.adoc[]
@@ -69,9 +84,21 @@ include::{snippets}/updateWithValidMove/response-fields.adoc[]
 .request
 include::{snippets}/attemptWithInvalidMove/http-request.adoc[]
 
-Here, -1 is used to indicate the request is a test, however, in practice, only positive values should be used.
+Here, -1 on the player Id is used to indicate the request is a test, however, in practice, only positive values should be used.
 
 .response
 include::{snippets}/attemptWithInvalidMove/http-response.adoc[]
 
 The response is an HTTP 400 error, with a message describes the request and says it's invalid.
+
+=== Case for a move on an already finished Match
+
+.request
+include::{snippets}/attemptMoveOnFinishedMatch/http-request.adoc[]
+
+Here, -1 on the player Id is used to indicate the request is a test, however, in practice, only positive values should be used.
+
+.response
+include::{snippets}/attemptMoveOnFinishedMatch/http-response.adoc[]
+
+The response is an HTTP 400 error, with a message saying the match is finished and thus, no moves are available.

@@ -14,6 +14,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.document;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -55,6 +56,8 @@ public class ChessApplicationHTTPTests{
     }
 	
 	@Test public void shouldReturnNewMatch() throws Exception{
+		when(repository.save(any(Match.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
 		String requestBody = "{\"whitePlayerId\": -1, \"blackPlayerId\": -1}";
 
 		this.mockMvc.perform(post("/matches").contentType(MediaType.APPLICATION_JSON).content(requestBody))
@@ -133,10 +136,38 @@ public class ChessApplicationHTTPTests{
 			);
 	}
 
+	@Test public void shouldReturnUpdatedMatchAfterFinish() throws Exception{
+		String testMatchId = "testId";
+		Match testMatch = new Match(testMatchId, Long.valueOf(-1), Long.valueOf(-1));
+
+		when(repository.findById(testMatchId)).thenReturn(Optional.of(testMatch));
+		when(repository.save(testMatch)).thenReturn(testMatch);
+
+		String requestBody = "{\"result\": \"BLACK_WINS\", \"reason\": \"CHECKMATE\"}";
+		
+		this.mockMvc.perform(patch("/matches/" + testMatchId + "/result/").contentType(MediaType.APPLICATION_JSON).content(requestBody))
+			.andExpect(status().isOk())
+			.andDo(
+				document(
+					"finishMatch",
+					responseFields(
+						fieldWithPath("id").description("The identifier for the finished match, the same that was used on the PATCH request."),
+						fieldWithPath("whitePlayerId").description("The identifier for the white player of the finished match."),
+						fieldWithPath("blackPlayerId").description("The identifier for the black player of the finished match."),
+						fieldWithPath("movements").description("A list of the movements that have been made during this match."),
+						fieldWithPath("createdAt").description("The date and time in which this match started."),
+						fieldWithPath("result").description("String that describes the end result of this match. Takes one of three values: \"WHITE_WINS\" | \"BLACK_WINS\" | \"DRAW\""),
+						fieldWithPath("resultReason").description("String that describes the reason for the end result of this match. Takes one of four values: \"CHECKMATE\" | \"STALEMATE\" | \"DRAW_RULE\" | \"RESIGNATION\""),
+						subsectionWithPath("_links").description("Links related to this match.")
+					)
+				)
+			);
+	}
+
 	@Test public void shouldReturnUpdatedBoardAfterValidMove() throws Exception{
 		String testMatchId = "testId";
 
-		when(repository.findById(testMatchId)).thenReturn(Optional.of(new Match(Long.valueOf(-1), Long.valueOf(-1))));
+		when(repository.findById(testMatchId)).thenReturn(Optional.of(new Match(testMatchId, Long.valueOf(-1), Long.valueOf(-1))));
 
 		String requestBody = "{\"boardFenBeforeMove\": \"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1\", \"coordinateNotation\": \"E2E4\", \"playerId\": -1}";
 		
@@ -158,12 +189,24 @@ public class ChessApplicationHTTPTests{
 	@Test public void shouldThrowExceptionAfterInvalidMove() throws Exception{
 		String testMatchId = "testId";
 
-		when(repository.findById(testMatchId)).thenReturn(Optional.of(new Match(Long.valueOf(-1), Long.valueOf(-1))));
+		when(repository.findById(testMatchId)).thenReturn(Optional.of(new Match(testMatchId, Long.valueOf(-1), Long.valueOf(-1))));
 
 		String requestBody = "{\"boardFenBeforeMove\": \"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1\", \"coordinateNotation\": \"E2E5\", \"playerId\": -1}";
 
 		this.mockMvc.perform(patch("/matches/" + testMatchId + "/movements/").contentType(MediaType.APPLICATION_JSON).content(requestBody))
 			.andExpect(status().isBadRequest())
 			.andDo(document("attemptWithInvalidMove"));
+	}
+
+	@Test public void shouldThrowExceptionAfterMoveOnFinishedMatch() throws Exception{
+		String testMatchId = "testId";
+
+		when(repository.findById(testMatchId)).thenReturn(Optional.of(new Match(testMatchId, Long.valueOf(-1), Long.valueOf(-1), "WHITE_WINS", "RESIGNATION")));
+
+		String requestBody = "{\"boardFenBeforeMove\": \"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1\", \"coordinateNotation\": \"E2E4\", \"playerId\": -1}";
+
+		this.mockMvc.perform(patch("/matches/" + testMatchId + "/movements/").contentType(MediaType.APPLICATION_JSON).content(requestBody))
+			.andExpect(status().isBadRequest())
+			.andDo(document("attemptMoveOnFinishedMatch"));
 	}
 }

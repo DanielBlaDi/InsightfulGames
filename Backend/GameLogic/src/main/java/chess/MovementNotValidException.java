@@ -4,4 +4,8 @@ public class MovementNotValidException extends RuntimeException{
 	MovementNotValidException(String boardFenBeforeMove, String coordinateNotation){
 		super("Move \"" + coordinateNotation + "\" is not valid for board state \"" + boardFenBeforeMove + "\"");
 	}
+
+	MovementNotValidException(String message){
+		super(message);
+	}
 }
