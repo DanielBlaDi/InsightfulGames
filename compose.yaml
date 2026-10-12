@@ -1,0 +1,283 @@
+name: InsightfulGames
+
+services:
+  frontend:
+    container_name: fronted-component
+    restart: unless-stopped
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: frontend:dev
+    ports:
+      - "${FRONTEND_PORT}:80"
+    environment:
+      API_GATEWAY_URL: http://api-gateway-component:8080
+    networks:
+      - app
+
+
+
+  api-gateway-component:
+
+    ports:
+      - "${API_GATEWAY_PORT}:${API_GATEWAY_PORT}"
+        # <--- for testing with curl
+
+    container_name: api-gateway-component
+    restart: unless-stopped
+    build:
+      context: ./Backend/api-gateway
+      dockerfile: Dockerfile
+    image: api-gateway-component:dev
+    expose:
+      - "${API_GATEWAY_PORT}"
+    environment:
+      PORT: "${API_GATEWAY_PORT}"
+
+      # USE_MOCK: "True"
+      # <--- for testing with curl
+
+      AUTH_SERVICE_URL: http://auth-component:${AUTH_PORT}
+      GAME_SERVICE_URL: http://single-player-component:${SINGLE_PLAYER_PORT}
+      
+      JWT_SECRET: "${JWT_SECRET:-}"
+      JWT_ALGORITHM: "${JWT_ALGORITHM}"
+
+      # MULTIPLAYER_COMPONENT_URL: http://multiplayer-component:${MULTIPLAYER_PORT}
+      # TUTOR_COMPONENT_URL: http://tutor-component:${TUTOR_PORT}
+      BOTSITO_COMPONENT_URL: http://botsito-component:${BOTSITO_PORT}
+    depends_on:
+      - auth-component
+      - single-player-component
+      # - multiplayer-component
+      # - tutor-component
+      - game-logic-component
+      # - botsito-component
+    networks:
+      - app
+
+
+
+  auth-component:
+    ports:
+    - "${AUTH_PORT}:${AUTH_PORT}" #  <--- for testing with curl
+
+    container_name: auth-component
+    restart: unless-stopped
+    build:
+      context: ./Backend/auth-component
+      dockerfile: Dockerfile
+    image: auth-component:dev
+    expose:
+      - "${AUTH_PORT}"
+    environment:
+      SERVER_PORT: "${AUTH_PORT}"
+
+      SPRING_DATASOURCE_URL: "jdbc:mysql://mysql:${MYSQL_PORT}/${MYSQL_DATABASE}"
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
+      SPRING_JPA_HIBERNATE_DDL_AUTO: validate
+
+      JWT_SECRET: ${JWT_SECRET}
+
+      GATEWAY_URL: http://api-gateway-component:${API_GATEWAY_PORT}
+      
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - app
+
+
+
+  game-logic-component:
+    ports:
+      - "${GAME_LOGIC_PORT}:${GAME_LOGIC_PORT}" #  <--- for testing with curl
+    container_name: game-logic-component
+    restart: unless-stopped
+    build:
+      context: ./Backend/GameLogic
+      dockerfile: Dockerfile
+    image: game-logic-component:dev
+    expose:
+      - "${GAME_LOGIC_PORT}"
+    environment:
+      SERVER_PORT: "${GAME_LOGIC_PORT}"
+      MONGODB_URI: "mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongo:${MONGO_PORT}/${MONGO_DATABASE}?authSource=${MONGO_DATABASE}"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - app
+
+
+
+  single-player-component:
+    ports:
+      - "${SINGLE_PLAYER_PORT}:${SINGLE_PLAYER_PORT}" # <--- for testing with curl
+    container_name: single-player-component
+    restart: unless-stopped
+    build:
+      context: ./Backend/GameService
+      dockerfile: Dockerfile
+    image: single-player-component:dev
+    expose:
+      - "${SINGLE_PLAYER_PORT}"
+    environment:
+      PORT: "${SINGLE_PLAYER_PORT}"
+      GATEWAY_URL: http://api-gateway-component:${API_GATEWAY_PORT}
+      GAMELOGIC_URL: http://game-logic-component:${GAME_LOGIC_PORT}
+      # BOTCITO_URL: http://host.docker.internal:8000 # el modo BOT necesita que Botcito exista  <--- for testing with curl
+    depends_on:
+      - game-logic-component
+    networks:
+      - app
+
+
+
+  # multiplayer-component:
+    # container_name: multiplayer-component
+    # restart: unless-stopped
+  #   build:
+  #     context: ./Backend/multiplayer-component
+  #     dockerfile: Dockerfile
+  #   image: multiplayer-component:dev
+  #   expose:
+  #     - "${MULTIPLAYER_PORT}"
+  #   environment:
+  #     SERVER_PORT: "${MULTIPLAYER_PORT}"
+  #     GATEWAY_URL: http://api-gateway-component:${API_GATEWAY_PORT}
+  #     GAME_LOGIC_COMPONENT_URL: http://game-logic-component:${GAME_LOGIC_PORT}
+  #   depends_on:
+  #     - game-logic-component
+  #   networks:
+  #     - app
+
+
+
+  # tutor-component:
+    # container_name: tutor-component
+    # restart: unless-stopped
+    # build:
+    #   context: ./Backend/tutor-component
+    #   dockerfile: Dockerfile
+    # image: tutor-component:dev
+    # expose:
+    #   - "${TUTOR_PORT}"
+    # environment:
+    #   PORT: "${TUTOR_PORT}"
+    #   GATEWAY_URL: http://api-gateway-component:${API_GATEWAY_PORT}
+    #   REDIS_HOST: redis
+    #   REDIS_PORT: "${REDIS_PORT}"
+    #   REDIS_PASSWORD: ${REDIS_PASSWORD}
+    # depends_on:
+    #   - redis
+        
+    # networks:
+    #   - app
+
+
+
+  # botsito-component:
+    # ports:
+    #   - "${BOTSITO_PORT}:${BOTSITO_PORT}" # <--- for testing with curl
+  #   container_name: botsito-component
+  #   restart: unless-stopped
+  #   build:
+  #     context: ./Backend/botsito-component
+  #     dockerfile: Dockerfile
+  #   image: botsito-component:dev
+  #   expose:
+  #     - "${BOTSITO_PORT}"
+  #   environment:
+  #     PORT: "${BOTSITO_PORT}"
+  #     GATEWAY_URL: http://api-gateway-component:${API_GATEWAY_PORT}
+  #   networks:
+  #     - app
+
+
+
+  # redis:
+  #   image: redis:7-alpine
+  # container_name: redis-db
+  # restart: unless-stopped
+  #   command: redis-server --requirepass ${REDIS_PASSWORD}
+  #   expose:
+  #     - "${REDIS_PORT}"
+  #   volumes:
+  #     - redis-data:/data
+  #   networks:
+  #     - app
+
+
+
+  mongo:
+    image: mongo:7
+    container_name: mongo-db
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE}
+
+      MONGO_APP_DATABASE: ${MONGO_DATABASE}
+      MONGO_APP_USERNAME: ${MONGO_USER}
+      MONGO_APP_PASSWORD: ${MONGO_PASSWORD}
+    expose:
+      - "${MONGO_PORT}"
+    volumes:
+      - mongo-data:/data/db
+      - ./databases/mongo/init-mongo.sh:/docker-entrypoint-initdb.d/init-mongo.sh:ro
+    healthcheck:
+      test:
+        - CMD
+        - mongosh
+        - --quiet
+        - --eval
+        - "db.adminCommand('ping').ok"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - app
+      
+
+
+
+  mysql:
+    image: mysql:8.4
+    container_name: mysql-db
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    expose:
+      - "${MYSQL_PORT}"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./databases/auth/01-init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'mysqladmin ping -h 127.0.0.1 -u root -p"$${MYSQL_ROOT_PASSWORD}" --silent'
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - app
+
+
+
+networks:
+  app:
+
+
+
+volumes:
+  redis-data:
+  mongo-data:
+  mysql-data:   

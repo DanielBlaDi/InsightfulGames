@@ -1,0 +1,50 @@
+# === Secrets / Environment ===
+.env
+.env.*
+!.env.example
+
+# === Python ===
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# === TypeScript / Node ===
+node_modules/
+dist/
+*.tsbuildinfo
+.npm/
+
+# === Java ===
+*.class
+*.jar
+*.war
+target/
+.gradle/
+**/out/
+
+# === Build (genérico) ===
+build/
+out/
+
+# === IDE / Editor ===
+.idea/
+.vscode/
+*.iml
+.classpath
+.project
+.settings/
+
+# Sistema operativo
+
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Archivos temporales
+
+*.tmp
+*.bak
