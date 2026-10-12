@@ -24,6 +24,6 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway" # necesario en Linux; en Windows y Mac ya existe
     depends_on:
-      - game-logic-component
+      - game-logic
     ports:
       - "8083:8083"
