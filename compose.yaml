@@ -54,7 +54,7 @@ services:
       # - multiplayer-component
       # - tutor-component
       - game-logic-component
-      # - botsito-component
+      - botsito-component
     networks:
       - app
 
@@ -188,23 +188,23 @@ services:
     #   - app
 
 
-
-  # botsito-component:
-    # ports:
-    #   - "${BOTSITO_PORT}:${BOTSITO_PORT}" # <--- for testing with curl
-  #   container_name: botsito-component
-  #   restart: unless-stopped
-  #   build:
-  #     context: ./Backend/botsito-component
-  #     dockerfile: Dockerfile
-  #   image: botsito-component:dev
-  #   expose:
-  #     - "${BOTSITO_PORT}"
-  #   environment:
-  #     PORT: "${BOTSITO_PORT}"
-  #     GATEWAY_URL: http://api-gateway-component:${API_GATEWAY_PORT}
-  #   networks:
-  #     - app
+  
+  botsito-component:
+    ports:
+      - "${BOTSITO_PORT}:${BOTSITO_PORT}" # <--- for testing with curl
+    container_name: botsito-component
+    restart: unless-stopped
+    build:
+      context: ./Backend/botcito-component
+      dockerfile: Dockerfile
+    image: botsito-component:dev
+    expose:
+      - "${BOTSITO_PORT}"
+    environment:
+      PORT: "${BOTSITO_PORT}"
+      # GATEWAY_URL: http://api-gateway-component:${API_GATEWAY_PORT}
+    networks:
+      - app
 
 
 
