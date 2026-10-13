@@ -17,10 +17,12 @@ interface GameFlowProps {
   /** Pinta la partida creada; `onExit` devuelve a la configuración. */
   renderGame: (game: GameState, onExit: () => void) => ReactNode;
   onUnauthorized?: () => void;
+  /** Salir del módulo desde la configuración. */
+  onExit?: () => void;
 }
 
 /** Configuración → creación → partida. No sabe de dónde salen las partidas ni cómo se juegan. */
-export default function GameFlow({ createGame, renderGame, onUnauthorized }: GameFlowProps) {
+export default function GameFlow({ createGame, renderGame, onUnauthorized, onExit }: GameFlowProps) {
   const [game, setGame] = useState<GameState | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,5 +53,5 @@ export default function GameFlow({ createGame, renderGame, onUnauthorized }: Gam
   };
 
   if (game) return renderGame(game, () => setGame(null));
-  return <GameSetup loading={loading} error={error} onStart={handleStart} />;
+  return <GameSetup loading={loading} error={error} onStart={handleStart} onExit={onExit} />;
 }

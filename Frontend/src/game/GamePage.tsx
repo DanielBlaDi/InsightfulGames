@@ -38,11 +38,24 @@ const EXIT_BUTTON =
   'py-space-xs px-space-md rounded-lg bg-surface-container-high text-on-surface font-label-lg text-label-lg hover:bg-surface-container-highest transition-colors flex items-center justify-center gap-1 cursor-pointer';
 
 export default function GamePage({ session, onUnauthorized, onExit }: GamePageProps) {
-  const { connection, closeCode, state, lastMove, botThinking, awaitingReply, rejection, sendMove, resign } =
-    session;
+  const {
+    connection,
+    closeCode,
+    state,
+    lastMove,
+    botThinking,
+    awaitingReply,
+    rejection,
+    serverError,
+    sendMove,
+    resign,
+    reconnect,
+  } = session;
   const [flipped, setFlipped] = useState(false);
   const [confirmingResign, setConfirmingResign] = useState(false);
   const disconnected = connection === 'closed';
+  // Un cierre por token o por partida ajena no se arregla reconectando.
+  const canReconnect = disconnected && closeCode !== CLOSE_UNAUTHORIZED && closeCode !== CLOSE_GAME_NOT_FOUND;
 
   // Una sola llamada por cierre, aunque quien monta la pantalla pase un callback nuevo en cada render.
   const notifyUnauthorized = useEffectEvent(() => onUnauthorized?.());
@@ -54,6 +67,12 @@ export default function GamePage({ session, onUnauthorized, onExit }: GamePagePr
     return (
       <div className="w-full min-h-screen bg-background flex flex-col items-center justify-center gap-space-md px-gutter-mobile text-center font-body-md text-body-md text-on-surface-variant">
         {disconnected ? describeClose(closeCode) : 'Conectando con la partida…'}
+        {canReconnect && (
+          <button type="button" onClick={reconnect} className={EXIT_BUTTON}>
+            <span className="material-symbols-outlined text-[18px]">refresh</span>
+            Reintentar conexión
+          </button>
+        )}
         {onExit && (
           <button type="button" onClick={onExit} className={EXIT_BUTTON}>
             <span className="material-symbols-outlined text-[18px]">arrow_back</span>
@@ -150,6 +169,29 @@ export default function GamePage({ session, onUnauthorized, onExit }: GamePagePr
               >
                 {describeClose(closeCode)}
               </div>
+            )}
+
+            {serverError && (
+              <div
+                role="alert"
+                className="p-space-sm rounded-xl bg-error-container text-on-error-container font-body-sm text-body-sm"
+              >
+                <strong>{serverError.code}</strong> · {serverError.message}
+                {!finished && (
+                  <p className="mt-1">
+                    {botTurn
+                      ? 'Botcito no pudo jugar. La partida sigue como estaba; puedes reintentar.'
+                      : 'La partida sigue como estaba; puedes repetir tu jugada.'}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {!finished && (canReconnect || (serverError && botTurn)) && (
+              <button type="button" onClick={reconnect} className={EXIT_BUTTON}>
+                <span className="material-symbols-outlined text-[18px]">refresh</span>
+                {canReconnect ? 'Reintentar conexión' : 'Reintentar turno de Botcito'}
+              </button>
             )}
 
             {rejection && (

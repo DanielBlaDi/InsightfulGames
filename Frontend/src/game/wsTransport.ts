@@ -35,6 +35,7 @@ function parseServerMessage(data: unknown): ServerMessage | null {
       return valid ? (message as ServerMessage) : null;
     }
     case 'move_rejected':
+    case 'error':
       return typeof message.code === 'string' && typeof message.message === 'string'
         ? (message as ServerMessage)
         : null;

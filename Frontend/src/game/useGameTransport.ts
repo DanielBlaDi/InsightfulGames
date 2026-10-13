@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer, useRef } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { initialSessionView, sessionReducer } from './session';
 import type { GameSession, GameTransport } from './session';
 import type { ClientMessage, Color } from './types';
@@ -10,6 +10,8 @@ import type { ClientMessage, Color } from './types';
 export function useGameTransport(create: () => GameTransport): GameSession {
   const [view, dispatch] = useReducer(sessionReducer, initialSessionView);
   const transport = useRef<GameTransport | null>(null);
+  // Cambiar el intento vuelve a ejecutar el efecto: cierra la conexión actual y abre una nueva.
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     dispatch({ type: 'connecting' });
@@ -24,7 +26,7 @@ export function useGameTransport(create: () => GameTransport): GameSession {
       current.close();
       transport.current = null;
     };
-  }, [create]);
+  }, [create, attempt]);
 
   const send = useCallback((message: ClientMessage) => {
     if (!transport.current) return;
@@ -39,5 +41,7 @@ export function useGameTransport(create: () => GameTransport): GameSession {
     [send],
   );
 
-  return { ...view, sendMove, resign };
+  const reconnect = useCallback(() => setAttempt((n) => n + 1), []);
+
+  return { ...view, sendMove, resign, reconnect };
 }

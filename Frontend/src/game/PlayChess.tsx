@@ -9,13 +9,15 @@ interface PlayChessProps {
   token: string;
   /** El Gateway rechazó el token (401 en REST o cierre 4401 en el WebSocket): toca volver al login. */
   onUnauthorized?: () => void;
+  /** Salir del ajedrez desde la configuración. No cierra la sesión ni abandona ninguna partida. */
+  onExit?: () => void;
 }
 
 /**
  * Punto de entrada para la aplicación principal: configurar una partida, crearla en el
- * Gateway y jugarla. Uso: <PlayChess token={accessToken} onUnauthorized={irAlLogin} />
+ * Gateway y jugarla. Uso: <PlayChess token={accessToken} onUnauthorized={irAlLogin} onExit={irAlInicio} />
  */
-export default function PlayChess({ token, onUnauthorized }: PlayChessProps) {
+export default function PlayChess({ token, onUnauthorized, onExit }: PlayChessProps) {
   const create = useCallback(
     (request: CreateGameRequest, signal: AbortSignal) => createGame(request, token, signal),
     [token],
@@ -25,6 +27,7 @@ export default function PlayChess({ token, onUnauthorized }: PlayChessProps) {
     <GameFlow
       createGame={create}
       onUnauthorized={onUnauthorized}
+      onExit={onExit}
       renderGame={(game, onExit) => (
         <GameScreen gameId={game.gameId} token={token} onUnauthorized={onUnauthorized} onExit={onExit} />
       )}
