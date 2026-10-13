@@ -24,12 +24,10 @@ extra["snippetsDir"] = file("build/generated-snippets")
 dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-data-mongodb")
 	implementation("org.springframework.boot:spring-boot-starter-webmvc")
-	implementation("org.springframework.boot:spring-boot-starter-hateoas")
 	testImplementation("org.springframework.boot:spring-boot-starter-data-mongodb-test")
 	testImplementation("org.springframework.boot:spring-boot-starter-restdocs")
 	testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
 	testImplementation("org.springframework.restdocs:spring-restdocs-mockmvc")
-	testImplementation("org.springframework.boot:spring-boot-starter-hateoas-test")
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
 	implementation("com.github.bhlangonijr:chesslib:1.3.7")
