@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ApiError } from './api';
 import GameSetup from './GameSetup';
-import type { CreateGameRequest, GameState } from './types';
+import type { CreateGameRequest, GameState, GameMode } from './types';
 
 function describeError(error: unknown): string {
   if (error instanceof ApiError) {
@@ -17,10 +17,12 @@ interface GameFlowProps {
   /** Pinta la partida creada; `onExit` devuelve a la configuración. */
   renderGame: (game: GameState, onExit: () => void) => ReactNode;
   onUnauthorized?: () => void;
+  /** Modo preseleccionado. Si se proporciona, el usuario no podrá cambiarlo. */
+  preselectedMode?: GameMode;
 }
 
 /** Configuración → creación → partida. No sabe de dónde salen las partidas ni cómo se juegan. */
-export default function GameFlow({ createGame, renderGame, onUnauthorized }: GameFlowProps) {
+export default function GameFlow({ createGame, renderGame, onUnauthorized, preselectedMode }: GameFlowProps) {
   const [game, setGame] = useState<GameState | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,5 +53,5 @@ export default function GameFlow({ createGame, renderGame, onUnauthorized }: Gam
   };
 
   if (game) return renderGame(game, () => setGame(null));
-  return <GameSetup loading={loading} error={error} onStart={handleStart} />;
+  return <GameSetup loading={loading} error={error} onStart={handleStart} preselectedMode={preselectedMode} />;
 }

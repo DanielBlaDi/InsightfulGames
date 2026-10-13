@@ -35,11 +35,13 @@ interface GameSetupProps {
   loading: boolean;
   error: string | null;
   onStart: (request: CreateGameRequest) => void;
+  /** Modo preseleccionado. Si se proporciona, el usuario no podrá cambiarlo. */
+  preselectedMode?: GameMode;
 }
 
 /** Formulario de configuración: decide el cuerpo de POST /games, pero no hace la llamada. */
-export default function GameSetup({ loading, error, onStart }: GameSetupProps) {
-  const [mode, setMode] = useState<GameMode>('local');
+export default function GameSetup({ loading, error, onStart, preselectedMode }: GameSetupProps) {
+  const [mode, setMode] = useState<GameMode>(preselectedMode ?? 'local');
   const [level, setLevel] = useState(DEFAULT_LEVEL);
   const [playerColor, setPlayerColor] = useState<Color>('white');
 
@@ -62,7 +64,7 @@ export default function GameSetup({ loading, error, onStart }: GameSetupProps) {
           </p>
         </header>
 
-        <fieldset disabled={loading} className="flex flex-col gap-space-sm">
+        <fieldset disabled={loading || preselectedMode !== undefined} className="flex flex-col gap-space-sm">
           <legend className="font-label-lg text-label-lg text-on-surface mb-space-sm">Modo de juego</legend>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-space-sm">
             {MODES.map((option) => (
@@ -70,8 +72,8 @@ export default function GameSetup({ loading, error, onStart }: GameSetupProps) {
                 key={option.mode}
                 type="button"
                 aria-pressed={mode === option.mode}
-                onClick={() => setMode(option.mode)}
-                className={optionClass(mode === option.mode)}
+                onClick={preselectedMode ? undefined : () => setMode(option.mode)}
+                className={optionClass(mode === option.mode) + (preselectedMode ? ' opacity-60 cursor-not-allowed' : '')}
               >
                 <span className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-space-sm">
                   <span className="material-symbols-outlined text-[24px]">{option.icon}</span>
@@ -80,6 +82,9 @@ export default function GameSetup({ loading, error, onStart }: GameSetupProps) {
                 <span className="block font-body-sm text-body-sm text-on-surface-variant mt-1">
                   {option.description}
                 </span>
+                {preselectedMode === option.mode && (
+                  <span className="mt-1 text-xs font-semibold text-primary">Seleccionado</span>
+                )}
               </button>
             ))}
           </div>
