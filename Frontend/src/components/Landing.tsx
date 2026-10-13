@@ -3,12 +3,15 @@ import { useState, useEffect } from 'react';
 interface LandingProps {
   onLogin: () => void;
   onLogout?: () => void;
+  /** Abre el módulo de ajedrez (Frontend B). App decide si antes hace falta iniciar sesión. */
+  onPlayChess?: () => void;
   user?: { userId: string; username: string } | null;
 }
 
-export default function Landing({ onLogin, onLogout, user }: LandingProps) {
+export default function Landing({ onLogin, onLogout, onPlayChess, user }: LandingProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeBoard, setActiveBoard] = useState<'chess' | 'go' | 'shogi'>('chess');
+  const [boardRotated, setBoardRotated] = useState(false);
 
   const openBoardModal = (gameKey: 'chess' | 'go' | 'shogi') => {
     setActiveBoard(gameKey);
@@ -19,6 +22,10 @@ export default function Landing({ onLogin, onLogout, user }: LandingProps) {
   const closeBoardModal = () => {
     setIsModalOpen(false);
     document.body.style.overflow = '';
+  };
+
+  const rotateBoard = () => {
+    setBoardRotated(!boardRotated);
   };
 
   useEffect(() => {
@@ -624,7 +631,321 @@ export default function Landing({ onLogin, onLogout, user }: LandingProps) {
 
             {/* Contenido Modal */}
             <div className="p-4 sm:p-6 overflow-y-auto flex-1 bg-surface-container-lowest">
-              {/* Contenido de cada juego omitido para brevedad en esta respuesta; usa el mismo que antes */}
+
+              {/* AJEDREZ VIEW */}
+              {activeBoard === 'chess' && (
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+                  <div className="lg:col-span-7 flex flex-col items-center">
+                    <div className="p-3 sm:p-4 rounded-2xl bg-[#52331c] shadow-[0_16px_36px_rgba(40,16,6,0.35)] border border-[#784c2b] w-full max-w-[430px]">
+                      <div className="grid grid-cols-8 text-center text-[#d9b896] text-[11px] font-mono font-bold pb-1 select-none">
+                        <span>a</span><span>b</span><span>c</span><span>d</span><span>e</span><span>f</span><span>g</span><span>h</span>
+                      </div>
+                      <div
+                        id="chessGrid"
+                        className="relative aspect-square grid grid-cols-8 grid-rows-8 border-2 border-[#3b1f0d] rounded-lg overflow-hidden shadow-inner select-none transition-transform duration-500"
+                        style={{ transform: boardRotated ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                      >
+                        <div className="bg-[#e9d2b4] flex items-center justify-center text-2xl font-serif">♜</div>
+                        <div className="bg-[#9c633a] flex items-center justify-center text-2xl font-serif text-[#2a170c]">♞</div>
+                        <div className="bg-[#e9d2b4] flex items-center justify-center text-2xl font-serif">♝</div>
+                        <div className="bg-[#9c633a] flex items-center justify-center text-2xl font-serif text-[#2a170c]">♛</div>
+                        <div className="bg-[#e9d2b4] flex items-center justify-center text-2xl font-serif">♚</div>
+                        <div className="bg-[#9c633a] flex items-center justify-center text-2xl font-serif text-[#2a170c]">♝</div>
+                        <div className="bg-[#e9d2b4] flex items-center justify-center text-2xl font-serif">♞</div>
+                        <div className="bg-[#9c633a] flex items-center justify-center text-2xl font-serif text-[#2a170c]">♜</div>
+
+                        <div className="bg-[#9c633a] flex items-center justify-center text-2xl font-serif text-[#2a170c]">♟</div>
+                        <div className="bg-[#e9d2b4] flex items-center justify-center text-2xl font-serif">♟</div>
+                        <div className="bg-[#9c633a] flex items-center justify-center text-2xl font-serif text-[#2a170c]">♟</div>
+                        <div className="bg-[#e9d2b4] flex items-center justify-center text-2xl font-serif">♟</div>
+                        <div className="bg-[#9c633a] flex items-center justify-center text-2xl font-serif text-[#2a170c]">♟</div>
+                        <div className="bg-[#e9d2b4] flex items-center justify-center text-2xl font-serif">♟</div>
+                        <div className="bg-[#9c633a] flex items-center justify-center text-2xl font-serif text-[#2a170c]">♟</div>
+                        <div className="bg-[#e9d2b4] flex items-center justify-center text-2xl font-serif">♟</div>
+
+                        <div className="bg-[#e9d2b4]"></div><div className="bg-[#9c633a]"></div><div className="bg-[#e9d2b4]"></div><div className="bg-[#9c633a]"></div><div className="bg-[#e9d2b4]"></div><div className="bg-[#9c633a]"></div><div className="bg-[#e9d2b4]"></div><div className="bg-[#9c633a]"></div>
+
+                        <div className="bg-[#9c633a]"></div><div className="bg-[#e9d2b4]"></div><div className="bg-[#9c633a]"></div><div className="bg-[#e9d2b4]"></div>
+                        <div className="bg-[#9c633a] flex items-center justify-center text-2xl font-serif text-[#2a170c] bg-primary/20">♟</div>
+                        <div className="bg-[#e9d2b4]"></div><div className="bg-[#9c633a]"></div><div className="bg-[#e9d2b4]"></div>
+
+                        <div className="bg-[#e9d2b4]"></div><div className="bg-[#9c633a]"></div><div className="bg-[#e9d2b4]"></div><div className="bg-[#9c633a]"></div>
+                        <div className="bg-[#e9d2b4] flex items-center justify-center text-2xl font-serif text-primary drop-shadow font-bold ring-2 ring-primary/60 animate-pulse">♙</div>
+                        <div className="bg-[#9c633a]"></div><div className="bg-[#e9d2b4]"></div><div className="bg-[#9c633a]"></div>
+
+                        <div className="bg-[#9c633a]"></div><div className="bg-[#e9d2b4]"></div><div className="bg-[#9c633a]"></div><div className="bg-[#e9d2b4]"></div><div className="bg-[#9c633a]"></div>
+                        <div className="bg-[#e9d2b4] flex items-center justify-center text-2xl font-serif text-stone-900 drop-shadow">♘</div>
+                        <div className="bg-[#9c633a]"></div><div className="bg-[#e9d2b4]"></div>
+
+                        <div className="bg-[#e9d2b4] flex items-center justify-center text-2xl font-serif text-stone-900">♙</div>
+                        <div className="bg-[#9c633a] flex items-center justify-center text-2xl font-serif text-stone-900">♙</div>
+                        <div className="bg-[#e9d2b4] flex items-center justify-center text-2xl font-serif text-stone-900">♙</div>
+                        <div className="bg-[#9c633a] flex items-center justify-center text-2xl font-serif text-stone-900">♙</div>
+                        <div className="bg-[#e9d2b4]"></div>
+                        <div className="bg-[#9c633a] flex items-center justify-center text-2xl font-serif text-stone-900">♙</div>
+                        <div className="bg-[#e9d2b4] flex items-center justify-center text-2xl font-serif text-stone-900">♙</div>
+                        <div className="bg-[#9c633a] flex items-center justify-center text-2xl font-serif text-stone-900">♙</div>
+
+                        <div className="bg-[#9c633a] flex items-center justify-center text-2xl font-serif text-stone-900">♖</div>
+                        <div className="bg-[#e9d2b4] flex items-center justify-center text-2xl font-serif text-stone-900">♘</div>
+                        <div className="bg-[#9c633a] flex items-center justify-center text-2xl font-serif text-stone-900">♗</div>
+                        <div className="bg-[#e9d2b4] flex items-center justify-center text-2xl font-serif text-stone-900">♕</div>
+                        <div className="bg-[#9c633a] flex items-center justify-center text-2xl font-serif text-stone-900">♔</div>
+                        <div className="bg-[#e9d2b4] flex items-center justify-center text-2xl font-serif text-stone-900">♗</div>
+                        <div className="bg-[#9c633a]"></div>
+                        <div className="bg-[#e9d2b4] flex items-center justify-center text-2xl font-serif text-stone-900">♖</div>
+                      </div>
+                      <div className="grid grid-cols-8 text-center text-[#d9b896] text-[11px] font-mono font-bold pt-1 select-none">
+                        <span>a</span><span>b</span><span>c</span><span>d</span><span>e</span><span>f</span><span>g</span><span>h</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 mt-3">
+                      <button
+                        onClick={rotateBoard}
+                        className="px-3 py-1.5 rounded-lg bg-surface-container text-xs font-semibold text-on-surface hover:bg-surface-container-high transition-colors flex items-center gap-1 shadow-sm cursor-pointer"
+                      >
+                        <span className="material-symbols-outlined text-[15px]">autorenew</span> Rotar perspectiva
+                      </button>
+                      <span className="text-xs text-on-surface-variant font-medium">Turno: <strong className="text-primary">Blancas juegan (1. e4 e5 2. Nf3)</strong></span>
+                    </div>
+                  </div>
+
+                  <div className="lg:col-span-5 flex flex-col gap-3">
+                    <div className="p-4 rounded-xl bg-surface-container-low border border-outline-variant/30 shadow-sm">
+                      <div className="flex items-center gap-2 text-primary font-semibold text-sm mb-1.5">
+                        <span className="material-symbols-outlined text-[18px]">psychology</span>
+                        <span>Tutor IA: Análisis de Posición Viva</span>
+                      </div>
+                      <p className="text-xs leading-relaxed text-on-surface-variant">
+                        "El avance <strong className="text-on-surface">e4</strong> toma control del centro sin comprometer tu estructura. Al desarrollar el caballo a <strong className="text-on-surface">f3</strong>, atacas el peón negro mientras preparas el enroque sin memorizaciones rígidas."
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="p-3 rounded-lg bg-surface border border-outline-variant/20 flex items-start gap-2.5">
+                        <span className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0">1</span>
+                        <div>
+                          <h5 className="text-xs font-bold text-on-surface">Heurística de Centro Armónico</h5>
+                          <p className="text-[11px] text-on-surface-variant">Las 4 casillas centrales (d4, d5, e4, e5) determinan la fluidez de tus piezas mayores.</p>
+                        </div>
+                      </div>
+                      <div className="p-3 rounded-lg bg-surface border border-outline-variant/20 flex items-start gap-2.5">
+                        <span className="w-6 h-6 rounded-full bg-secondary/10 text-secondary flex items-center justify-center text-xs font-bold shrink-0">2</span>
+                        <div>
+                          <h5 className="text-xs font-bold text-on-surface">Sin castigo numérico</h5>
+                          <p className="text-[11px] text-on-surface-variant">Aquí no verás barras de evaluación estresantes; solo ideas y conceptos tácticos.</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="pt-2 flex flex-col gap-2">
+                      <button
+                        onClick={() => { closeBoardModal(); (onPlayChess ?? onLogin)(); }}
+                        className="w-full py-2.5 rounded-xl bg-primary text-on-primary font-semibold text-xs text-center shadow hover:bg-primary-container transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">smart_toy</span>
+                        <span>Jugar partida guiada con Bot Ajedrez</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* GO VIEW */}
+              {activeBoard === 'go' && (
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+                  <div className="lg:col-span-7 flex flex-col items-center">
+                    <div className="p-4 sm:p-5 rounded-2xl bg-[#dcb372] shadow-[0_16px_36px_rgba(70,45,15,0.35)] border-2 border-[#b58843] w-full max-w-[430px] relative">
+                      <div className="relative aspect-square w-full bg-[#deb877] rounded-lg shadow-inner overflow-hidden border border-[#b88c47] p-4 flex items-center justify-center">
+                        <svg className="w-full h-full" viewBox="0 0 360 360">
+                          <defs>
+                            <radialGradient cx="35%" cy="30%" id="goBlackGrad" r="70%">
+                              <stop offset="0%" stopColor="#555"></stop>
+                              <stop offset="60%" stopColor="#111"></stop>
+                              <stop offset="100%" stopColor="#000"></stop>
+                            </radialGradient>
+                            <radialGradient cx="30%" cy="25%" id="goWhiteGrad" r="75%">
+                              <stop offset="0%" stopColor="#ffffff"></stop>
+                              <stop offset="70%" stopColor="#e8e2d8"></stop>
+                              <stop offset="100%" stopColor="#c9bfae"></stop>
+                            </radialGradient>
+                          </defs>
+                          <line stroke="#704f21" strokeWidth="1.2" x1="20" x2="340" y1="20" y2="20"></line>
+                          <line stroke="#704f21" strokeWidth="1.2" x1="20" x2="340" y1="60" y2="60"></line>
+                          <line stroke="#704f21" strokeWidth="1.2" x1="20" x2="340" y1="100" y2="100"></line>
+                          <line stroke="#704f21" strokeWidth="1.2" x1="20" x2="340" y1="140" y2="140"></line>
+                          <line stroke="#704f21" strokeWidth="1.2" x1="20" x2="340" y1="180" y2="180"></line>
+                          <line stroke="#704f21" strokeWidth="1.2" x1="20" x2="340" y1="220" y2="220"></line>
+                          <line stroke="#704f21" strokeWidth="1.2" x1="20" x2="340" y1="260" y2="260"></line>
+                          <line stroke="#704f21" strokeWidth="1.2" x1="20" x2="340" y1="300" y2="300"></line>
+                          <line stroke="#704f21" strokeWidth="1.2" x1="20" x2="340" y1="340" y2="340"></line>
+                          <line stroke="#704f21" strokeWidth="1.2" x1="20" x2="20" y1="20" y2="340"></line>
+                          <line stroke="#704f21" strokeWidth="1.2" x1="60" x2="60" y1="20" y2="340"></line>
+                          <line stroke="#704f21" strokeWidth="1.2" x1="100" x2="100" y1="20" y2="340"></line>
+                          <line stroke="#704f21" strokeWidth="1.2" x1="140" x2="140" y1="20" y2="340"></line>
+                          <line stroke="#704f21" strokeWidth="1.2" x1="180" x2="180" y1="20" y2="340"></line>
+                          <line stroke="#704f21" strokeWidth="1.2" x1="220" x2="220" y1="20" y2="340"></line>
+                          <line stroke="#704f21" strokeWidth="1.2" x1="260" x2="260" y1="20" y2="340"></line>
+                          <line stroke="#704f21" strokeWidth="1.2" x1="300" x2="300" y1="20" y2="340"></line>
+                          <line stroke="#704f21" strokeWidth="1.2" x1="340" x2="340" y1="20" y2="340"></line>
+                          <circle cx="100" cy="100" fill="#543711" r="3.2"></circle>
+                          <circle cx="260" cy="100" fill="#543711" r="3.2"></circle>
+                          <circle cx="180" cy="180" fill="#543711" r="3.5"></circle>
+                          <circle cx="100" cy="260" fill="#543711" r="3.2"></circle>
+                          <circle cx="260" cy="260" fill="#543711" r="3.2"></circle>
+                          <circle cx="100" cy="100" fill="url(#goBlackGrad)" r="17"></circle>
+                          <circle cx="140" cy="100" fill="url(#goBlackGrad)" r="17"></circle>
+                          <circle cx="100" cy="140" fill="url(#goBlackGrad)" r="17"></circle>
+                          <circle cx="260" cy="220" fill="url(#goBlackGrad)" r="17"></circle>
+                          <circle cx="220" cy="260" fill="url(#goBlackGrad)" r="17"></circle>
+                          <circle cx="260" cy="260" fill="url(#goBlackGrad)" r="17"></circle>
+                          <circle cx="260" cy="100" fill="url(#goWhiteGrad)" r="17"></circle>
+                          <circle cx="220" cy="100" fill="url(#goWhiteGrad)" r="17"></circle>
+                          <circle cx="180" cy="180" fill="url(#goWhiteGrad)" r="17"></circle>
+                          <circle cx="100" cy="260" fill="url(#goWhiteGrad)" r="17"></circle>
+                          <circle cx="140" cy="260" fill="url(#goWhiteGrad)" r="17"></circle>
+                          <circle cx="100" cy="100" fill="none" opacity="0.8" r="21" stroke="#7b5414" strokeDasharray="3 3" strokeWidth="2"></circle>
+                        </svg>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 mt-3">
+                      <span className="text-xs text-on-surface-variant font-medium">Formato: <strong className="text-tertiary">Goban 9x9 (Didáctico) o 19x19 Canónico</strong></span>
+                      <span className="text-xs bg-tertiary/10 text-tertiary px-2 py-0.5 rounded-full font-semibold">Territorio vivo</span>
+                    </div>
+                  </div>
+
+                  <div className="lg:col-span-5 flex flex-col gap-3">
+                    <div className="p-4 rounded-xl bg-surface-container-low border border-outline-variant/30 shadow-sm">
+                      <div className="flex items-center gap-2 text-tertiary font-semibold text-sm mb-1.5">
+                        <span className="material-symbols-outlined text-[18px]">nature_people</span>
+                        <span>Tutor IA: Filosofía del Espacio y Formas</span>
+                      </div>
+                      <p className="text-xs leading-relaxed text-on-surface-variant">
+                        "En Go no buscas destruir al oponente, sino convivir construyendo más territorio sólido. Las piedras negras en la esquina superior izquierda han formado una base con <strong className="text-on-surface">dos ojos potenciales</strong>, garantizando vida permanente."
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="p-3 rounded-lg bg-surface border border-outline-variant/20 flex items-start gap-2.5">
+                        <span className="w-6 h-6 rounded-full bg-tertiary/10 text-tertiary flex items-center justify-center text-xs font-bold shrink-0">1</span>
+                        <div>
+                          <h5 className="text-xs font-bold text-on-surface">Libertades y Atari</h5>
+                          <p className="text-[11px] text-on-surface-variant">Cada intersección adyacente vacía es una respiración de vida para tu cadena de piedras.</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="pt-2 flex flex-col gap-2">
+                      <button
+                        onClick={() => { closeBoardModal(); onLogin(); }}
+                        className="w-full py-2.5 rounded-xl bg-tertiary text-on-tertiary font-semibold text-xs text-center shadow hover:bg-tertiary-container transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">smart_toy</span>
+                        <span>Jugar partida guiada con Bot Go</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* SHOGI VIEW */}
+              {activeBoard === 'shogi' && (
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+                  <div className="lg:col-span-7 flex flex-col items-center">
+                    <div className="p-3 sm:p-4 rounded-2xl bg-[#cfa163] shadow-[0_16px_36px_rgba(65,40,10,0.35)] border-2 border-[#a87a3e] w-full max-w-[440px]">
+                      <div className="flex items-center justify-between px-2 py-1 mb-1 bg-[#b88c4d] rounded text-[11px] font-semibold text-[#2f1f0a]">
+                        <span>Komadai Oponente:</span>
+                        <span className="font-mono bg-[#dfc18c] px-2 py-0.5 rounded shadow-inner text-xs">角 (Kaku) • 歩 (Fu)</span>
+                      </div>
+                      <div className="aspect-[9/10] grid grid-cols-9 grid-rows-9 bg-[#e5c692] border-2 border-[#82561e] rounded shadow-inner select-none p-0.5 gap-[1px]">
+                        <div className="bg-[#deb877] flex items-center justify-center rotate-180 text-[11px] font-bold text-[#1a1107]">香</div>
+                        <div className="bg-[#deb877] flex items-center justify-center rotate-180 text-[11px] font-bold text-[#1a1107]">桂</div>
+                        <div className="bg-[#deb877] flex items-center justify-center rotate-180 text-[11px] font-bold text-[#1a1107]">銀</div>
+                        <div className="bg-[#deb877] flex items-center justify-center rotate-180 text-[11px] font-bold text-[#1a1107]">金</div>
+                        <div className="bg-[#deb877] flex items-center justify-center rotate-180 text-[11px] font-black text-[#1a1107]">王</div>
+                        <div className="bg-[#deb877] flex items-center justify-center rotate-180 text-[11px] font-bold text-[#1a1107]">金</div>
+                        <div className="bg-[#deb877] flex items-center justify-center rotate-180 text-[11px] font-bold text-[#1a1107]">銀</div>
+                        <div className="bg-[#deb877] flex items-center justify-center rotate-180 text-[11px] font-bold text-[#1a1107]">桂</div>
+                        <div className="bg-[#deb877] flex items-center justify-center rotate-180 text-[11px] font-bold text-[#1a1107]">香</div>
+
+                        <div className="bg-[#deb877]"></div>
+                        <div className="bg-[#deb877] flex items-center justify-center rotate-180 text-[11px] font-bold text-[#1a1107]">飛</div>
+                        <div className="bg-[#deb877]"></div><div className="bg-[#deb877]"></div><div className="bg-[#deb877]"></div><div className="bg-[#deb877]"></div><div className="bg-[#deb877]"></div>
+                        <div className="bg-[#deb877] flex items-center justify-center rotate-180 text-[11px] font-bold text-[#1a1107]">角</div>
+                        <div className="bg-[#deb877]"></div>
+
+                        <div className="bg-[#deb877] flex items-center justify-center rotate-180 text-[10px] text-[#2c1c09]">歩</div>
+                        <div className="bg-[#deb877] flex items-center justify-center rotate-180 text-[10px] text-[#2c1c09]">歩</div>
+                        <div className="bg-[#deb877] flex items-center justify-center rotate-180 text-[10px] text-[#2c1c09]">歩</div>
+                        <div className="bg-[#deb877] flex items-center justify-center rotate-180 text-[10px] text-[#2c1c09]">歩</div>
+                        <div className="bg-[#deb877] flex items-center justify-center rotate-180 text-[10px] text-[#2c1c09]">歩</div>
+                        <div className="bg-[#deb877] flex items-center justify-center rotate-180 text-[10px] text-[#2c1c09]">歩</div>
+                        <div className="bg-[#deb877] flex items-center justify-center rotate-180 text-[10px] text-[#2c1c09]">歩</div>
+                        <div className="bg-[#deb877] flex items-center justify-center rotate-180 text-[10px] text-[#2c1c09]">歩</div>
+                        <div className="bg-[#deb877] flex items-center justify-center rotate-180 text-[10px] text-[#2c1c09]">歩</div>
+
+                        <div className="bg-[#deb877]"></div><div className="bg-[#deb877]"></div><div className="bg-[#deb877]"></div><div className="bg-[#deb877]"></div><div className="bg-[#deb877]"></div><div className="bg-[#deb877]"></div><div className="bg-[#deb877]"></div><div className="bg-[#deb877]"></div><div className="bg-[#deb877]"></div>
+                        <div className="bg-[#deb877]"></div><div className="bg-[#deb877]"></div><div className="bg-[#deb877]"></div><div className="bg-[#deb877]"></div>
+                        <div className="bg-[#deb877] flex items-center justify-center text-[11px] font-bold text-secondary ring-1 ring-secondary/50 rounded-sm">歩</div>
+                        <div className="bg-[#deb877]"></div><div className="bg-[#deb877]"></div><div className="bg-[#deb877]"></div><div className="bg-[#deb877]"></div>
+                        <div className="bg-[#deb877]"></div><div className="bg-[#deb877]"></div><div className="bg-[#deb877]"></div><div className="bg-[#deb877]"></div><div className="bg-[#deb877]"></div><div className="bg-[#deb877]"></div><div className="bg-[#deb877]"></div><div className="bg-[#deb877]"></div><div className="bg-[#deb877]"></div>
+
+                        <div className="bg-[#deb877] flex items-center justify-center text-[10px] text-[#2c1c09]">歩</div>
+                        <div className="bg-[#deb877] flex items-center justify-center text-[10px] text-[#2c1c09]">歩</div>
+                        <div className="bg-[#deb877] flex items-center justify-center text-[10px] text-[#2c1c09]">歩</div>
+                        <div className="bg-[#deb877] flex items-center justify-center text-[10px] text-[#2c1c09]">歩</div>
+                        <div className="bg-[#deb877]"></div>
+                        <div className="bg-[#deb877] flex items-center justify-center text-[10px] text-[#2c1c09]">歩</div>
+                        <div className="bg-[#deb877] flex items-center justify-center text-[10px] text-[#2c1c09]">歩</div>
+                        <div className="bg-[#deb877] flex items-center justify-center text-[10px] text-[#2c1c09]">歩</div>
+                        <div className="bg-[#deb877] flex items-center justify-center text-[10px] text-[#2c1c09]">歩</div>
+
+                        <div className="bg-[#deb877]"></div>
+                        <div className="bg-[#deb877] flex items-center justify-center text-[11px] font-bold text-[#1a1107]">角</div>
+                        <div className="bg-[#deb877]"></div><div className="bg-[#deb877]"></div><div className="bg-[#deb877]"></div><div className="bg-[#deb877]"></div><div className="bg-[#deb877]"></div>
+                        <div className="bg-[#deb877] flex items-center justify-center text-[11px] font-bold text-[#1a1107]">飛</div>
+                        <div className="bg-[#deb877]"></div>
+
+                        <div className="bg-[#deb877] flex items-center justify-center text-[11px] font-bold text-[#1a1107]">香</div>
+                        <div className="bg-[#deb877] flex items-center justify-center text-[11px] font-bold text-[#1a1107]">桂</div>
+                        <div className="bg-[#deb877] flex items-center justify-center text-[11px] font-bold text-[#1a1107]">銀</div>
+                        <div className="bg-[#deb877] flex items-center justify-center text-[11px] font-bold text-[#1a1107]">金</div>
+                        <div className="bg-[#deb877] flex items-center justify-center text-[12px] font-black text-secondary bg-secondary-fixed/40 ring-2 ring-secondary/50 rounded shadow-sm">王将</div>
+                        <div className="bg-[#deb877] flex items-center justify-center text-[11px] font-bold text-[#1a1107]">金</div>
+                        <div className="bg-[#deb877] flex items-center justify-center text-[11px] font-bold text-[#1a1107]">銀</div>
+                        <div className="bg-[#deb877] flex items-center justify-center text-[11px] font-bold text-[#1a1107]">桂</div>
+                        <div className="bg-[#deb877] flex items-center justify-center text-[11px] font-bold text-[#1a1107]">香</div>
+                      </div>
+                      <div className="flex items-center justify-between px-2 py-1 mt-1 bg-[#b88c4d] rounded text-[11px] font-semibold text-[#2f1f0a]">
+                        <span>Tu Komadai (Reserva):</span>
+                        <span className="font-mono bg-[#dfc18c] px-2 py-0.5 rounded shadow-inner text-xs font-bold text-secondary">銀 (Gin) • 桂 (Keima)</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 mt-3">
+                      <span className="text-xs text-on-surface-variant font-medium">Mecánica: <strong className="text-secondary">Reintroducción ("Drop") &amp; Ascenso de Rango</strong></span>
+                    </div>
+                  </div>
+
+                  <div className="lg:col-span-5 flex flex-col gap-3">
+                    <div className="p-4 rounded-xl bg-surface-container-low border border-outline-variant/30 shadow-sm">
+                      <div className="flex items-center gap-2 text-secondary font-semibold text-sm mb-1.5">
+                        <span className="material-symbols-outlined text-[18px]">recycling</span>
+                        <span>Tutor IA: Resurrección &amp; Movilidad Eterna</span>
+                      </div>
+                      <p className="text-xs leading-relaxed text-on-surface-variant">
+                        "En Shogi, una pieza capturada no muere. Se une a tu reserva en el <strong className="text-on-surface">Komadai</strong> y puede ser devuelta en cualquier casilla clave para asestar un golpe decisivo."
+                      </p>
+                    </div>
+                    <div className="pt-2 flex flex-col gap-2">
+                      <button
+                        onClick={() => { closeBoardModal(); onLogin(); }}
+                        className="w-full py-2.5 rounded-xl bg-secondary text-on-secondary font-semibold text-xs text-center shadow hover:bg-secondary/90 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">smart_toy</span>
+                        <span>Jugar partida guiada con Bot Shogi</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
             </div>
             {/* Footer Modal */}
             <div className="px-5 py-3 border-t border-outline-variant/20 bg-surface-container flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-on-surface-variant shrink-0">
@@ -632,12 +953,23 @@ export default function Landing({ onLogin, onLogout, user }: LandingProps) {
                 <span className="material-symbols-outlined text-primary text-[16px]">info</span>
                 <span>Pulsa <kbd className="px-1.5 py-0.5 bg-surface-container-highest rounded border border-outline-variant/40 font-mono text-[10px]">ESC</kbd> o haz clic fuera para cerrar.</span>
               </div>
-              <button
-                className="px-4 py-1.5 rounded-lg bg-surface-container-highest hover:bg-surface-container-high text-on-surface font-semibold transition-colors cursor-pointer"
-                onClick={closeBoardModal}
-              >
-                Cerrar Previsualización
-              </button>
+              <div className="flex items-center gap-2">
+                {activeBoard === 'chess' && onPlayChess && (
+                  <button
+                    className="px-4 py-1.5 rounded-lg bg-primary hover:bg-primary-container text-on-primary font-semibold transition-colors flex items-center gap-1 cursor-pointer"
+                    onClick={() => { closeBoardModal(); onPlayChess(); }}
+                  >
+                    <span className="material-symbols-outlined text-[16px]">play_arrow</span>
+                    Jugar ajedrez
+                  </button>
+                )}
+                <button
+                  className="px-4 py-1.5 rounded-lg bg-surface-container-highest hover:bg-surface-container-high text-on-surface font-semibold transition-colors cursor-pointer"
+                  onClick={closeBoardModal}
+                >
+                  Cerrar Previsualización
+                </button>
+              </div>
             </div>
           </div>
         </div>

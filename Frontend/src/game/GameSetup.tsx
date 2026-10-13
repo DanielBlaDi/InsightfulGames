@@ -35,10 +35,12 @@ interface GameSetupProps {
   loading: boolean;
   error: string | null;
   onStart: (request: CreateGameRequest) => void;
+  /** Si se pasa, se ofrece salir del módulo (por ejemplo, volver a la página de inicio). */
+  onExit?: () => void;
 }
 
 /** Formulario de configuración: decide el cuerpo de POST /games, pero no hace la llamada. */
-export default function GameSetup({ loading, error, onStart }: GameSetupProps) {
+export default function GameSetup({ loading, error, onStart, onExit }: GameSetupProps) {
   const [mode, setMode] = useState<GameMode>('local');
   const [level, setLevel] = useState(DEFAULT_LEVEL);
   const [playerColor, setPlayerColor] = useState<Color>('white');
@@ -55,6 +57,16 @@ export default function GameSetup({ loading, error, onStart }: GameSetupProps) {
         }}
       >
         <header className="flex flex-col gap-space-xs">
+          {onExit && (
+            <button
+              type="button"
+              onClick={onExit}
+              className="self-start mb-space-sm font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface transition-colors flex items-center gap-1 cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+              Volver al inicio
+            </button>
+          )}
           <span className="font-label-sm text-label-sm uppercase tracking-widest text-primary">Ajedrez</span>
           <h1 className="font-headline-lg text-headline-lg text-on-surface">Configura tu partida</h1>
           <p className="font-body-md text-body-md text-on-surface-variant">

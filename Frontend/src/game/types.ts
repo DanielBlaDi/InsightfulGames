@@ -54,4 +54,7 @@ export type ServerMessage =
   | { type: 'state'; state: GameState; lastMove?: string }
   | { type: 'move_rejected'; code: string; message: string }
   | { type: 'bot_thinking' }
-  | { type: 'game_over'; result: GameResult; endReason: EndReason };
+  | { type: 'game_over'; result: GameResult; endReason: EndReason }
+  // Extensión de GameService, fuera de contracts.docx: fallos que no son una jugada rechazada
+  // (Botcito o Game Logic no disponibles, error interno). No cambia el estado de la partida.
+  | { type: 'error'; code: string; message: string };

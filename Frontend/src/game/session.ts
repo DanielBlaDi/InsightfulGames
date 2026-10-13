@@ -23,11 +23,15 @@ export interface SessionView {
   /** Hay un mensaje enviado sin respuesta: el servidor contestará con `state` o `move_rejected`. */
   awaitingReply: boolean;
   rejection: MoveRejection | null;
+  /** Último `error` del servidor (Botcito o Game Logic caídos, etc.). No altera `state`. */
+  serverError: MoveRejection | null;
 }
 
 export interface GameSession extends SessionView {
   sendMove: (uci: string) => void;
   resign: (side?: Color) => void;
+  /** Cierra la conexión y abre otra. Nunca reenvía mensajes: el servidor responde con el `state` vigente. */
+  reconnect: () => void;
 }
 
 export interface TransportHandlers {
@@ -58,6 +62,7 @@ export const initialSessionView: SessionView = {
   botThinking: false,
   awaitingReply: false,
   rejection: null,
+  serverError: null,
 };
 
 /** Cada `state` reemplaza al anterior: el frontend solo pinta lo que recibe. */
@@ -72,11 +77,20 @@ function applyMessage(view: SessionView, message: ServerMessage): SessionView {
         botThinking: false,
         awaitingReply: false,
         rejection: null,
+        serverError: null,
       };
     case 'move_rejected':
       return { ...view, awaitingReply: false, rejection: { code: message.code, message: message.message } };
     case 'bot_thinking':
-      return { ...view, botThinking: true, rejection: null };
+      return { ...view, botThinking: true, rejection: null, serverError: null };
+    case 'error':
+      // El servidor no confirmó nada: se conserva el último `state` y se desbloquea la pantalla.
+      return {
+        ...view,
+        botThinking: false,
+        awaitingReply: false,
+        serverError: { code: message.code, message: message.message },
+      };
     case 'game_over':
       // El `state` previo ya trae status, result y endReason.
       return { ...view, botThinking: false };
@@ -92,7 +106,7 @@ export function sessionReducer(view: SessionView, event: SessionEvent): SessionV
     case 'open':
       return { ...view, connection: 'open', closeCode: null };
     case 'sent':
-      return { ...view, awaitingReply: true, rejection: null };
+      return { ...view, awaitingReply: true, rejection: null, serverError: null };
     case 'closed':
       return { ...view, connection: 'closed', closeCode: event.code, botThinking: false, awaitingReply: false };
     case 'message':
