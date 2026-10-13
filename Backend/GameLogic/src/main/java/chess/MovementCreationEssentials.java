@@ -1,20 +1,13 @@
 package chess;
 
+/** Cuerpo de POST /logic/games/{id}/moves: { "uci": "e2e4" }. Con promoción: "e7e8q". */
 public class MovementCreationEssentials{
-    public String boardFenBeforeMove;
-    public String coordinateNotation;
-    public Long playerId;
+    public String uci;
 
     public MovementCreationEssentials(){}
 
-    public MovementCreationEssentials(String boardFenBeforeMove){
+    public MovementCreationEssentials(String uci){
         this();
-        this.boardFenBeforeMove = boardFenBeforeMove;
-    }
-
-    public MovementCreationEssentials(String boardFenBeforeMove, String coordinateNotation, Long playerId){
-        this(boardFenBeforeMove);
-        this.coordinateNotation = coordinateNotation;
-        this.playerId = playerId;
+        this.uci = uci;
     }
 }

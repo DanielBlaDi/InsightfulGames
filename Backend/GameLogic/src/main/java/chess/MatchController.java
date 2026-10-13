@@ -1,30 +1,32 @@
 package chess;
 
-import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
-import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.methodOn;
-
-import java.time.LocalDateTime;
-import java.util.ArrayList;
+import java.net.URI;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.Map;
+import java.util.Optional;
+import java.util.regex.Pattern;
 
-import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.hateoas.CollectionModel;
-import org.springframework.hateoas.EntityModel;
-import org.springframework.hateoas.IanaLinkRelations;
-import org.springframework.http.ResponseEntity;
 
-import com.github.bhlangonijr.chesslib.*;
-import com.github.bhlangonijr.chesslib.move.*;
+import chess.ChessRules.Applied;
 
+/**
+ * Rutas de Game Logic (contrato, sección 3.5). Solo las llama Single Player.
+ * Game Logic guarda el estado de la partida: el cliente manda únicamente la jugada en UCI,
+ * y el FEN, el turno y las jugadas legales salen de lo guardado en MongoDB.
+ */
 @RestController
 public class MatchController{
+    private static final Pattern UUID_FORMAT = Pattern.compile("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
+
     private final MatchRepository repository;
     private final MatchAssembler assembler;
 
@@ -33,104 +35,121 @@ public class MatchController{
         this.assembler = assembler;
     }
 
-    @PostMapping({"/matches", "/matches/"})
-    ResponseEntity<EntityModel<Match>> newMatch(@RequestBody Match newMatch){
-        EntityModel<Match> matchEntityModel = assembler.toModel(repository.save(newMatch));
+    /** Crea la partida en la posición inicial. Game Logic genera gameId y createdAt. */
+    @PostMapping({"/logic/games", "/logic/games/"})
+    ResponseEntity<GameState> newMatch(@RequestBody CreateGameRequest request){
+        Match saved = repository.save(buildNewMatch(request));
 
-        return ResponseEntity.created(matchEntityModel.getRequiredLink(IanaLinkRelations.SELF).toUri()).body(matchEntityModel);
+        return ResponseEntity.created(URI.create("/logic/games/" + saved.getId())).body(assembler.toState(saved));
     }
 
-    @PostMapping({"/movements/{coordinate}", "/movements/{coordinate}/"})
-    ResponseEntity<AvailableMovesResponse> getAvailableMovesForPosition(@PathVariable String coordinate, @RequestBody MovementCreationEssentials movement){
-        Board board = new Board();
-        board.loadFromFen(movement.boardFenBeforeMove);
+    @GetMapping({"/logic/games/{id}", "/logic/games/{id}/"})
+    GameState getMatchById(@PathVariable("id") String id){
+        return assembler.toState(findMatch(id));
+    }
 
-        List<Move> allLegalMoves = board.legalMoves();
-        List<String> availableMovesForSpecificCoordinate = new ArrayList<>();
+    /** Las partidas de un usuario, la más reciente primero. */
+    @GetMapping({"/logic/games", "/logic/games/"})
+    List<GameSummary> getMatchesByUserId(@RequestParam(name = "userId", required = false) String userId){
+        if(userId == null || userId.isBlank()){
+            throw new RequestNotValidException("Falta el parámetro userId");
+        }
 
-        for(Move move : allLegalMoves){
-            if(move.getFrom().value().equalsIgnoreCase(coordinate)){
-                String promotion = move.getPromotion().value();
-                availableMovesForSpecificCoordinate.add(move.getTo().value() + (promotion.equals("NONE") ? "" : promotion));
+        return repository.findByUserIdOrderByCreatedAtDesc(userId).stream().map(assembler::toSummary).toList();
+    }
+
+    /** Aplica una jugada UCI sobre la posición guardada. Rechaza las ilegales y las de partidas terminadas. */
+    @PostMapping({"/logic/games/{id}/moves", "/logic/games/{id}/moves/"})
+    GameState addMovement(@PathVariable("id") String id, @RequestBody MovementCreationEssentials movement){
+        Match match = findMatch(id);
+
+        if(movement == null || movement.uci == null || movement.uci.isBlank()){
+            throw new RequestNotValidException("Falta el campo uci");
+        }
+        if(match.isFinished()){
+            throw MovementNotValidException.matchFinished();
+        }
+
+        //La posición se reconstruye desde initialFen y las jugadas guardadas (así se detecta la repetición triple)
+        Optional<Applied> applied = ChessRules.apply(match.getInitialFen(), match.playedUciMoves(), movement.uci);
+        if(applied.isEmpty()){
+            throw MovementNotValidException.illegalMove(movement.uci);
+        }
+
+        Applied result = applied.get();
+        Movement newMovement = new Movement(
+            match.getMovements().size() + 1,
+            result.san(),
+            movement.uci.trim().toLowerCase(),
+            result.fenAfter(),
+            Instant.now().truncatedTo(ChronoUnit.MILLIS)
+        );
+        match.addMovement(newMovement, result.turn());
+
+        if(result.outcome() != null){
+            match.finish(result.outcome().result(), result.outcome().endReason());
+        }
+
+        return assembler.toState(repository.save(match));
+    }
+
+    /** El bando indicado se rinde: gana el contrario por "resignation". */
+    @PostMapping({"/logic/games/{id}/resign", "/logic/games/{id}/resign/"})
+    GameState finishMatch(@PathVariable("id") String id, @RequestBody MatchResultRequest body){
+        Match match = findMatch(id);
+
+        if(body == null || !isColor(body.side)){
+            throw new RequestNotValidException("side debe ser \"white\" o \"black\"");
+        }
+        if(match.isFinished()){
+            throw MovementNotValidException.matchFinished();
+        }
+
+        match.finish("white".equals(body.side) ? "black" : "white", "resignation");
+
+        return assembler.toState(repository.save(match));
+    }
+
+    @GetMapping({"/health", "/health/"})
+    Map<String, String> health(){
+        return Map.of("status", "ok");
+    }
+
+    private Match findMatch(String id){
+        return repository.findById(id).orElseThrow(() -> new MatchNotFoundException(id));
+    }
+
+    /** Valida el cuerpo de POST /logic/games y arma la partida nueva. */
+    private static Match buildNewMatch(CreateGameRequest request){
+        if(request == null){
+            throw new RequestNotValidException("Falta el cuerpo de la petición");
+        }
+        if(request.userId() == null || !UUID_FORMAT.matcher(request.userId()).matches()){
+            throw new RequestNotValidException("userId debe ser un UUID");
+        }
+
+        String mode = request.mode();
+        if(!Match.MODE_LOCAL.equals(mode) && !Match.MODE_VS_BOT.equals(mode)){
+            throw new RequestNotValidException("mode debe ser \"local\" o \"vs_bot\"");
+        }
+
+        Integer botLevel = null;
+        String playerColor = null;
+        if(Match.MODE_VS_BOT.equals(mode)){
+            botLevel = request.botLevel();
+            if(botLevel == null || botLevel < 1 || botLevel > 20){
+                throw new RequestNotValidException("botLevel debe ser un entero de 1 a 20");
+            }
+            playerColor = request.playerColor();
+            if(!isColor(playerColor)){
+                throw new RequestNotValidException("playerColor debe ser \"white\" o \"black\"");
             }
         }
 
-        return ResponseEntity.ok(AvailableMovesResponse.of(availableMovesForSpecificCoordinate));
+        return new Match(request.userId(), mode, botLevel, playerColor);
     }
 
-    @GetMapping({"/matches/{id}", "/matches/{id}/"})
-    EntityModel<Match> getMatchById(@PathVariable String id){
-        Match foundMatch = repository.findById(id).orElseThrow(() -> new MatchNotFoundException(id));
-        return assembler.toModel(foundMatch);
-    }
-
-    @GetMapping({"/players/{id}/matches", "/players/{id}/matches/"})
-    CollectionModel<EntityModel<Match>> getMatchesByPlayerId(@PathVariable Long id){
-        List<EntityModel<Match>> matches = repository.findByWhitePlayerId(id).stream().map(assembler::toModel).collect(Collectors.toList());
-        List<EntityModel<Match>> matchesByBlackPlayerId = repository.findByBlackPlayerId(id).stream().map(assembler::toModel).collect(Collectors.toList());
-        
-        //Avoiding duplicates when the match has the same white player as black player
-        matchesByBlackPlayerId.removeAll(matches);
-        matches.addAll(matchesByBlackPlayerId);
-
-        return CollectionModel.of(matches, linkTo(methodOn(MatchController.class).getMatchesByPlayerId(id)).withSelfRel());
-    }
-
-    /** Cierra la partida y guarda su resultado (mate, tablas o abandono). */
-    @PatchMapping({"/matches/{id}/result", "/matches/{id}/result/"})
-    ResponseEntity<EntityModel<Match>> finishMatch(@PathVariable String id, @RequestBody MatchResultRequest body){
-        Match match = repository.findById(id).orElseThrow(() -> new MatchNotFoundException(id));
-        match.finish(body.result(), body.reason());
-
-        return ResponseEntity.ok(assembler.toModel(repository.save(match)));
-    }
-
-    @PatchMapping({"/matches/{id}/movements", "/matches/{id}/movements/"})
-    ResponseEntity<MovementResponse> addMovement(@PathVariable String id, @RequestBody MovementCreationEssentials movement){
-        Match modifiedMatch = repository.findById(id).orElseThrow(() -> new MatchNotFoundException(id));
-
-        if(modifiedMatch.getResult() == null){
-            Board board = new Board();
-            board.loadFromFen(movement.boardFenBeforeMove);
-
-            Move move = null;
-            boolean isLegal = false;
-        
-            try{
-                Move requested = new Move(movement.coordinateNotation, board.getSideToMove());
-                for(Move candidate : board.legalMoves()){
-                    if(candidate.getFrom() == requested.getFrom()
-                            && candidate.getTo() == requested.getTo()
-                            && candidate.getPromotion() == requested.getPromotion()){
-                        move = candidate;
-                        isLegal = true;
-                        break;
-                    }
-                }
-            }catch(RuntimeException e){
-                isLegal = false; //Notación mal formada
-            }
-
-            if(!isLegal){
-                throw new MovementNotValidException(movement.boardFenBeforeMove, movement.coordinateNotation);
-            }
-
-            board.doMove(move);
-            Movement newMovement = new Movement(movement.boardFenBeforeMove, board.getFen(), movement.coordinateNotation, movement.playerId, LocalDateTime.now());
-
-            modifiedMatch.addMovement(newMovement);
-            repository.save(modifiedMatch);
-
-            return ResponseEntity.ok(MovementResponse.of(board));
-        }else{
-            throw new MovementNotValidException("The match is already finished, no more moves can be done.");
-        }
-    }
-
-    @DeleteMapping({"/matches/{id}", "/matches/{id}/"})
-    ResponseEntity<?> deleteMatch(@PathVariable String id){
-        repository.deleteById(id);
-
-        return ResponseEntity.noContent().build();
+    private static boolean isColor(String value){
+        return "white".equals(value) || "black".equals(value);
     }
 }
