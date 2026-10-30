@@ -64,7 +64,7 @@ public class ChessApplicationHTTPTests{
 	}
 
 	private ResultActions postMove(String matchId, String uci) throws Exception{
-		return this.mockMvc.perform(post("/logic/games/" + matchId + "/moves").contentType(MediaType.APPLICATION_JSON).content("{\"uci\": \"" + uci + "\"}"));
+		return this.mockMvc.perform(post("/internal/logic/games/" + matchId + "/moves").contentType(MediaType.APPLICATION_JSON).content("{\"uci\": \"" + uci + "\"}"));
 	}
 
 	/**Test for the function newMatch(@RequestBody CreateGameRequest request)*/
@@ -73,7 +73,7 @@ public class ChessApplicationHTTPTests{
 
 		String requestBody = "{\"userId\": \"" + TEST_USER_ID + "\", \"mode\": \"vs_bot\", \"botLevel\": 8, \"playerColor\": \"white\"}";
 
-		this.mockMvc.perform(post("/logic/games").contentType(MediaType.APPLICATION_JSON).content(requestBody))
+		this.mockMvc.perform(post("/internal/logic/games").contentType(MediaType.APPLICATION_JSON).content(requestBody))
 			.andExpect(status().isCreated())
 			.andExpect(jsonPath("$.gameId", notNullValue()))
 			.andExpect(jsonPath("$.userId").value(TEST_USER_ID))
@@ -110,7 +110,7 @@ public class ChessApplicationHTTPTests{
 
 		String requestBody = "{\"userId\": \"" + TEST_USER_ID + "\", \"mode\": \"local\"}";
 
-		this.mockMvc.perform(post("/logic/games").contentType(MediaType.APPLICATION_JSON).content(requestBody))
+		this.mockMvc.perform(post("/internal/logic/games").contentType(MediaType.APPLICATION_JSON).content(requestBody))
 			.andExpect(status().isCreated())
 			.andExpect(jsonPath("$.mode").value("local"))
 			.andExpect(jsonPath("$.botLevel").value(nullValue()))
@@ -129,7 +129,7 @@ public class ChessApplicationHTTPTests{
 		};
 
 		for(String invalidBody : invalidBodies){
-			this.mockMvc.perform(post("/logic/games").contentType(MediaType.APPLICATION_JSON).content(invalidBody))
+			this.mockMvc.perform(post("/internal/logic/games").contentType(MediaType.APPLICATION_JSON).content(invalidBody))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"));
 		}
@@ -139,7 +139,7 @@ public class ChessApplicationHTTPTests{
 	@Test public void shouldReturnExistingMatch() throws Exception{
 		Match testMatch = givenStoredMatch(new Match(TEST_USER_ID, "local", null, null));
 
-		this.mockMvc.perform(get("/logic/games/" + testMatch.getId())).andExpect(status().isOk())
+		this.mockMvc.perform(get("/internal/logic/games/" + testMatch.getId())).andExpect(status().isOk())
 			.andExpect(jsonPath("$.gameId").value(testMatch.getId()))
 			.andExpect(jsonPath("$.status").value("in_progress"))
 			.andExpect(jsonPath("$.moves").isEmpty())
@@ -170,7 +170,7 @@ public class ChessApplicationHTTPTests{
 	@Test public void shouldReturnNotFoundForMissingMatch() throws Exception{
 		when(repository.findById("noExiste")).thenReturn(Optional.empty());
 
-		this.mockMvc.perform(get("/logic/games/noExiste"))
+		this.mockMvc.perform(get("/internal/logic/games/noExiste"))
 			.andExpect(status().isNotFound())
 			.andExpect(jsonPath("$.error.code").value("GAME_NOT_FOUND"))
 			.andDo(
@@ -193,7 +193,7 @@ public class ChessApplicationHTTPTests{
 
 		when(repository.findByUserIdOrderByCreatedAtDesc(TEST_USER_ID)).thenReturn(mockMatches);
 
-		this.mockMvc.perform(get("/logic/games").param("userId", TEST_USER_ID)).andExpect(status().isOk())
+		this.mockMvc.perform(get("/internal/logic/games").param("userId", TEST_USER_ID)).andExpect(status().isOk())
 			.andExpect(jsonPath("$.length()").value(2))
 			.andExpect(jsonPath("$[0].gameId").value(mockMatches.get(0).getId()))
 			.andDo(
@@ -212,7 +212,7 @@ public class ChessApplicationHTTPTests{
 
 	/**Test for the function getMatchesByUserId(@RequestParam String userId) without the userId*/
 	@Test public void shouldReturnValidationErrorWhenUserIdIsMissing() throws Exception{
-		this.mockMvc.perform(get("/logic/games"))
+		this.mockMvc.perform(get("/internal/logic/games"))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"));
 	}
@@ -285,7 +285,7 @@ public class ChessApplicationHTTPTests{
 	@Test public void shouldReturnValidationErrorWhenUciIsMissing() throws Exception{
 		Match testMatch = givenStoredMatch(new Match(TEST_USER_ID, "local", null, null));
 
-		this.mockMvc.perform(post("/logic/games/" + testMatch.getId() + "/moves").contentType(MediaType.APPLICATION_JSON).content("{}"))
+		this.mockMvc.perform(post("/internal/logic/games/" + testMatch.getId() + "/moves").contentType(MediaType.APPLICATION_JSON).content("{}"))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"));
 	}
@@ -363,7 +363,7 @@ public class ChessApplicationHTTPTests{
 	@Test public void shouldFinishMatchOnResignation() throws Exception{
 		Match testMatch = givenStoredMatch(new Match(TEST_USER_ID, "local", null, null));
 
-		this.mockMvc.perform(post("/logic/games/" + testMatch.getId() + "/resign").contentType(MediaType.APPLICATION_JSON).content("{\"side\": \"white\"}"))
+		this.mockMvc.perform(post("/internal/logic/games/" + testMatch.getId() + "/resign").contentType(MediaType.APPLICATION_JSON).content("{\"side\": \"white\"}"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.status").value("finished"))
 			.andExpect(jsonPath("$.result").value("black"))
@@ -378,7 +378,7 @@ public class ChessApplicationHTTPTests{
 		finishedMatch.finish("white", "resignation");
 		givenStoredMatch(finishedMatch);
 
-		this.mockMvc.perform(post("/logic/games/" + finishedMatch.getId() + "/resign").contentType(MediaType.APPLICATION_JSON).content("{\"side\": \"black\"}"))
+		this.mockMvc.perform(post("/internal/logic/games/" + finishedMatch.getId() + "/resign").contentType(MediaType.APPLICATION_JSON).content("{\"side\": \"black\"}"))
 			.andExpect(status().isUnprocessableContent())
 			.andExpect(jsonPath("$.error.code").value("GAME_FINISHED"));
 	}
@@ -387,7 +387,7 @@ public class ChessApplicationHTTPTests{
 	@Test public void shouldReturnValidationErrorOnInvalidSide() throws Exception{
 		Match testMatch = givenStoredMatch(new Match(TEST_USER_ID, "local", null, null));
 
-		this.mockMvc.perform(post("/logic/games/" + testMatch.getId() + "/resign").contentType(MediaType.APPLICATION_JSON).content("{\"side\": \"green\"}"))
+		this.mockMvc.perform(post("/internal/logic/games/" + testMatch.getId() + "/resign").contentType(MediaType.APPLICATION_JSON).content("{\"side\": \"green\"}"))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"));
 	}

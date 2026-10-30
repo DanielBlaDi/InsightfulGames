@@ -31,20 +31,20 @@ public class MatchController{
     }
 
     /** Crea la partida en la posición inicial. GameLogic genera gameId y createdAt. */
-    @PostMapping({"/logic/games", "/logic/games/"})
+    @PostMapping({"/internal/logic/games", "/internal/logic/games/"})
     ResponseEntity<GameState> newMatch(@RequestBody CreateGameRequest request){
         Match saved = repository.save(buildNewMatch(request));
 
-        return ResponseEntity.created(URI.create("/logic/games/" + saved.getId())).body(assembler.toState(saved));
+        return ResponseEntity.created(URI.create("/internal/logic/games/" + saved.getId())).body(assembler.toState(saved));
     }
 
-    @GetMapping({"/logic/games/{id}", "/logic/games/{id}/"})
+    @GetMapping({"/internal/logic/games/{id}", "/internal/logic/games/{id}/"})
     GameState getMatchById(@PathVariable("id") String id){
         return assembler.toState(findMatch(id));
     }
 
     /** Las partidas de un usuario, la más reciente primero. */
-    @GetMapping({"/logic/games", "/logic/games/"})
+    @GetMapping({"/internal/logic/games", "/internal/logic/games/"})
     List<GameSummary> getMatchesByUserId(@RequestParam(name = "userId", required = false) String userId){
         if(userId == null || userId.isBlank()){
             throw new RequestNotValidException("Falta el parámetro userId");
@@ -54,7 +54,7 @@ public class MatchController{
     }
 
     /** Aplica una jugada UCI sobre la posición guardada. Rechaza las ilegales y las de partidas terminadas. */
-    @PostMapping({"/logic/games/{id}/moves", "/logic/games/{id}/moves/"})
+    @PostMapping({"/internal/logic/games/{id}/moves", "/internal/logic/games/{id}/moves/"})
     GameState addMovement(@PathVariable("id") String id, @RequestBody MovementCreationEssentials movement){
         Match match = findMatch(id);
 
@@ -89,7 +89,7 @@ public class MatchController{
     }
 
     /** El bando indicado se rinde: gana el contrario por "resignation". */
-    @PostMapping({"/logic/games/{id}/resign", "/logic/games/{id}/resign/"})
+    @PostMapping({"/internal/logic/games/{id}/resign", "/internal/logic/games/{id}/resign/"})
     GameState finishMatch(@PathVariable("id") String id, @RequestBody MatchResultRequest body){
         Match match = findMatch(id);
 
