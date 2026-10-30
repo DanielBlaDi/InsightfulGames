@@ -10,7 +10,6 @@ import chess.GameState.MoveEntry;
 
 /**
  * Convierte una Match (lo guardado en Mongo) en los objetos JSON del contrato.
- * Antes armaba los enlaces HATEOAS; el contrato no los usa, así que ahora arma GameState y GameSummary.
  */
 @Component
 public class MatchAssembler{

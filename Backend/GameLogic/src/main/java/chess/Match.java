@@ -13,7 +13,7 @@ import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.Field;
 
 /**
- * Una partida. Es el documento de la colección "games" (contrato, sección 3.8): el mismo GameState
+ * Una partida. Es el documento de la colección "games": el mismo GameState
  * con _id = gameId y el campo extra initialFen. legalMoves no se guarda, se calcula al responder
  * (ver MatchAssembler).
  */
@@ -25,22 +25,77 @@ public class Match{
     public static final String STATUS_IN_PROGRESS = "in_progress";
     public static final String STATUS_FINISHED = "finished";
 
+    /**
+     * gameId: UUID v4 en texto
+     */
     @Id
-    private String id;                  // gameId: UUID v4 en texto
-    private String userId;              // UUID v4 en texto
-    private String mode;                // local | vs_bot
-    private Integer botLevel;           // 1 a 20; solo en vs_bot, null en local
-    private String playerColor;         // white | black; solo en vs_bot, null en local
-    private String status;              // in_progress | finished
-    private String turn;                // white | black
-    private String fen;                 // posición actual
-    private String initialFen;          // posición con la que empezó la partida
-    @Field("moves")
-    private List<Movement> movements;   // en Mongo y en el JSON del contrato el campo se llama "moves"
-    private String result;              // white | black | draw | null (si la partida sigue)
-    private String endReason;           // checkmate | stalemate | resignation | draw | null (si la partida sigue)
+    private String id;
+
+    /**
+     * UUID v4 en texto
+     */
+    private String userId;
+
+    /**
+     * "local" o "vs_bot"
+     */
+    private String mode;
+
+    /**
+     * 1 a 20; solo en vs_bot, null en local
+     */
+    private Integer botLevel;
+
+    /**
+     * "white" o "black"; solo en vs_bot, null en local
+     */
+    private String playerColor;
+
+    /**
+     * "in_progress" o "finished"
+     */
+    private String status;
+
+    /**
+     * "white" o "black", indica qué jugador tiene el turno actualmente
+     */
+    private String turn;
+
+    /**
+     * Estado del tablero en notación FEN
+     */
+    private String fen;
+
+    /**
+     * Estado del tablero en notación FEN al iniciar la partida
+     */
+    private String initialFen;
+
+    /**
+     * Lista de movimientos que se han realizado en esta partida
+    */
+    @Field("moves") //En Mongo el campo se llama "moves"
+    private List<Movement> movements;
+
+    /**
+     * "white" o "black" o "draw" o null (si la partida no ha terminado)
+     */
+    private String result;
+
+    /**
+     * "checkmate" o "stalemate" o "resignation" o "draw" o null (si la partida sigue)
+     */
+    private String endReason;
+
+    /**
+     * El tiempo de inicio de la partida
+     */
     private Instant createdAt;
-    private Instant finishedAt;         // null mientras la partida sigue
+
+    /**
+     * El tiempo de fin de la partida, null mientras la partida sigue
+     */
+    private Instant finishedAt;
 
     /** Lo usa Spring Data para reconstruir la partida desde Mongo. */
     public Match(){
@@ -74,7 +129,7 @@ public class Match{
         this.turn = turnAfterMove;
     }
 
-    /** Cierra la partida (jaque mate, ahogado, tablas o abandono). */
+    /** Cierra la partida */
     public void finish(String result, String endReason){
         this.status = STATUS_FINISHED;
         this.result = result;
@@ -86,7 +141,7 @@ public class Match{
         return STATUS_FINISHED.equals(status);
     }
 
-    /** Las jugadas ya hechas en UCI, en orden. Con ellas y initialFen se reconstruye la posición. */
+    /** Las jugadas ya hechas en UCI, en orden. Con ellas e initialFen se reconstruye la posición. */
     public List<String> playedUciMoves(){
         List<String> uciMoves = new ArrayList<>();
         for(Movement movement : movements){

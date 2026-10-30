@@ -5,12 +5,31 @@ import java.util.Objects;
 
 import org.springframework.data.annotation.PersistenceCreator;
 
-/** Una jugada ya hecha, guardada dentro del documento de la partida (elemento de "moves" en el contrato). */
+/** Una jugada ya hecha, guardada dentro del documento de la partida*/
 public class Movement{
-    private int ply;            // número de jugada, desde 1 (media jugada)
-    private String san;         // notación para mostrar al usuario, p. ej. "e4"
-    private String uci;         // notación UCI, p. ej. "e2e4" (con promoción: "e7e8q")
-    private String fenAfter;    // posición después de la jugada
+    /**
+     * Número de jugada, desde 1 (media jugada)
+     */
+    private int ply;
+
+    /**
+     * Notación para mostrar al usuario, p. ej. "e4"
+     */
+    private String san;
+
+    /**
+     * Notación UCI, p. ej. "e2e4" (con promoción: "e7e8q")
+     */
+    private String uci;
+
+    /**
+     * Estado del tablero en notación FEN después de la jugada
+     */
+    private String fenAfter;
+
+    /**
+     * El tiempo en el que se realizó la jugada
+     */
     private Instant timestamp;
 
     @PersistenceCreator

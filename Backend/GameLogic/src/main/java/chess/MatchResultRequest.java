@@ -1,6 +1,6 @@
 package chess;
 
-/** Cuerpo de POST /logic/games/{id}/resign: { "side": "white" }. Es el bando que se rinde. */
+/** Cuerpo de POST /internal/logic/games/{id}/resign: { "side": "white" }. Es el bando que se rinde. */
 public class MatchResultRequest{
     public String side;
 

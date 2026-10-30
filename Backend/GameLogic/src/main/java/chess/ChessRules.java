@@ -14,7 +14,7 @@ import com.github.bhlangonijr.chesslib.move.Move;
 import com.github.bhlangonijr.chesslib.move.MoveList;
 
 /**
- * Reglas de ajedrez (RNF-11). Clase sin Spring, para poder probarla sola.
+ * Reglas de ajedrez. Clase sin Spring, para poder probarla sola.
  * Toda la posición se reconstruye desde el FEN inicial y las jugadas guardadas,
  * así que la repetición triple de posición sí se detecta.
  */
@@ -55,7 +55,7 @@ public final class ChessRules{
 
     /**
      * Aplica una jugada UCI a la partida que empezó en initialFen y en la que ya se jugaron previousUci.
-     * Devuelve vacío si la jugada es ilegal o está mal escrita.
+     * Devuelve null si la jugada es ilegal o está mal escrita.
      */
     public static Optional<Applied> apply(String initialFen, List<String> previousUci, String uci){
         Board board = replay(initialFen, previousUci);

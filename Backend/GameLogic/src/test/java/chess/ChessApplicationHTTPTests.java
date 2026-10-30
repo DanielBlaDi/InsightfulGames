@@ -260,7 +260,7 @@ public class ChessApplicationHTTPTests{
 		Match testMatch = givenStoredMatch(new Match(TEST_USER_ID, "local", null, null));
 
 		postMove(testMatch.getId(), "e2e5")
-			.andExpect(status().isUnprocessableEntity())
+			.andExpect(status().isUnprocessableContent())
 			.andExpect(jsonPath("$.error.code").value("INVALID_MOVE"))
 			.andDo(
 				document(
@@ -277,9 +277,8 @@ public class ChessApplicationHTTPTests{
 	@Test public void shouldReturnInvalidMoveAfterMalformedOrWrongTurnMove() throws Exception{
 		Match testMatch = givenStoredMatch(new Match(TEST_USER_ID, "local", null, null));
 
-		postMove(testMatch.getId(), "hola").andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.error.code").value("INVALID_MOVE"));
-		//Es el turno de las blancas
-		postMove(testMatch.getId(), "e7e5").andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.error.code").value("INVALID_MOVE"));
+		postMove(testMatch.getId(), "hola").andExpect(status().isUnprocessableContent()).andExpect(jsonPath("$.error.code").value("INVALID_MOVE"));
+		postMove(testMatch.getId(), "e7e5").andExpect(status().isUnprocessableContent()).andExpect(jsonPath("$.error.code").value("INVALID_MOVE"));
 	}
 
 	/**Test for the function addMovement(@PathVariable String id, @RequestBody MovementCreationEssentials movement) without the uci field*/
@@ -307,7 +306,7 @@ public class ChessApplicationHTTPTests{
 		givenStoredMatch(finishedMatch);
 
 		postMove(finishedMatch.getId(), "e2e4")
-			.andExpect(status().isUnprocessableEntity())
+			.andExpect(status().isUnprocessableContent())
 			.andExpect(jsonPath("$.error.code").value("GAME_FINISHED"))
 			.andDo(
 				document(
@@ -380,7 +379,7 @@ public class ChessApplicationHTTPTests{
 		givenStoredMatch(finishedMatch);
 
 		this.mockMvc.perform(post("/logic/games/" + finishedMatch.getId() + "/resign").contentType(MediaType.APPLICATION_JSON).content("{\"side\": \"black\"}"))
-			.andExpect(status().isUnprocessableEntity())
+			.andExpect(status().isUnprocessableContent())
 			.andExpect(jsonPath("$.error.code").value("GAME_FINISHED"));
 	}
 

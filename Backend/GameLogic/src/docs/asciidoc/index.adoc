@@ -1,7 +1,5 @@
 = Game Logic API
 
-This API follows the contract of the Prototipo 1 (sections 3.5, 3.8 and 4). It is only called by the Single Player component.
-
 Game Logic is the only source of truth of each match: it stores the position, the moves and the result, and validates every move against the stored position. The client only sends the move in UCI notation.
 
 The identifiers (the match id and the user id) are UUID v4 Strings. The dates are in ISO 8601 UTC. The colors are always "white" or "black".

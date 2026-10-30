@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class MovementNotValidAdvice{
 	@ExceptionHandler(MovementNotValidException.class)
-	@ResponseStatus(HttpStatus.UNPROCESSABLE_ENTITY)
+	@ResponseStatus(HttpStatus.UNPROCESSABLE_CONTENT)
 	Map<String, Object> movementNotValidHandler(MovementNotValidException exception){
 		return error(exception.getCode(), exception.getMessage());
 	}
@@ -30,7 +30,6 @@ public class MovementNotValidAdvice{
 		return error("VALIDATION_ERROR", "El cuerpo de la petición no es un JSON válido");
 	}
 
-	/** Forma de error del contrato: { "error": { "code": "...", "message": "..." } } */
 	private static Map<String, Object> error(String code, String message){
 		return Map.of("error", Map.of("code", code, "message", message));
 	}

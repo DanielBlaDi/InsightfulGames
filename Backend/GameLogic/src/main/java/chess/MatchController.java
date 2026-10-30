@@ -18,11 +18,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import chess.ChessRules.Applied;
 
-/**
- * Rutas de Game Logic (contrato, sección 3.5). Solo las llama Single Player.
- * Game Logic guarda el estado de la partida: el cliente manda únicamente la jugada en UCI,
- * y el FEN, el turno y las jugadas legales salen de lo guardado en MongoDB.
- */
 @RestController
 public class MatchController{
     private static final Pattern UUID_FORMAT = Pattern.compile("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
@@ -35,7 +30,7 @@ public class MatchController{
         this.assembler = assembler;
     }
 
-    /** Crea la partida en la posición inicial. Game Logic genera gameId y createdAt. */
+    /** Crea la partida en la posición inicial. GameLogic genera gameId y createdAt. */
     @PostMapping({"/logic/games", "/logic/games/"})
     ResponseEntity<GameState> newMatch(@RequestBody CreateGameRequest request){
         Match saved = repository.save(buildNewMatch(request));
@@ -119,7 +114,7 @@ public class MatchController{
         return repository.findById(id).orElseThrow(() -> new MatchNotFoundException(id));
     }
 
-    /** Valida el cuerpo de POST /logic/games y arma la partida nueva. */
+    /** Valida el cuerpo de POST /internal/logic/games y arma la partida nueva. */
     private static Match buildNewMatch(CreateGameRequest request){
         if(request == null){
             throw new RequestNotValidException("Falta el cuerpo de la petición");
