@@ -1,0 +1,15 @@
+# Pruebas sin Docker: H2 en modo PostgreSQL con el mismo script de Databases/profile y sin RabbitMQ.
+spring:
+  datasource:
+    url: jdbc:h2:mem:profile;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+  sql:
+    init:
+      mode: always
+      schema-locations: file:../../Databases/profile/01-init.sql
+  rabbitmq:
+    listener:
+      simple:
+        # Los consumidores se prueban llamando a sus métodos; no se conecta a ningún broker.
+        auto-startup: false
