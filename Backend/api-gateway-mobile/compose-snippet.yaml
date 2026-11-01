@@ -1,0 +1,31 @@
+# Pegar dentro de `services:` del compose.yaml de la raíz.
+# Contrato: contenedor y servicio `api-gateway-mobile`, carpeta Backend/api-gateway-mobile/,
+# puerto interno 8090, publicado como MOBILE_GATEWAY_PORT. Arranca después del gateway interno (web).
+
+  api-gateway-mobile:
+    container_name: api-gateway-mobile
+    restart: unless-stopped
+    build:
+      context: ./Backend/api-gateway-mobile
+      dockerfile: Dockerfile
+    image: api-gateway-mobile:dev
+    ports:
+      - "${MOBILE_GATEWAY_PORT:-8090}:8090"
+    environment:
+      PORT: "8090"
+      GATEWAY_INTERNAL_URL: http://api-gateway-component:${API_GATEWAY_PORT}
+      JWT_SECRET: ${JWT_SECRET:?}          # obligatoria: Compose no arranca sin ella
+      JWT_ALGORITHM: HS256
+      HTTP_TIMEOUT: "15"
+      LOG_LEVEL: INFO
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8090/health', timeout=3).status == 200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    depends_on:
+      api-gateway-component:
+        condition: service_started
+    networks:
+      - app
