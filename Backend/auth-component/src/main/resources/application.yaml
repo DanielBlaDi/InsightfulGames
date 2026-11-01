@@ -15,3 +15,12 @@ spring:
     hibernate:
       ddl-auto: validate
     open-in-view: false
+
+  rabbitmq:
+    # amqp://usuario:clave@rabbitmq:5672 (contrato v9, sección 21)
+    addresses: ${RABBITMQ_URL:amqp://guest:guest@localhost:5672}
+
+# Borrado de cuenta: Auth llama a Game Logic, Tutor y Profile/Stats por el gateway interno.
+gateway:
+  internal-url: ${GATEWAY_INTERNAL_URL:http://localhost:8080}
+  timeout-seconds: ${HTTP_TIMEOUT:15}

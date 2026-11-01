@@ -268,3 +268,25 @@ Antes de producción, verificar que las rutas internas no queden accesibles sin 
 Los contratos y archivos de configuración descritos documentan la implementación prevista. Antes de considerar el componente listo para integrarse, se deben verificar la compilación, la conexión con MySQL, el registro, el inicio de sesión, la validación del JWT y la eliminación de cuentas.
 
 La validación de JWT y el control de acceso a las rutas de negocio corresponden al Gateway.
+10. Cambios del Prototipo 2 (contrato v9)
+
+Rutas. Las rutas pasan a /internal/auth/register, /internal/auth/login y DELETE /internal/auth/account, y solo se llaman a través del gateway (sección 7). Las rutas /auth/* se mantienen como alias mientras el gateway actual siga usándolas; se pueden quitar cuando el gateway web llame a /internal/auth/*.
+
+Errores. Todas las respuestas de error usan el formato común: { "error": { "code": "...", "message": "..." } }. Códigos: VALIDATION_ERROR (400), INVALID_CREDENTIALS (401), USERNAME_TAKEN (409), SERVICES_UNAVAILABLE (503).
+
+Evento user.registered. Tras confirmar el registro en MySQL, Auth publica en el exchange user.events (topic, durable) con la clave user.registered:
+{ "eventId", "eventType": "user.registered", "occurredAt", "userId", "username" }
+Si RabbitMQ no responde, se reintenta 3 veces en memoria. Si sigue fallando, el registro se conserva y el evento se pierde (no hay outbox en esta entrega).
+
+Borrado de cuenta (DELETE /internal/auth/account, cabecera X-User-Id):
+1. DELETE /internal/logic/users/{userId}
+2. DELETE /internal/tutor/users/{userId}
+3. DELETE /internal/profile/users/{userId}
+Las tres llamadas van por el gateway interno (GATEWAY_INTERNAL_URL). Cada una debe responder 204. Si una falla, Auth responde 503 SERVICES_UNAVAILABLE, no borra su fila y no llama a las siguientes; el usuario puede reintentar. Si las tres responden 204, se borra la fila de MySQL y se responde 204. Si la cuenta ya no existe, responde 204 sin llamar a nadie.
+La cookie de sesión la pone y la borra el gateway web, no Auth.
+
+Variables nuevas: RABBITMQ_URL (amqp://usuario:clave@rabbitmq:5672), GATEWAY_INTERNAL_URL (http://api-gateway-component:8080), HTTP_TIMEOUT (segundos, 15 por defecto).
+
+Pruebas. mvn test (JDK 21). Usan H2 en modo MySQL con Databases/auth/01-init.sql; RabbitMQ y los servicios del borrado se simulan. No necesitan Docker.
+
+Pendiente. El esquema de v9 (sección 7) usa la columna id y añade created_at; el script actual usa user_id y no tiene created_at. No se cambió porque obligaría a recrear el volumen de MySQL y ningún flujo necesita created_at. Pendiente de decidir con el equipo.

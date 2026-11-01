@@ -1,0 +1,17 @@
+# Pruebas sin Docker: H2 en modo MySQL con el script de Databases/auth, sin RabbitMQ real.
+spring:
+  datasource:
+    url: jdbc:h2:mem:auth;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  sql:
+    init:
+      mode: always
+      schema-locations: file:../../Databases/auth/01-init.sql
+
+JWT_SECRET: secreto-de-prueba-con-al-menos-32-bytes-0123456789
+
+gateway:
+  internal-url: http://localhost:1
+  timeout-seconds: 1

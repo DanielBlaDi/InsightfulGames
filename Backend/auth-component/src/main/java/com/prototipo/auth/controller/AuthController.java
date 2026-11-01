@@ -15,8 +15,12 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * Rutas de Auth. v9 (sección 7) las publica como /internal/auth/*, siempre a través del gateway.
+ * /auth/* se mantiene mientras el gateway actual siga llamando a esas rutas.
+ */
 @RestController
-@RequestMapping("/auth")
+@RequestMapping({"/internal/auth", "/auth"})
 public class AuthController {
 
     private final AuthService authService;
