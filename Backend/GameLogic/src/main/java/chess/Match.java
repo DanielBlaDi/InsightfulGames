@@ -12,6 +12,10 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.Field;
 
+import chess.constants.Color;
+import chess.constants.Mode;
+import chess.constants.Status;
+
 /**
  * Una partida. Es el documento de la colección "games": el mismo GameState
  * con _id = gameId y el campo extra initialFen. legalMoves no se guarda, se calcula al responder
@@ -19,20 +23,6 @@ import org.springframework.data.mongodb.core.mapping.Field;
  */
 @Document(collection = "games")
 public class Match{
-    public static final String MODE_LOCAL = "local";
-    public static final String MODE_VS_BOT = "vs_bot";
-    public static final String MODE_MULTIPLAYER = "multiplayer";
-
-    public static final String STATUS_IN_PROGRESS = "in_progress";
-    public static final String STATUS_FINISHED = "finished";
-    public static final String STATUS_WAITING = "waiting";
-
-    public static final String VISIBILITY_PRIVATE = "private";
-    public static final String VISIBILITY_SHARED = "shared";
-
-    public static final String COLOR_WHITE = "white";
-    public static final String COLOR_BLACK = "black";
-
     /**
      * gameId: UUID v4 en texto
      */
@@ -148,8 +138,8 @@ public class Match{
         this.timeControl = timeControl;
 
         if(timeControl != null){
-            if(mode.equals(Match.MODE_VS_BOT)){
-                if(participants.get(0).color().equals(Match.COLOR_WHITE)){
+            if(mode.equals(Mode.VS_BOT.toString())){
+                if(participants.get(0).color().equals(Color.WHITE.toString())){
                     this.clocks = new Clocks(timeControl.minutes()*60000, null);
                 }else{
                     this.clocks = new Clocks(null, timeControl.minutes()*60000);
@@ -159,8 +149,8 @@ public class Match{
             }
         }
 
-        this.status = mode.equals(MODE_MULTIPLAYER) ? STATUS_WAITING : STATUS_IN_PROGRESS;
-        this.turn = "white";
+        this.status = mode.equals(Mode.MULTIPLAYER.toString()) ? Status.WAITING.toString() : Status.IN_PROGRESS.toString();
+        this.turn = Color.WHITE.toString();
         this.fen = ChessRules.START_FEN;
         this.initialFen = ChessRules.START_FEN;
         this.drawOffer = null;
@@ -182,14 +172,14 @@ public class Match{
 
     /** Cierra la partida */
     public void finish(String result, String endReason){
-        this.status = STATUS_FINISHED;
+        this.status = Status.FINISHED.toString();
         this.result = result;
         this.endReason = endReason;
         this.finishedAt = now();
     }
 
     public boolean isFinished(){
-        return STATUS_FINISHED.equals(status);
+        return Status.FINISHED.toString().equals(status);
     }
 
     /** Las jugadas ya hechas en UCI, en orden. Con ellas e initialFen se reconstruye la posición. */

@@ -19,6 +19,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import chess.ChessRules.Applied;
+import chess.constants.Color;
+import chess.constants.EndReason;
+import chess.constants.Mode;
+import chess.constants.Visibility;
 
 @RestController
 public class MatchController{
@@ -57,7 +61,7 @@ public class MatchController{
     }
 
     @GetMapping({"/internal/logic/games/{id}", "/internal/logic/games/{id}/"})
-    GameState getMatchById(@PathVariable("id") String id){
+    GameState getMatchByGameId(@PathVariable("id") String id){
         return assembler.toState(findMatch(id));
     }
 
@@ -106,19 +110,19 @@ public class MatchController{
         return assembler.toState(repository.save(match));
     }
 
-    /** El bando indicado se rinde: gana el contrario por "resignation". */
+    /** El bando indicado se rinde: gana el contrario por "surrender". */
     @PostMapping({"/internal/logic/games/{id}/resign", "/internal/logic/games/{id}/resign/"})
     GameState finishMatch(@PathVariable("id") String id, @RequestBody MatchResultRequest body){
         Match match = findMatch(id);
 
         if(body == null || !isColor(body.side)){
-            throw new RequestNotValidException("side debe ser \"" + Match.COLOR_WHITE + "\" o \"" + Match.COLOR_BLACK + "\"");
+            throw new RequestNotValidException("side debe ser \"" + Color.WHITE.toString() + "\" o \"" + Color.BLACK.toString() + "\"");
         }
         if(match.isFinished()){
             throw MovementNotValidException.matchFinished();
         }
 
-        match.finish(Match.COLOR_WHITE.equals(body.side) ? Match.COLOR_BLACK : Match.COLOR_WHITE, "resignation");
+        match.finish(Color.WHITE.toString().equals(body.side) ? Color.BLACK.toString() : Color.WHITE.toString(), EndReason.SURRENDER.toString());
 
         return assembler.toState(repository.save(match));
     }
@@ -128,8 +132,8 @@ public class MatchController{
         return Map.of("status", "ok");
     }
 
-    private Match findMatch(String id){
-        return repository.findByGameId(id).orElseThrow(() -> new MatchNotFoundException(id));
+    private Match findMatch(String gameId){
+        return repository.findByGameId(gameId).orElseThrow(() -> new MatchNotFoundException(gameId));
     }
 
     /** Valida el cuerpo de POST /internal/logic/games y arma la partida nueva o retorna la partida existente si una con el mismo matchId ya existe. */
@@ -140,14 +144,14 @@ public class MatchController{
 
         String mode = request.mode();
 
-        if(!Match.MODE_LOCAL.equals(mode) && !Match.MODE_VS_BOT.equals(mode) && !Match.MODE_MULTIPLAYER.equals(mode)){
-            throw new RequestNotValidException("mode debe ser \"" + Match.MODE_LOCAL + "\", \"" + Match.MODE_VS_BOT + "\" o \"" + Match.MODE_MULTIPLAYER + "\"");
+        if(!Mode.LOCAL.toString().equals(mode) && !Mode.VS_BOT.toString().equals(mode) && !Mode.MULTIPLAYER.toString().equals(mode)){
+            throw new RequestNotValidException("mode debe ser \"" + Mode.LOCAL.toString() + "\", \"" + Mode.VS_BOT.toString() + "\" o \"" + Mode.MULTIPLAYER.toString() + "\"");
         }
 
         Integer botLevel = null;
         List<Player> participants = request.participants();
         
-        if(Match.MODE_LOCAL.equals(mode)){
+        if(Mode.LOCAL.toString().equals(mode)){
             if(participants.size() != 2){
                 throw new ParticipantsInvalidException("Una partida en modo local debe tener exactamente 2 participantes");
             }
@@ -157,10 +161,10 @@ public class MatchController{
             }
 
             if(!isColor(participants.get(0).color()) || !isColor(participants.get(1).color())){
-                throw new ParticipantsInvalidException("El color de los jugadores debe ser \"" + Match.COLOR_WHITE + "\" o \"" + Match.COLOR_BLACK + "\"");
+                throw new ParticipantsInvalidException("El color de los jugadores debe ser \"" + Color.WHITE.toString() + "\" o \"" + Color.BLACK.toString() + "\"");
             }
         }else{
-            if(Match.MODE_VS_BOT.equals(mode)){
+            if(Mode.VS_BOT.toString().equals(mode)){
                 botLevel = request.botLevel();
 
                 if(botLevel == null || botLevel < 1 || botLevel > 20){
@@ -173,11 +177,11 @@ public class MatchController{
             }
 
             if(participants.size() != 1){
-                throw new ParticipantsInvalidException("Una partida en modo " + (Match.MODE_VS_BOT.equals(mode) ? "vs bot" : "multijugador") + " debe ser creada con exactamente 1 participante");
+                throw new ParticipantsInvalidException("Una partida en modo " + (Mode.VS_BOT.toString().equals(mode) ? "vs bot" : "multijugador") + " debe ser creada con exactamente 1 participante");
             }
 
             if(!isColor(participants.get(0).color())){
-                throw new ParticipantsInvalidException("El color del jugador debe ser \"" + Match.COLOR_WHITE + "\" o \"" + Match.COLOR_BLACK + "\"");
+                throw new ParticipantsInvalidException("El color del jugador debe ser \"" + Color.WHITE.toString() + "\" o \"" + Color.BLACK.toString() + "\"");
             }
         }
 
@@ -185,7 +189,7 @@ public class MatchController{
             throw new RequestNotValidException("userId debe ser un UUID");
         }
         
-        if(!Match.VISIBILITY_PRIVATE.equals(request.visibility()) && !Match.VISIBILITY_SHARED.equals(request.visibility())){
+        if(!Visibility.PRIVATE.toString().equals(request.visibility()) && !Visibility.SHARED.toString().equals(request.visibility())){
             throw new RequestNotValidException("visbility debe ser");
         }
 
@@ -193,6 +197,6 @@ public class MatchController{
     }
 
     private static boolean isColor(String value){
-        return Match.COLOR_WHITE.equals(value) || Match.COLOR_BLACK.equals(value);
+        return Color.WHITE.toString().equals(value) || Color.BLACK.toString().equals(value);
     }
 }
