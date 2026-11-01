@@ -274,9 +274,13 @@ Rutas. Las rutas pasan a /internal/auth/register, /internal/auth/login y DELETE 
 
 Errores. Todas las respuestas de error usan el formato común: { "error": { "code": "...", "message": "..." } }. Códigos: VALIDATION_ERROR (400), INVALID_CREDENTIALS (401), USERNAME_TAKEN (409), SERVICES_UNAVAILABLE (503).
 
-Evento user.registered. Tras confirmar el registro en MySQL, Auth publica en el exchange user.events (topic, durable) con la clave user.registered:
+Evento user.registered (outbox). Al registrar, Auth guarda el usuario y el evento en la tabla outbox_events en la misma transacción: o quedan los dos o ninguno. Después lo publica en el exchange user.events (topic, durable) con la clave user.registered:
 { "eventId", "eventType": "user.registered", "occurredAt", "userId", "username" }
-Si RabbitMQ no responde, se reintenta 3 veces en memoria. Si sigue fallando, el registro se conserva y el evento se pierde (no hay outbox en esta entrega).
+- Se intenta publicar enseguida tras confirmar el registro (en segundo plano, sin retrasar la respuesta) y, como respaldo, cada OUTBOX_RELAY_INTERVAL_MS (2000 por defecto).
+- Un evento se marca como publicado solo cuando RabbitMQ confirma la recepción (publisher confirms) y existe alguna cola enlazada (mandatory). Si RabbitMQ está caído o nadie escucha, el evento queda pendiente y se reintenta; el registro no falla.
+- Entrega al menos una vez: si Auth cae entre la confirmación y la marca, el evento se reenvía con el mismo eventId. Profile/Stats lo descarta por idempotencia.
+- La tabla la crea Auth al arrancar con src/main/resources/db/outbox.sql (CREATE TABLE IF NOT EXISTS), también en volúmenes de MySQL ya existentes. Los eventos publicados se borran a los 7 días.
+- Orden de arranque recomendado: Profile/Stats debe haber declarado su cola profile.user-registered; mientras no exista, los eventos esperan en el outbox.
 
 Borrado de cuenta (DELETE /internal/auth/account, cabecera X-User-Id):
 1. DELETE /internal/logic/users/{userId}
@@ -285,8 +289,8 @@ Borrado de cuenta (DELETE /internal/auth/account, cabecera X-User-Id):
 Las tres llamadas van por el gateway interno (GATEWAY_INTERNAL_URL). Cada una debe responder 204. Si una falla, Auth responde 503 SERVICES_UNAVAILABLE, no borra su fila y no llama a las siguientes; el usuario puede reintentar. Si las tres responden 204, se borra la fila de MySQL y se responde 204. Si la cuenta ya no existe, responde 204 sin llamar a nadie.
 La cookie de sesión la pone y la borra el gateway web, no Auth.
 
-Variables nuevas: RABBITMQ_URL (amqp://usuario:clave@rabbitmq:5672), GATEWAY_INTERNAL_URL (http://api-gateway-component:8080), HTTP_TIMEOUT (segundos, 15 por defecto).
+Variables nuevas: RABBITMQ_URL (amqp://usuario:clave@rabbitmq:5672), GATEWAY_INTERNAL_URL (http://api-gateway-component:8080), HTTP_TIMEOUT (segundos, 15 por defecto), OUTBOX_RELAY_INTERVAL_MS (opcional).
 
-Pruebas. mvn test (JDK 21). Usan H2 en modo MySQL con Databases/auth/01-init.sql; RabbitMQ y los servicios del borrado se simulan. No necesitan Docker.
+Pruebas. mvn test (JDK 21). Usan H2 en modo MySQL con Databases/auth/01-init.sql y db/outbox.sql; RabbitMQ y los servicios del borrado se simulan. No necesitan Docker. La publicación real con confirmaciones (RabbitEventSender) no está probada contra un RabbitMQ real.
 
 Pendiente. El esquema de v9 (sección 7) usa la columna id y añade created_at; el script actual usa user_id y no tiene created_at. No se cambió porque obligaría a recrear el volumen de MySQL y ningún flujo necesita created_at. Pendiente de decidir con el equipo.

@@ -16,11 +16,24 @@ spring:
       ddl-auto: validate
     open-in-view: false
 
+  # Crea la tabla del outbox al arrancar, también en volúmenes de MySQL que ya existían.
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/outbox.sql
+
   rabbitmq:
     # amqp://usuario:clave@rabbitmq:5672 (contrato v9, sección 21)
     addresses: ${RABBITMQ_URL:amqp://guest:guest@localhost:5672}
+    # El outbox marca un evento como publicado solo con la confirmación del broker.
+    publisher-confirm-type: simple
+    publisher-returns: true
 
 # Borrado de cuenta: Auth llama a Game Logic, Tutor y Profile/Stats por el gateway interno.
 gateway:
   internal-url: ${GATEWAY_INTERNAL_URL:http://localhost:8080}
   timeout-seconds: ${HTTP_TIMEOUT:15}
+
+outbox:
+  relay-interval-ms: ${OUTBOX_RELAY_INTERVAL_MS:2000}
+  confirm-timeout-ms: 5000

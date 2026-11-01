@@ -10,6 +10,7 @@ import com.prototipo.auth.dto.UserResponse;
 import com.prototipo.auth.entity.User;
 import com.prototipo.auth.events.UserRegistered;
 import com.prototipo.auth.exception.ApiException;
+import com.prototipo.auth.outbox.UserRegisteredOutbox;
 import com.prototipo.auth.repository.UserRepository;
 import com.prototipo.auth.security.JwtService;
 import org.springframework.context.ApplicationEventPublisher;
@@ -26,21 +27,27 @@ public class AuthService {
     private final JwtService jwtService;
     private final ApplicationEventPublisher events;
     private final AccountDeletionClient deletionClient;
+    private final UserRegisteredOutbox outbox;
 
     public AuthService(
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
             ApplicationEventPublisher events,
-            AccountDeletionClient deletionClient) {
+            AccountDeletionClient deletionClient,
+            UserRegisteredOutbox outbox) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.events = events;
         this.deletionClient = deletionClient;
+        this.outbox = outbox;
     }
 
-    /** Registra al usuario. user.registered se publica solo si la transacción se confirma. */
+    /**
+     * Registra al usuario y guarda user.registered en el outbox en la misma transacción: o quedan
+     * los dos o ninguno. El evento se publica después, aunque RabbitMQ esté caído al registrar.
+     */
     @Transactional
     public RegisterResponse registrar(RegisterRequest solicitud) {
         if (userRepository.existsByUsername(solicitud.username())) {
@@ -52,7 +59,9 @@ public class AuthService {
 
         try {
             User guardado = userRepository.saveAndFlush(usuario);
-            events.publishEvent(new UserRegistered(guardado.getUserId(), guardado.getUsername()));
+            UserRegistered registrado = new UserRegistered(guardado.getUserId(), guardado.getUsername());
+            outbox.record(registrado);
+            events.publishEvent(registrado); // avisa al publicador cuando la transacción se confirme
             return new RegisterResponse(
                     guardado.getUserId(),
                     guardado.getUsername()

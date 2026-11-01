@@ -8,9 +8,14 @@ spring:
   sql:
     init:
       mode: always
-      schema-locations: file:../../Databases/auth/01-init.sql
+      schema-locations: file:../../Databases/auth/01-init.sql, classpath:db/outbox.sql
 
 JWT_SECRET: secreto-de-prueba-con-al-menos-32-bytes-0123456789
+
+# El outbox se publica a mano en las pruebas para que sean deterministas.
+outbox:
+  scheduler:
+    enabled: false
 
 gateway:
   internal-url: http://localhost:1
