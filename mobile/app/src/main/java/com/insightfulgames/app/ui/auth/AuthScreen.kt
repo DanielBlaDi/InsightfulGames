@@ -1,4 +1,4 @@
-package com.insightfulgames.app.ui.login
+package com.insightfulgames.app.ui.auth
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -20,6 +20,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -34,11 +35,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.insightfulgames.app.ui.AppViewModelProvider
 
+/** Login y registro en una sola pantalla (se alterna con el botón de abajo). */
 @Composable
-fun LoginScreen(
-    viewModel: LoginViewModel = viewModel(factory = AppViewModelProvider.Factory),
+fun AuthScreen(
+    viewModel: AuthViewModel = viewModel(factory = AppViewModelProvider.Factory),
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
+    val expired by viewModel.sessionExpired.collectAsStateWithLifecycle()
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
@@ -51,7 +54,6 @@ fun LoginScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            // TODO: reemplazar por el logo (Frontend/desing/.../logo_insightful_games_sin_fondo.png).
             Text(
                 text = "Insightful Games",
                 style = MaterialTheme.typography.headlineLarge,
@@ -60,16 +62,25 @@ fun LoginScreen(
                 color = MaterialTheme.colorScheme.primary,
             )
             Text(
-                text = "Inicia sesión para ver tu perfil y tus estadísticas",
+                text = if (ui.registerMode) "Crea tu cuenta" else "Inicia sesión para ver tu perfil y tus partidas",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Spacer(Modifier.height(12.dp))
+
+            if (expired && !ui.registerMode) {
+                Text(
+                    text = "Tu sesión expiró. Inicia sesión de nuevo.",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            Spacer(Modifier.height(8.dp))
 
             OutlinedTextField(
                 value = ui.username,
                 onValueChange = viewModel::onUsernameChange,
-                label = { Text("Usuario") },
+                label = { Text("Usuario (3 a 20 caracteres)") },
                 singleLine = true,
                 enabled = !ui.loading,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
@@ -78,7 +89,7 @@ fun LoginScreen(
             OutlinedTextField(
                 value = ui.password,
                 onValueChange = viewModel::onPasswordChange,
-                label = { Text("Contraseña") },
+                label = { Text(if (ui.registerMode) "Contraseña (mínimo 8)" else "Contraseña") },
                 singleLine = true,
                 enabled = !ui.loading,
                 visualTransformation = PasswordVisualTransformation(),
@@ -111,8 +122,12 @@ fun LoginScreen(
                         color = MaterialTheme.colorScheme.onPrimary,
                     )
                 } else {
-                    Text("Entrar")
+                    Text(if (ui.registerMode) "Crear cuenta" else "Entrar")
                 }
+            }
+
+            TextButton(onClick = viewModel::toggleMode, enabled = !ui.loading) {
+                Text(if (ui.registerMode) "¿Ya tienes cuenta? Inicia sesión" else "¿No tienes cuenta? Regístrate")
             }
         }
     }

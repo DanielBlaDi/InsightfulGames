@@ -1,18 +1,17 @@
 package com.insightfulgames.app.data.remote
 
+import com.insightfulgames.app.data.model.ApiErrorEnvelope
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.SerializationException
-import kotlinx.serialization.json.Json
-import com.insightfulgames.app.data.model.ApiErrorEnvelope
 import retrofit2.HttpException
 import java.io.IOException
 
-/** Error de API con la forma uniforme del contrato. status = 0 si ni siquiera hubo respuesta HTTP. */
-class ApiException(val status: Int, val code: String, message: String) : Exception(message)
+/** Error de API con la forma del contrato. status = 0 si no hubo respuesta HTTP. */
+class ApiException(val status: Int, val code: String, message: String) : Exception(message) {
+    val isUnauthorized: Boolean get() = status == 401
+}
 
-private val errorJson = Json { ignoreUnknownKeys = true }
-
-/** Ejecuta una llamada de red y devuelve Result, convirtiendo los fallos en ApiException. */
+/** Ejecuta una llamada de red y convierte los fallos en [ApiException]. */
 suspend fun <T> apiCall(block: suspend () -> T): Result<T> =
     try {
         Result.success(block())
@@ -28,7 +27,9 @@ suspend fun <T> apiCall(block: suspend () -> T): Result<T> =
 
 private fun HttpException.toApiException(): ApiException {
     val raw = runCatching { response()?.errorBody()?.string() }.getOrNull()
-    val parsed = raw?.let { runCatching { errorJson.decodeFromString<ApiErrorEnvelope>(it) }.getOrNull() }?.error
+    val parsed = raw
+        ?.let { runCatching { AppJson.decodeFromString<ApiErrorEnvelope>(it) }.getOrNull() }
+        ?.error
     return ApiException(
         status = code(),
         code = parsed?.code ?: "HTTP_${code()}",
@@ -36,15 +37,17 @@ private fun HttpException.toApiException(): ApiException {
     )
 }
 
-/** Mensaje legible para mostrar en la UI. */
-fun Throwable.userMessage(): String =
-    if (this is ApiException) {
-        when (code) {
-            "INVALID_CREDENTIALS" -> "Usuario o contraseña incorrectos."
-            "VALIDATION_ERROR" -> "Revisa el usuario y la contraseña."
-            "SERVICE_UNAVAILABLE" -> "El servidor no está disponible. Inténtalo más tarde."
-            else -> message ?: "Ocurrió un error inesperado."
-        }
-    } else {
-        "Ocurrió un error inesperado."
+/** Mensaje legible para la UI. */
+fun Throwable.userMessage(): String {
+    if (this !is ApiException) return "Ocurrió un error inesperado."
+    return when (code) {
+        "INVALID_CREDENTIALS" -> "Usuario o contraseña incorrectos."
+        "USERNAME_TAKEN" -> "Ese nombre de usuario ya existe."
+        "VALIDATION_ERROR" -> "Revisa los datos: usuario de 3 a 20 caracteres y contraseña de al menos 8 al registrarte."
+        "UNAUTHORIZED" -> "Tu sesión expiró. Inicia sesión de nuevo."
+        "SERVICES_UNAVAILABLE", "SERVICE_UNAVAILABLE" -> "El servidor no está disponible. Inténtalo más tarde."
+        "NETWORK" -> "Sin conexión con el servidor. Revisa tu red."
+        "GAME_NOT_FOUND", "MATCH_NOT_FOUND" -> "La partida no existe o ya no es visible."
+        else -> message ?: "Ocurrió un error inesperado."
     }
+}

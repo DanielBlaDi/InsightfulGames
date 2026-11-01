@@ -1,61 +1,45 @@
-# Insightful Games — App Android (esqueleto)
+# Insightful Games — App Android
 
-Login + perfil con estadísticas (partidas jugadas, terminadas, en curso, por modo y récord contra el bot).
-Kotlin · Jetpack Compose · Material 3 · Retrofit/OkHttp · kotlinx.serialization · DataStore.
+Contratos v9, sección 16. Kotlin · Jetpack Compose · Material 3 · Navigation · Retrofit/OkHttp · kotlinx.serialization · EncryptedSharedPreferences.
+
+Alcance: perfil, estadísticas, historial y detalle. No juega partidas en vivo, no muestra análisis del Tutor y no borra la cuenta.
 
 ## Cómo abrirla
-1. Android Studio (Koala o más nuevo) → *Open* → esta carpeta. El sync descarga Gradle 8.9 y las dependencias.
-2. Levantar el backend (`docker compose up`) y revisar `BASE_URL` en `app/build.gradle.kts`:
-   - Emulador: `http://10.0.2.2:8080/` (ya configurado; 8080 = `API_GATEWAY_PORT`).
-   - Dispositivo físico: `http://<IP-del-PC>:<API_GATEWAY_PORT>/` (mismo Wi-Fi, firewall abierto).
-   - Siempre con "/" al final y sin el prefijo `/api` (ese solo existe en el nginx del frontend web).
-3. Ejecutar. Probar con un usuario creado en la web (`POST /auth/register`).
+1. Android Studio (Koala o más nuevo) → *Open* → esta carpeta.
+2. Levantar el **gateway móvil** (puerto 8090) y revisar `BASE_URL` en `app/build.gradle.kts`:
+   - Emulador: `http://10.0.2.2:8090/` (ya configurado).
+   - Dispositivo físico: `http://<IP-del-PC>:8090/` (mismo Wi-Fi, firewall abierto).
+   - Siempre con `/` al final y **sin** `/api`. La app habla con el gateway móvil, no con el web.
+3. Sin backend completo: `Backend/api-gateway-mobile/tools/fake_internal_gateway.py` (ver su README).
+   Registrarse desde la app crea el usuario en el simulado.
+
+## Pantallas (navegación inferior)
+Login/Registro · Inicio (`GET /home`) · Perfil · Estadísticas · Historial (20 por página + "Cargar más") · Detalle.
+
+- Detalle: `local` y `vs_bot` → `GET /games/{gameId}`; `multiplayer` → `GET /matches/{matchId}` (el `matchId` viene en la lista).
+- Inicio: una sección en `unavailable` muestra "No disponible en este momento" + Reintentar; el resto se ve normal. No reintenta sola.
+- Estados: cargando, datos, vacío, no disponible, sesión expirada.
+
+## Sesión
+- Token y usuario cifrados con Android Keystore (`EncryptedSharedPreferences`). Nunca en texto plano.
+- 3600 s, sin refresh token. Un 401 en ruta protegida borra la sesión y vuelve al login con aviso.
+- Cerrar sesión solo borra el token local (no usa `/auth/logout`).
 
 ## Estructura
 ```
 app/src/main/java/com/insightfulgames/app/
-├── InsightfulApp.kt          Application + AppContainer (DI manual)
-├── MainActivity.kt
-├── data/
-│   ├── model/                DTOs del contrato y modelos de dominio
-│   ├── remote/               ApiService (Retrofit), ApiClient (OkHttp + Bearer + 401), apiCall/ApiException
-│   ├── local/SessionStore    token + usuario en DataStore
-│   └── repository/           AuthRepository, StatsRepository
-└── ui/
-    ├── AppRoot.kt            sesión guardada => Perfil; sin sesión => Login
-    ├── login/                LoginScreen + LoginViewModel
-    ├── profile/              ProfileScreen + ProfileViewModel
-    └── theme/                paleta "Terracotta & Tallow"
+├── InsightfulApp.kt     Application + AppContainer (DI manual)
+├── data/model           DTOs del contrato (Dtos.kt) y modelos de UI
+├── data/local           SessionStore (cifrado)
+├── data/remote          ApiService, ApiClient (Bearer + 401), apiCall/ApiException
+├── data/repository      Auth, Profile, Game
+└── ui                   AppRoot (sesión + navegación), auth/, home/, profile/, stats/, history/, detail/,
+                         components/, GameLabels.kt y FenParser.kt (lógica pura con pruebas JUnit)
 ```
 
-## Contrato con el backend
+## Pruebas
+`./gradlew test` → `GameLabelsTest`, `FenParserTest`.
 
-**Ya existe y la app lo usa**
-- `POST /auth/login` → `{ accessToken, expiresIn, user{userId, username} }`
-- `GET /games` (Bearer) → `[{ gameId, mode, status, result, createdAt }]`
-- Errores: `{ "error": { "code", "message" } }`; un 401 en rutas protegidas cierra la sesión.
-
-**Falta en el backend** (la app funciona sin esto, pero sin victorias/derrotas):
-
-Opción A — endpoint nuevo `GET /users/me/stats` (Gateway → Single Player → Game Logic, con agregación en Mongo):
-```json
-{
-  "totalGames": 12, "finished": 10, "inProgress": 2,
-  "byMode": { "local": 4, "vs_bot": 8 },
-  "vsBot": { "wins": 5, "losses": 2, "draws": 1 }
-}
-```
-(No usar `/games/stats`: choca con `GET /games/{game_id}` del gateway.)
-
-Opción B — ampliar `GameSummary` con `playerColor`, `botLevel`, `endReason`, `finishedAt`.
-La app ya calcula el récord sola desde `GET /games` en cuanto llega `playerColor`.
-
-`StatsRepository` prueba A y, si el gateway da 404, cae a B.
-
-## Pendiente / TODO
-- Cifrar el token con Android Keystore (hoy va en DataStore, almacenamiento privado de la app).
-- Sin refresh token: a la hora el token vence y la app vuelve al login.
+## Pendiente
 - Logo, tipografías (Playfair Display / Plus Jakarta Sans) y modo oscuro.
-- Registro de usuarios (`POST /auth/register` ya existe).
-- Tests unitarios de `StatsRepository` (cálculo de récord).
-- Release: poner el dominio HTTPS en `BASE_URL`; el release bloquea HTTP.
+- Release: poner el dominio HTTPS en `BASE_URL` (el release bloquea HTTP).

@@ -1,9 +1,6 @@
 package com.insightfulgames.app.data.remote
 
 import com.insightfulgames.app.BuildConfig
-import com.insightfulgames.app.data.local.SessionStore
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -13,40 +10,49 @@ import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import java.util.concurrent.TimeUnit
 
+val AppJson = Json {
+    ignoreUnknownKeys = true
+    coerceInputValues = true
+}
+
 object ApiClient {
 
+    /**
+     * @param tokenProvider token vigente (o null).
+     * @param onUnauthorized se llama con el token usado cuando una ruta protegida responde 401.
+     */
     fun create(
         baseUrl: String,
-        sessionStore: SessionStore,
-        onUnauthorized: () -> Unit,
+        tokenProvider: () -> String?,
+        onUnauthorized: (tokenUsed: String?) -> Unit,
     ): ApiService {
-        val json = Json { ignoreUnknownKeys = true }
-
-        // Añade "Authorization: Bearer <token>" y, ante un 401 en rutas protegidas
-        // (token vencido o inválido), avisa para cerrar la sesión. El 401 del propio
-        // login (credenciales incorrectas) no cierra nada.
         val authInterceptor = Interceptor { chain ->
-            // Se ejecuta en un hilo de OkHttp, no en el principal.
-            val token = runBlocking { sessionStore.session.first()?.token }
+            val token = tokenProvider()
             val request = chain.request().newBuilder().apply {
                 if (token != null) header("Authorization", "Bearer $token")
             }.build()
 
             val response = chain.proceed(request)
-            if (response.code == 401 && !request.url.encodedPath.endsWith("/auth/login")) {
-                onUnauthorized()
+
+            // 401 en login/registro = credenciales incorrectas: no cierra nada.
+            val path = request.url.encodedPath
+            val isAuthRoute = path.endsWith("/auth/login") || path.endsWith("/auth/register")
+            if (response.code == 401 && !isAuthRoute) {
+                onUnauthorized(token)
             }
             response
         }
 
         val client = OkHttpClient.Builder()
             .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(20, TimeUnit.SECONDS)
             .addInterceptor(authInterceptor)
             .apply {
                 if (BuildConfig.DEBUG) {
-                    // BASIC: solo método, URL y código; nunca cabeceras ni cuerpos (token, contraseña).
-                    addInterceptor(HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BASIC })
+                    // BASIC: método, URL y código. Nunca cabeceras ni cuerpos (token, contraseña).
+                    addInterceptor(
+                        HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BASIC },
+                    )
                 }
             }
             .build()
@@ -54,7 +60,7 @@ object ApiClient {
         return Retrofit.Builder()
             .baseUrl(baseUrl)
             .client(client)
-            .addConverterFactory(json.asConverterFactory("application/json; charset=UTF-8".toMediaType()))
+            .addConverterFactory(AppJson.asConverterFactory("application/json; charset=UTF-8".toMediaType()))
             .build()
             .create(ApiService::class.java)
     }

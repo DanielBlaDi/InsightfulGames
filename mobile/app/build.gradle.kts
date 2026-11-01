@@ -14,15 +14,16 @@ android {
         minSdk = 26
         targetSdk = 34
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = "1.0.0"
     }
 
     buildTypes {
         debug {
             // 10.0.2.2 = el localhost del PC visto desde el emulador de Android.
-            // En un dispositivo físico: http://<IP-del-PC-en-la-LAN>:<API_GATEWAY_PORT>/
-            // La URL debe terminar en "/".
-            buildConfigField("String", "BASE_URL", "\"http://10.0.2.2:8080/\"")
+            // Apunta al GATEWAY MÓVIL (MOBILE_GATEWAY_PORT, 8090), no al gateway web.
+            // En un dispositivo físico: http://<IP-del-PC-en-la-LAN>:8090/
+            // La URL debe terminar en "/" y no lleva el prefijo /api.
+            buildConfigField("String", "BASE_URL", "\"http://10.0.2.2:8090/\"")
         }
         release {
             isMinifyEnabled = false
@@ -50,13 +51,16 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-core")
     debugImplementation("androidx.compose.ui:ui-tooling")
 
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.activity:activity-compose:1.9.2")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.6")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.6")
-    implementation("androidx.datastore:datastore-preferences:1.1.1")
+    implementation("androidx.navigation:navigation-compose:2.8.2")
+    // Contrato (sección 16): el token se guarda cifrado con Android Keystore.
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")

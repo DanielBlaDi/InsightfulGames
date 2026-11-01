@@ -1,56 +1,121 @@
 package com.insightfulgames.app.data.local
 
 import android.content.Context
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.longPreferencesKey
-import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
+import android.content.SharedPreferences
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import com.insightfulgames.app.data.model.Session
+import com.insightfulgames.app.data.model.SessionState
 import com.insightfulgames.app.data.model.UserDto
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
-
-private val Context.sessionDataStore by preferencesDataStore(name = "session")
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.withContext
 
 /**
- * Guarda el token y el usuario en el almacenamiento privado de la app (DataStore).
- * TODO: cifrar el token con una clave del Android Keystore antes de publicar.
+ * Guarda el token y el usuario cifrados con una clave del Android Keystore
+ * (EncryptedSharedPreferences). Nunca en texto plano (sección 16 del contrato).
+ *
+ * - Sin refresh token: a los 3600 s el token vence y se vuelve al login.
+ * - [load] debe llamarse una vez al arrancar; hasta entonces el estado es Loading.
  */
 class SessionStore(context: Context) {
-    private val store = context.applicationContext.sessionDataStore
+    private val appContext = context.applicationContext
 
-    /** Sesión vigente, o null si no hay una o el token ya venció. */
-    val session: Flow<Session?> = store.data.map { prefs ->
-        val token = prefs[TOKEN]
-        val userId = prefs[USER_ID]
-        val username = prefs[USERNAME]
-        val expiresAt = prefs[EXPIRES_AT]
-        if (token != null && userId != null && username != null &&
-            expiresAt != null && expiresAt > System.currentTimeMillis()
-        ) {
-            Session(token, userId, username)
+    private val prefs: SharedPreferences by lazy { createPrefs() }
+
+    private val _state = MutableStateFlow<SessionState>(SessionState.Loading)
+    val state: StateFlow<SessionState> = _state.asStateFlow()
+
+    /** true si la sesión se cerró porque el gateway respondió 401 (sesión expirada). */
+    private val _expired = MutableStateFlow(false)
+    val expired: StateFlow<Boolean> = _expired.asStateFlow()
+
+    /** Token vigente, leído por el interceptor de red desde hilos de OkHttp. */
+    @Volatile
+    var token: String? = null
+        private set
+
+    /** Lee la sesión guardada. Descarta un token ya vencido. */
+    suspend fun load() = withContext(Dispatchers.IO) {
+        val t = prefs.getString(TOKEN, null)
+        val userId = prefs.getString(USER_ID, null)
+        val username = prefs.getString(USERNAME, null)
+        val expiresAt = prefs.getLong(EXPIRES_AT, 0L)
+
+        if (t != null && userId != null && username != null && expiresAt > System.currentTimeMillis()) {
+            token = t
+            _state.value = SessionState.LoggedIn(Session(t, userId, username))
         } else {
-            null
+            prefs.edit().clear().apply()
+            token = null
+            _state.value = SessionState.LoggedOut
         }
     }
 
-    suspend fun save(token: String, user: UserDto, expiresInSeconds: Long) {
-        store.edit { prefs ->
-            prefs[TOKEN] = token
-            prefs[USER_ID] = user.userId
-            prefs[USERNAME] = user.username
-            prefs[EXPIRES_AT] = System.currentTimeMillis() + expiresInSeconds * 1000
+    suspend fun save(accessToken: String, user: UserDto, expiresInSeconds: Long) =
+        withContext(Dispatchers.IO) {
+            prefs.edit()
+                .putString(TOKEN, accessToken)
+                .putString(USER_ID, user.userId)
+                .putString(USERNAME, user.username)
+                .putLong(EXPIRES_AT, System.currentTimeMillis() + expiresInSeconds * 1000)
+                .apply()
+            token = accessToken
+            _expired.value = false
+            _state.value = SessionState.LoggedIn(Session(accessToken, user.userId, user.username))
         }
+
+    /** Cerrar sesión: solo borra el token local (la app no usa /auth/logout). */
+    suspend fun clear() = withContext(Dispatchers.IO) {
+        wipe()
+        _expired.value = false
     }
 
-    suspend fun clear() {
-        store.edit { it.clear() }
+    /**
+     * El gateway respondió 401 con [tokenUsed]. Se borra la sesión y se marca como expirada.
+     * Si mientras tanto hubo un login nuevo (otro token), se ignora el 401 viejo.
+     */
+    suspend fun expire(tokenUsed: String?) = withContext(Dispatchers.IO) {
+        if (tokenUsed != null && tokenUsed != token) return@withContext
+        wipe()
+        _expired.value = true
+    }
+
+    private fun wipe() {
+        prefs.edit().clear().apply()
+        token = null
+        _state.value = SessionState.LoggedOut
+    }
+
+    private fun createPrefs(): SharedPreferences {
+        fun build(): SharedPreferences {
+            val masterKey = MasterKey.Builder(appContext)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+            return EncryptedSharedPreferences.create(
+                appContext,
+                FILE,
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
+            )
+        }
+        return try {
+            build()
+        } catch (e: Exception) {
+            // Keystore o archivo corrompido (p. ej. tras restaurar el teléfono): se parte de cero.
+            appContext.deleteSharedPreferences(FILE)
+            build()
+        }
     }
 
     private companion object {
-        val TOKEN = stringPreferencesKey("access_token")
-        val USER_ID = stringPreferencesKey("user_id")
-        val USERNAME = stringPreferencesKey("username")
-        val EXPIRES_AT = longPreferencesKey("expires_at_ms")
+        const val FILE = "session_secure"
+        const val TOKEN = "access_token"
+        const val USER_ID = "user_id"
+        const val USERNAME = "username"
+        const val EXPIRES_AT = "expires_at_ms"
     }
 }

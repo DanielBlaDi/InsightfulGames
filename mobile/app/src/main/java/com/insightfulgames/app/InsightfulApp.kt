@@ -5,7 +5,8 @@ import android.content.Context
 import com.insightfulgames.app.data.local.SessionStore
 import com.insightfulgames.app.data.remote.ApiClient
 import com.insightfulgames.app.data.repository.AuthRepository
-import com.insightfulgames.app.data.repository.StatsRepository
+import com.insightfulgames.app.data.repository.GameRepository
+import com.insightfulgames.app.data.repository.ProfileRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -29,11 +30,17 @@ class AppContainer(context: Context) {
 
     private val api = ApiClient.create(
         baseUrl = BuildConfig.BASE_URL,
-        sessionStore = sessionStore,
-        // El gateway dijo 401 en una ruta protegida: se borra la sesión y la UI vuelve al login.
-        onUnauthorized = { appScope.launch { sessionStore.clear() } },
+        tokenProvider = { sessionStore.token },
+        // El gateway respondió 401 en una ruta protegida: se borra la sesión y la UI vuelve al login.
+        onUnauthorized = { tokenUsed -> appScope.launch { sessionStore.expire(tokenUsed) } },
     )
 
     val authRepository = AuthRepository(api, sessionStore)
-    val statsRepository = StatsRepository(api)
+    val profileRepository = ProfileRepository(api)
+    val gameRepository = GameRepository(api)
+
+    init {
+        // Lee la sesión cifrada fuera del hilo principal. Hasta entonces el estado es Loading.
+        appScope.launch { sessionStore.load() }
+    }
 }

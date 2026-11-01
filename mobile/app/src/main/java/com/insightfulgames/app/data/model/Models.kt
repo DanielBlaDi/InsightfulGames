@@ -3,30 +3,20 @@ package com.insightfulgames.app.data.model
 /** Sesión activa del usuario. */
 data class Session(val token: String, val userId: String, val username: String)
 
-/** Resultado de una partida desde el punto de vista del usuario. */
-enum class Outcome { WIN, LOSS, DRAW, IN_PROGRESS, LOCAL_FINISHED, UNKNOWN }
-
-data class BotRecord(val wins: Int, val losses: Int, val draws: Int) {
-    val played: Int get() = wins + losses + draws
-    val winRate: Double get() = if (played == 0) 0.0 else wins.toDouble() / played
+/** Estado de la sesión guardada en el teléfono. */
+sealed interface SessionState {
+    data object Loading : SessionState
+    data object LoggedOut : SessionState
+    data class LoggedIn(val session: Session) : SessionState
 }
 
-data class ProfileStats(
-    val totalGames: Int,
-    val finished: Int,
-    val inProgress: Int,
-    val localGames: Int,
-    val botGames: Int,
-    /** null si el backend aún no permite saber quién ganó desde la perspectiva del usuario. */
-    val botRecord: BotRecord?,
-)
+/**
+ * Qué ruta pide el detalle (sección 5): local y vs_bot usan /games/{gameId};
+ * multiplayer usa /matches/{matchId}, con el matchId que trae la lista.
+ */
+enum class DetailKind { GAME, MATCH }
 
-data class RecentGame(
-    val gameId: String,
-    val mode: String,
-    val botLevel: Int?,
-    val createdAt: String,
-    val outcome: Outcome,
-)
+data class DetailTarget(val kind: DetailKind, val id: String)
 
-data class ProfileData(val stats: ProfileStats, val recent: List<RecentGame>)
+/** Resultado de una partida desde el punto de vista del usuario. */
+enum class Outcome { WIN, LOSS, DRAW, WAITING, IN_PROGRESS, EXPIRED, NO_RESULT, WHITE_WON, BLACK_WON }
