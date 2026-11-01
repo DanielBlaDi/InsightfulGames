@@ -1,8 +1,11 @@
 import { useState } from 'react';
 import { MAX_BOT_LEVEL, MIN_BOT_LEVEL } from './types';
-import type { Color, CreateGameRequest, GameMode } from './types';
+import type { Color, CreateGameRequest } from './types';
 
-const MODES: { mode: GameMode; icon: string; title: string; description: string }[] = [
+/** Modos que se crean desde esta pantalla; multiplayer tiene su propio flujo (sección 10). */
+type SetupMode = 'local' | 'vs_bot';
+
+const MODES: { mode: SetupMode; icon: string; title: string; description: string }[] = [
   {
     mode: 'local',
     icon: 'group',
@@ -41,11 +44,11 @@ interface GameSetupProps {
 
 /** Formulario de configuración: decide el cuerpo de POST /games, pero no hace la llamada. */
 export default function GameSetup({ loading, error, onStart, onExit }: GameSetupProps) {
-  const [mode, setMode] = useState<GameMode>('local');
+  const [mode, setMode] = useState<SetupMode>('local');
   const [level, setLevel] = useState(DEFAULT_LEVEL);
   const [playerColor, setPlayerColor] = useState<Color>('white');
 
-  const request: CreateGameRequest = mode === 'local' ? { mode } : { mode, level, playerColor };
+  const request: CreateGameRequest = mode === 'local' ? { mode } : { mode, botLevel: level, playerColor };
 
   return (
     <div className="w-full min-h-screen bg-background font-body-md text-on-surface antialiased px-gutter-mobile md:px-margin py-space-xl">
@@ -167,7 +170,7 @@ export default function GameSetup({ loading, error, onStart, onExit }: GameSetup
               <>
                 <dt className="text-on-surface-variant">Nivel</dt>
                 <dd className="text-on-surface font-semibold">
-                  {request.level} de {MAX_BOT_LEVEL}
+                  {request.botLevel} de {MAX_BOT_LEVEL}
                 </dd>
                 <dt className="text-on-surface-variant">Tus piezas</dt>
                 <dd className="text-on-surface font-semibold">

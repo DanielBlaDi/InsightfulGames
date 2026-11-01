@@ -57,7 +57,7 @@ export async function mockCreateGame(
   }
 
   const base = request.mode === 'local' ? SCENARIO_FOR.local : SCENARIO_FOR[request.playerColor];
-  const scenario: MockScenario = request.mode === 'vs_bot' ? { ...base, botLevel: request.level } : base;
+  const scenario: MockScenario = request.mode === 'vs_bot' ? { ...base, botLevel: request.botLevel } : base;
   const gameId = `mock-${nextGame++}`;
   games.set(gameId, scenario);
   return initialState(scenario, gameId);

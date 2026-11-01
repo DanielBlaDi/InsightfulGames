@@ -1,4 +1,4 @@
-import { gatewayBaseUrl } from './config';
+import { apiSocketUrl } from './config';
 import { isRecord } from './guards';
 import type { GameTransport } from './session';
 import type { ServerMessage } from './types';
@@ -6,12 +6,11 @@ import type { ServerMessage } from './types';
 const CLOSE_ABNORMAL = 1006;
 
 /**
- * URL del WebSocket de una partida: /ws/games/{id}?token=<jwt>, siempre en el API Gateway.
- * El contrato exige el token en la URL del socket: no registrar esta cadena en consola ni en logs.
+ * URL del WebSocket de una partida: /api/ws/games/{id} en el mismo origen. El navegador envía
+ * la cookie session y el gateway valida el token y el Origin antes de aceptar (sección 9).
  */
-export function gameSocketUrl(gameId: string, token: string): string {
-  const base = gatewayBaseUrl().replace(/^http/i, 'ws');
-  return `${base}/ws/games/${encodeURIComponent(gameId)}?token=${encodeURIComponent(token)}`;
+export function gameSocketUrl(gameId: string): string {
+  return apiSocketUrl(`/ws/games/${encodeURIComponent(gameId)}`);
 }
 
 /** Descarta lo que no tenga la forma mínima que la pantalla necesita para no romperse. */
@@ -31,7 +30,8 @@ function parseServerMessage(data: unknown): ServerMessage | null {
         isRecord(state) &&
         typeof state.fen === 'string' &&
         isRecord(state.legalMoves) &&
-        Array.isArray(state.moves);
+        Array.isArray(state.moves) &&
+        typeof state.version === 'number';
       return valid ? (message as ServerMessage) : null;
     }
     case 'move_rejected':

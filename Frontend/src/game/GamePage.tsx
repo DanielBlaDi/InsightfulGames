@@ -1,7 +1,8 @@
 import { useEffect, useEffectEvent, useState } from 'react';
 import ChessBoard from './ChessBoard';
-import { CLOSE_GAME_NOT_FOUND, CLOSE_UNAUTHORIZED } from './session';
+import { CLOSE_FORBIDDEN_ORIGIN, CLOSE_GAME_NOT_FOUND, CLOSE_UNAUTHORIZED } from './session';
 import type { GameSession } from './session';
+import { humanColor } from './types';
 import type { Color, EndReason, GameState } from './types';
 
 const COLOR_LABEL: Record<Color, string> = { white: 'Blancas', black: 'Negras' };
@@ -9,11 +10,15 @@ const COLOR_LABEL: Record<Color, string> = { white: 'Blancas', black: 'Negras' }
 const REASON_LABEL: Record<EndReason, string> = {
   checkmate: 'por jaque mate',
   stalemate: 'por ahogado',
-  resignation: 'por abandono',
+  surrender: 'por rendición',
   draw: '',
+  timeout: 'por tiempo',
+  abandonment: 'por abandono',
+  expired: '',
 };
 
 function describeResult(state: GameState): string {
+  if (state.endReason === 'expired') return 'La partida caducó sin jugarse';
   if (state.result === null) return 'Partida finalizada';
   const reason = state.endReason ? REASON_LABEL[state.endReason] : '';
   const outcome = state.result === 'draw' ? 'Tablas' : `Ganan las ${COLOR_LABEL[state.result].toLowerCase()}`;
@@ -23,6 +28,7 @@ function describeResult(state: GameState): string {
 function describeClose(code: number | null): string {
   if (code === CLOSE_UNAUTHORIZED) return 'Tu sesión venció. Inicia sesión de nuevo.';
   if (code === CLOSE_GAME_NOT_FOUND) return 'La partida no existe o no te pertenece.';
+  if (code === CLOSE_FORBIDDEN_ORIGIN) return 'El servidor rechazó la conexión desde este sitio.';
   return 'Se perdió la conexión con la partida.';
 }
 
@@ -55,7 +61,11 @@ export default function GamePage({ session, onUnauthorized, onExit }: GamePagePr
   const [confirmingResign, setConfirmingResign] = useState(false);
   const disconnected = connection === 'closed';
   // Un cierre por token o por partida ajena no se arregla reconectando.
-  const canReconnect = disconnected && closeCode !== CLOSE_UNAUTHORIZED && closeCode !== CLOSE_GAME_NOT_FOUND;
+  const canReconnect =
+    disconnected &&
+    closeCode !== CLOSE_UNAUTHORIZED &&
+    closeCode !== CLOSE_GAME_NOT_FOUND &&
+    closeCode !== CLOSE_FORBIDDEN_ORIGIN;
 
   // Una sola llamada por cierre, aunque quien monta la pantalla pase un callback nuevo en cada render.
   const notifyUnauthorized = useEffectEvent(() => onUnauthorized?.());
@@ -85,8 +95,9 @@ export default function GamePage({ session, onUnauthorized, onExit }: GamePagePr
 
   const finished = state.status === 'finished';
   const vsBot = state.mode === 'vs_bot';
-  const botTurn = vsBot && state.turn !== state.playerColor;
-  const base: Color = state.playerColor ?? 'white';
+  const playerColor = humanColor(state);
+  const botTurn = vsBot && state.turn !== playerColor;
+  const base: Color = playerColor ?? 'white';
   const orientation: Color = flipped ? (base === 'white' ? 'black' : 'white') : base;
 
   const handleResign = () => {
@@ -159,7 +170,7 @@ export default function GamePage({ session, onUnauthorized, onExit }: GamePagePr
 
             <p className="font-body-sm text-body-sm text-on-surface-variant">
               Estado: <strong className="text-on-surface">{finished ? 'Finalizada' : 'En curso'}</strong>
-              {vsBot && state.playerColor && <> · Juegas con {COLOR_LABEL[state.playerColor].toLowerCase()}</>}
+              {vsBot && playerColor && <> · Juegas con {COLOR_LABEL[playerColor].toLowerCase()}</>}
             </p>
 
             {disconnected && !finished && (
