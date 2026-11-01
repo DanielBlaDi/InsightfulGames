@@ -21,20 +21,23 @@ import org.springframework.data.mongodb.core.mapping.Field;
 public class Match{
     public static final String MODE_LOCAL = "local";
     public static final String MODE_VS_BOT = "vs_bot";
+    public static final String MODE_MULTIPLAYER = "multiplayer";
 
     public static final String STATUS_IN_PROGRESS = "in_progress";
     public static final String STATUS_FINISHED = "finished";
+    public static final String STATUS_WAITING = "waiting";
+
+    public static final String VISIBILITY_PRIVATE = "private";
+    public static final String VISIBILITY_SHARED = "shared";
+
+    public static final String COLOR_WHITE = "white";
+    public static final String COLOR_BLACK = "black";
 
     /**
      * gameId: UUID v4 en texto
      */
     @Id
-    private String id;
-
-    /**
-     * UUID v4 en texto
-     */
-    private String userId;
+    private String gameId;
 
     /**
      * "local" o "vs_bot"
@@ -42,17 +45,37 @@ public class Match{
     private String mode;
 
     /**
-     * 1 a 20; solo en vs_bot, null en local
+     * Indica si usuarios distintos a los participantes pueden ver esta partida, puede ser "private" o "shared"
+     */
+    private String visibility;
+
+    /**
+     * La id que utiliza Multiplayer para cada partida
+     */
+    private String matchId;
+
+    /**
+     * Los jugadores que hacen parte de esta partida
+     */
+    private List<Player> participants;
+
+    /**
+     * 1 a 20; solo en vs_bot, null de lo contrario
      */
     private Integer botLevel;
-
+        
     /**
-     * "white" o "black"; solo en vs_bot, null en local
+     * Configuración del reloj de la partida, el tiempo inicial en minutos
      */
-    private String playerColor;
+    private TimeControl timeControl;
 
     /**
-     * "in_progress" o "finished"
+     * Indica el tiempo en milisegundos restante para cada jugador, se mantiene y modifica a lo largo de los turnos. Además indica el tiempo en el que inició la partida y el máximo para terminar.
+     */
+    private Clocks clocks;
+
+    /**
+     * "waiting" o "in_progress" o "finished"
      */
     private String status;
 
@@ -76,6 +99,16 @@ public class Match{
     */
     @Field("moves") //En Mongo el campo se llama "moves"
     private List<Movement> movements;
+
+    /**
+     * Indica el color del jugador que pidió un empate, null si no se pidió empate
+     */
+    private String drawOffer;
+
+    /**
+     * Versión de la partida, para mantener consistencia con operaciones que modifiquen a la partida
+     */
+    private int expectedVersion;
 
     /**
      * "white" o "black" o "draw" o null (si la partida no ha terminado)
@@ -103,17 +136,35 @@ public class Match{
     }
 
     /** Crea una partida nueva en la posición inicial. Game Logic genera gameId y createdAt. */
-    public Match(String userId, String mode, Integer botLevel, String playerColor){
+    public Match(String mode, TimeControl timeControl, String visibility, Integer botLevel, String matchId, List<Player> participants){
         this();
-        this.id = UUID.randomUUID().toString();
-        this.userId = userId;
+        this.gameId = UUID.randomUUID().toString();
+
         this.mode = mode;
+        this.visibility = visibility;
+        this.matchId = matchId;
+        this.participants = participants;
         this.botLevel = botLevel;
-        this.playerColor = playerColor;
-        this.status = STATUS_IN_PROGRESS;
+        this.timeControl = timeControl;
+
+        if(timeControl != null){
+            if(mode.equals(Match.MODE_VS_BOT)){
+                if(participants.get(0).color().equals(Match.COLOR_WHITE)){
+                    this.clocks = new Clocks(timeControl.minutes()*60000, null);
+                }else{
+                    this.clocks = new Clocks(null, timeControl.minutes()*60000);
+                }
+            }else{
+                this.clocks = new Clocks(timeControl.minutes()*60000, timeControl.minutes()*60000);
+            }
+        }
+
+        this.status = mode.equals(MODE_MULTIPLAYER) ? STATUS_WAITING : STATUS_IN_PROGRESS;
         this.turn = "white";
-        this.initialFen = ChessRules.START_FEN;
         this.fen = ChessRules.START_FEN;
+        this.initialFen = ChessRules.START_FEN;
+        this.drawOffer = null;
+        this.expectedVersion = 0;
         this.createdAt = now();
     }
 
@@ -150,24 +201,36 @@ public class Match{
         return uciMoves;
     }
 
-    public String getId(){
-        return id;
-    }
-
-    public String getUserId(){
-        return userId;
+    public String getGameId(){
+        return gameId;
     }
 
     public String getMode(){
         return mode;
     }
 
+    public String getVisibility(){
+        return visibility;
+    }
+
+    public String getMatchId(){
+        return matchId;
+    }
+
+    public List<Player> getParticipants(){
+        return participants;
+    }
+
     public Integer getBotLevel(){
         return botLevel;
     }
 
-    public String getPlayerColor(){
-        return playerColor;
+    public TimeControl getTimeControl(){
+        return timeControl;
+    }
+
+    public Clocks getClocks(){
+        return clocks;
     }
 
     public String getStatus(){
@@ -188,6 +251,14 @@ public class Match{
 
     public List<Movement> getMovements(){
         return movements;
+    }
+
+    public String getDrawOffer(){
+        return drawOffer;
+    }
+
+    public int getExpectedVersion(){
+        return expectedVersion;
     }
 
     public String getResult(){
@@ -214,15 +285,15 @@ public class Match{
         }else{
             Match otherMatch = (Match)other;
 
-            return Objects.equals(this.id, otherMatch.id) && Objects.equals(this.userId, otherMatch.userId);
+            return Objects.equals(this.gameId, otherMatch.gameId) && Objects.equals(this.participants, otherMatch.participants);
         }
     }
 
     @Override public int hashCode(){
-        return Objects.hash(id, userId);
+        return Objects.hash((gameId != null ? gameId : matchId), participants);
     }
 
     @Override public String toString(){
-        return "{id: " + id + ", userId: " + userId + ", mode: " + mode + ", status: " + status + ", movements: " + movements + "}";
+        return "{gameId: " + gameId + ", participants: " + participants + ", mode: " + mode + ", status: " + status + ", movements: " + movements + "}";
     }
 }

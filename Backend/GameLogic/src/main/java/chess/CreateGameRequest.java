@@ -1,5 +1,6 @@
 package chess;
 
-/** Cuerpo de POST /internal/logic/games. botLevel y playerColor solo se usan en vs_bot. */
-public record CreateGameRequest(String userId, String mode, Integer botLevel, String playerColor){
-}
+import java.util.List;
+
+/** Cuerpo de POST /internal/logic/games*/
+public record CreateGameRequest(String mode, TimeControl timeControl, String visibility, Integer botLevel, String matchId, List<Player> participants){}

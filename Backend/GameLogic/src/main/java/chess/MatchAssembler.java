@@ -24,16 +24,22 @@ public class MatchAssembler{
         }
 
         return new GameState(
-            match.getId(),
-            match.getUserId(),
+            match.getGameId(),
             match.getMode(),
+            match.getVisibility(),
+            match.getMatchId(),
+            match.getParticipants(),
             match.getBotLevel(),
-            match.getPlayerColor(),
+            match.getTimeControl(),
+            match.getClocks(),
             match.getStatus(),
             match.getTurn(),
             match.getFen(),
+            match.getInitialFen(),
             legalMoves,
             moves,
+            match.getDrawOffer(),
+            match.getExpectedVersion(),
             match.getResult(),
             match.getEndReason(),
             match.getCreatedAt().toString(),
@@ -42,6 +48,6 @@ public class MatchAssembler{
     }
 
     public GameSummary toSummary(Match match){
-        return new GameSummary(match.getId(), match.getMode(), match.getStatus(), match.getResult(), match.getCreatedAt().toString());
+        return new GameSummary(match.getGameId(), match.getMode(), match.getStatus(), match.getResult(), match.getCreatedAt().toString());
     }
 }

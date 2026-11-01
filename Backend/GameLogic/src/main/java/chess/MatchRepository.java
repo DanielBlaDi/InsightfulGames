@@ -8,7 +8,8 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface MatchRepository extends MongoRepository<Match, String>{
-    Optional<Match> findById(String id);
+    Optional<Match> findByGameId(String gameId);
+    Optional<Match> findByMatchId(String matchId);
     /** Las partidas de un usuario, la más reciente primero. */
-    List<Match> findByUserIdOrderByCreatedAtDesc(String userId);
+    List<Match> findByParticipantsUserIdOrderByCreatedAtDesc(String userId);
 }
