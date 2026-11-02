@@ -1,4 +1,4 @@
-package chess;
+package chess.matches;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -6,7 +6,8 @@ import java.util.Map;
 
 import org.springframework.stereotype.Component;
 
-import chess.GameState.MoveEntry;
+import chess.matches.GameState.MoveEntry;
+import chess.movements.Movement;
 
 /**
  * Convierte una Match (lo guardado en Mongo) en los objetos JSON del contrato.

@@ -1,4 +1,4 @@
-package chess;
+package chess.movements;
 
 import java.util.Map;
 
@@ -7,6 +7,8 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import chess.matches.RequestNotValidException;
 
 /** Errores de petición: 422 para jugadas que no se aceptan y 400 VALIDATION_ERROR para peticiones mal formadas. */
 @RestControllerAdvice

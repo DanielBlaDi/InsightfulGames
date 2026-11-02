@@ -12,7 +12,8 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
-import chess.ChessRules.Applied;
+import chess.matches.ChessRules;
+import chess.matches.ChessRules.Applied;
 
 /** Pruebas de las reglas de ajedrez, sin Spring ni MongoDB. */
 class ChessRulesTest{

@@ -1,4 +1,4 @@
-package chess;
+package chess.movements;
 
 import java.time.Instant;
 import java.util.Objects;

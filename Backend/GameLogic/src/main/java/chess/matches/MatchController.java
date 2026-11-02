@@ -1,4 +1,4 @@
-package chess;
+package chess.matches;
 
 import java.net.URI;
 import java.time.Instant;
@@ -20,12 +20,15 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import chess.ChessRules.Applied;
 import chess.constants.Color;
 import chess.constants.EndReason;
 import chess.constants.Mode;
 import chess.constants.Status;
 import chess.constants.Visibility;
+import chess.matches.ChessRules.Applied;
+import chess.movements.Movement;
+import chess.movements.MovementCreationEssentials;
+import chess.movements.MovementNotValidException;
 
 @RestController
 public class MatchController{
@@ -43,7 +46,7 @@ public class MatchController{
 
     /** Crea la partida en la posición inicial. GameLogic genera gameId y createdAt. */
     @PostMapping({"/internal/logic/games", "/internal/logic/games/"})
-    ResponseEntity<GameState> newMatch(@RequestBody CreateGameRequest request){
+    ResponseEntity<GameState> newMatch(@RequestBody CreateMatchRequest request){
         Match saved = null;
         boolean matchAlreadyExists = false;
 
@@ -85,7 +88,7 @@ public class MatchController{
     GameState addMovement(@PathVariable("id") String id, @RequestBody MovementCreationEssentials movement){
         Match match = findMatch(id);
 
-        if(movement == null || movement.uci == null || movement.uci.isBlank()){
+        if(movement == null || movement.uci() == null || movement.uci().isBlank()){
             throw new RequestNotValidException("Falta el campo uci");
         }
         if(match.isFinished()){
@@ -93,16 +96,16 @@ public class MatchController{
         }
 
         //La posición se reconstruye desde initialFen y las jugadas guardadas (así se detecta la repetición triple)
-        Optional<Applied> applied = ChessRules.apply(match.getInitialFen(), match.playedUciMoves(), movement.uci);
+        Optional<Applied> applied = ChessRules.apply(match.getInitialFen(), match.playedUciMoves(), movement.uci());
         if(applied.isEmpty()){
-            throw MovementNotValidException.illegalMove(movement.uci);
+            throw MovementNotValidException.illegalMove(movement.uci());
         }
 
         Applied result = applied.get();
         Movement newMovement = new Movement(
             match.getMovements().size() + 1,
             result.san(),
-            movement.uci.trim().toLowerCase(),
+            movement.uci().trim().toLowerCase(),
             result.fenAfter(),
             Instant.now().truncatedTo(ChronoUnit.MILLIS)
         );
@@ -120,14 +123,14 @@ public class MatchController{
     GameState finishMatch(@PathVariable("id") String id, @RequestBody MatchResultRequest body){
         Match match = findMatch(id);
 
-        if(body == null || !isColor(body.side)){
+        if(body == null || !isColor(body.side())){
             throw new RequestNotValidException("side debe ser \"" + Color.WHITE.toString() + "\" o \"" + Color.BLACK.toString() + "\"");
         }
         if(match.isFinished()){
             throw MovementNotValidException.matchFinished();
         }
 
-        match.finish(Color.WHITE.toString().equals(body.side) ? Color.BLACK.toString() : Color.WHITE.toString(), EndReason.SURRENDER.toString());
+        match.finish(Color.WHITE.toString().equals(body.side()) ? Color.BLACK.toString() : Color.WHITE.toString(), EndReason.SURRENDER.toString());
 
         return assembler.toState(repository.save(match));
     }
@@ -150,7 +153,7 @@ public class MatchController{
                         rabbitTemplate.convertAndSend(
                             "game.events", 
                             "game.finished", 
-                            new GameFinishedMessage(
+                            new MatchFinishedMessage(
                                 UUID.randomUUID().toString(), 
                                 "game.finished", 
                                 Instant.now().toString(), 
@@ -191,7 +194,7 @@ public class MatchController{
     }
 
     /** Valida el cuerpo de POST /internal/logic/games y arma la partida nueva o retorna la partida existente si una con el mismo matchId ya existe. */
-    private Match buildNewMatch(CreateGameRequest request){
+    private Match buildNewMatch(CreateMatchRequest request){
         if(request == null){
             throw new RequestNotValidException("Falta el cuerpo de la petición");
         }

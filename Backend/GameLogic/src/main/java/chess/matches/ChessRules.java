@@ -1,4 +1,4 @@
-package chess;
+package chess.matches;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -13,6 +13,10 @@ import com.github.bhlangonijr.chesslib.Side;
 import com.github.bhlangonijr.chesslib.move.Move;
 import com.github.bhlangonijr.chesslib.move.MoveList;
 
+import chess.constants.Color;
+import chess.constants.EndReason;
+import chess.constants.Result;
+
 /**
  * Reglas de ajedrez. Clase sin Spring, para poder probarla sola.
  * Toda la posición se reconstruye desde el FEN inicial y las jugadas guardadas,
@@ -21,7 +25,6 @@ import com.github.bhlangonijr.chesslib.move.MoveList;
 public final class ChessRules{
     public static final String START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
-    /** result: "white" | "black" | "draw". endReason: "checkmate" | "stalemate" | "draw". */
     public record Outcome(String result, String endReason){}
 
     /** outcome es null si la partida continúa. */
@@ -30,7 +33,7 @@ public final class ChessRules{
     private ChessRules(){}
 
     public static String colorOf(Side side){
-        return side == Side.WHITE ? "white" : "black";
+        return side == Side.WHITE ? Color.WHITE.toString() : Color.BLACK.toString();
     }
 
     /** Casilla de origen -> casillas de destino legales (todo en minúsculas, ordenado). */
@@ -75,12 +78,12 @@ public final class ChessRules{
         Outcome outcome = null;
         if(board.isMated()){
             //Quien tiene el turno es quien quedó en jaque mate
-            outcome = new Outcome(board.getSideToMove() == Side.WHITE ? "black" : "white", "checkmate");
+            outcome = new Outcome(board.getSideToMove() == Side.WHITE ? Color.BLACK.toString() : Color.WHITE.toString(), EndReason.CHECKMATE.toString());
         }else if(board.isStaleMate()){
-            outcome = new Outcome("draw", "stalemate");
+            outcome = new Outcome(Result.DRAW.toString(), EndReason.STALEMATE.toString());
         }else if(board.isDraw()){
             //Material insuficiente, regla de 50 jugadas o repetición triple
-            outcome = new Outcome("draw", "draw");
+            outcome = new Outcome(Result.DRAW.toString(), Result.DRAW.toString());
         }
 
         return Optional.of(new Applied(san, board.getFen(), colorOf(board.getSideToMove()), outcome));

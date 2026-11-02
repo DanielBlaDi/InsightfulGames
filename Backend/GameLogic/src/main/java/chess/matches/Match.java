@@ -1,4 +1,4 @@
-package chess;
+package chess.matches;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -15,6 +15,7 @@ import org.springframework.data.mongodb.core.mapping.Field;
 import chess.constants.Color;
 import chess.constants.Mode;
 import chess.constants.Status;
+import chess.movements.Movement;
 
 /**
  * Una partida. Es el documento de la colección "games": el mismo GameState

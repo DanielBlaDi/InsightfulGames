@@ -1,4 +1,4 @@
-package chess;
+package chess.matches;
 
 public class Clocks{
     private Integer white;

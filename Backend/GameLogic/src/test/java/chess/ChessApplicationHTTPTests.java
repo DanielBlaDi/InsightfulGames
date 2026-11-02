@@ -19,6 +19,13 @@ import chess.constants.Mode;
 import chess.constants.Result;
 import chess.constants.Status;
 import chess.constants.Visibility;
+import chess.matches.CreateMatchRequest;
+import chess.matches.Match;
+import chess.matches.MatchAssembler;
+import chess.matches.MatchController;
+import chess.matches.MatchRepository;
+import chess.matches.Participant;
+import chess.matches.TimeControl;
 import tools.jackson.databind.ObjectMapper;
 
 import static org.hamcrest.Matchers.containsInAnyOrder;
@@ -79,14 +86,14 @@ public class ChessApplicationHTTPTests{
 		return this.mockMvc.perform(post("/internal/logic/games/" + matchId + "/moves").contentType(MediaType.APPLICATION_JSON).content("{\"uci\": \"" + uci + "\"}"));
 	}
 
-	/**Test for the function newMatch(@RequestBody CreateGameRequest request)*/
+	/**Test for the function newMatch(@RequestBody CreateMatchRequest request)*/
 	@Test public void shouldReturnNewMatch() throws Exception{
 		when(repository.save(any(Match.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
 		List<Participant> testParticipants = new ArrayList<>(1);
 		testParticipants.add(new Participant(TEST_USER_ID, Color.WHITE.toString()));
 
-		CreateGameRequest request = new CreateGameRequest(Mode.VS_BOT.toString(), null, Visibility.SHARED.toString(), 8, null, testParticipants);
+		CreateMatchRequest request = new CreateMatchRequest(Mode.VS_BOT.toString(), null, Visibility.SHARED.toString(), 8, null, testParticipants);
 
 		ObjectMapper objectMapper = new ObjectMapper();
 
@@ -128,7 +135,7 @@ public class ChessApplicationHTTPTests{
 			);
 	}
 
-	/**Test for the function newMatch(@RequestBody CreateGameRequest request) on a local match*/
+	/**Test for the function newMatch(@RequestBody CreateMatchRequest request) on a local match*/
 	@Test public void shouldLeaveBotFieldsEmptyOnLocalMatch() throws Exception{
 		when(repository.save(any(Match.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -136,7 +143,7 @@ public class ChessApplicationHTTPTests{
 		testParticipants.add(new Participant(TEST_USER_ID, Color.WHITE.toString()));
 		testParticipants.add(new Participant(TEST_USER_ID, Color.BLACK.toString()));
 
-		CreateGameRequest request = new CreateGameRequest(Mode.LOCAL.toString(), null, Visibility.SHARED.toString(), null, null, testParticipants);
+		CreateMatchRequest request = new CreateMatchRequest(Mode.LOCAL.toString(), null, Visibility.SHARED.toString(), null, null, testParticipants);
 
 		ObjectMapper objectMapper = new ObjectMapper();
 
