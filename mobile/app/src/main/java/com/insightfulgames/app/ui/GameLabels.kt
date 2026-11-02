@@ -124,4 +124,12 @@ object GameLabels {
             append(' ')
         }
     }.trim()
+
+    /** Texto bajo el tablero al repetir la partida: "Posición inicial · 0 / 40" o "6... Nf3 · 12 / 40". */
+    fun replayCaption(ply: Int, total: Int, move: MoveDto?): String {
+        if (move == null) return "Posición inicial · 0 / $total"
+        val number = (move.ply + 1) / 2
+        val dots = if (isWhiteMove(move)) "." else "..."
+        return "$number$dots ${move.san} · $ply / $total"
+    }
 }

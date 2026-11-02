@@ -19,17 +19,24 @@ import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.insightfulgames.app.ui.Square
 import com.insightfulgames.app.ui.parseFenPlacement
 import com.insightfulgames.app.ui.pieceGlyph
 
 private val LightSquare = Color(0xFFF0D9B5)
 private val DarkSquare = Color(0xFFB58863)
 private val BlackPiece = Color(0xFF1F1B1A)
+private val LightSquareMoved = Color(0xFFF7EC74)
+private val DarkSquareMoved = Color(0xFFDAC34B)
 
-/** Tablero de solo lectura a partir de una FEN. Blancas abajo. No dibuja nada si la FEN no es válida. */
+/**
+ * Tablero de solo lectura a partir de una FEN. Blancas abajo. No dibuja nada si la FEN no es válida.
+ * [lastMove] (origen, destino) pinta de amarillo la última jugada, como en chess.com.
+ */
 @Composable
-fun FenBoard(fen: String?, modifier: Modifier = Modifier) {
+fun FenBoard(fen: String?, modifier: Modifier = Modifier, lastMove: Pair<Square, Square>? = null) {
     val board = remember(fen) { fen?.let { parseFenPlacement(it) } } ?: return
+    val marked = remember(lastMove) { lastMove?.let { setOf(it.first, it.second) } ?: emptySet() }
 
     Column(
         modifier
@@ -41,11 +48,16 @@ fun FenBoard(fen: String?, modifier: Modifier = Modifier) {
             Row(Modifier.weight(1f).fillMaxWidth()) {
                 for (c in 0 until 8) {
                     val dark = (r + c) % 2 == 1
+                    val squareColor = when {
+                        Square(r, c) in marked -> if (dark) DarkSquareMoved else LightSquareMoved
+                        dark -> DarkSquare
+                        else -> LightSquare
+                    }
                     Box(
                         Modifier
                             .weight(1f)
                             .fillMaxHeight()
-                            .background(if (dark) DarkSquare else LightSquare),
+                            .background(squareColor),
                         contentAlignment = Alignment.Center,
                     ) {
                         val piece = board[r][c]
