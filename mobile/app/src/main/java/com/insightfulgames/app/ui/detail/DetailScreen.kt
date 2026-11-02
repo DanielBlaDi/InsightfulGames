@@ -56,7 +56,7 @@ fun DetailScreen(
 
 @Composable
 private fun DetailContent(game: GameStateDto, myUserId: String, modifier: Modifier = Modifier) {
-    val outcome = GameLabels.outcome(game)
+    val outcome = GameLabels.outcome(game, myUserId)
 
     Column(
         modifier = modifier

@@ -10,8 +10,11 @@ Alcance: perfil, estadísticas, historial y detalle. No juega partidas en vivo, 
    - Emulador: `http://10.0.2.2:8090/` (ya configurado).
    - Dispositivo físico: `http://<IP-del-PC>:8090/` (mismo Wi-Fi, firewall abierto).
    - Siempre con `/` al final y **sin** `/api`. La app habla con el gateway móvil, no con el web.
-3. Sin backend completo: `Backend/api-gateway-mobile/tools/fake_internal_gateway.py` (ver su README).
-   Registrarse desde la app crea el usuario en el simulado.
+3. Backend real: `docker compose up -d --build` desde la raíz del repo (el gateway móvil ya está en el compose).
+   Hoy funcionan registro/login, historial y detalle de partidas local y vs_bot. Perfil y estadísticas dependen de
+   Profile/Stats y las partidas online de Multiplayer, que aún no existen: la app los muestra como "No disponible".
+4. Sin backend: `Backend/api-gateway-mobile/tools/fake_internal_gateway.py` (ver su README) simula todo,
+   incluidos perfil, estadísticas y partidas multijugador. Registrarse desde la app crea el usuario en el simulado.
 
 ## Pantallas (navegación inferior)
 Login/Registro · Inicio (`GET /home`) · Perfil · Estadísticas · Historial (20 por página + "Cargar más") · Detalle.

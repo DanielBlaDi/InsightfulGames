@@ -105,4 +105,40 @@ class GameLabelsTest {
         assertEquals("Abandono", GameLabels.endReasonLabel("abandonment"))
         assertNull(GameLabels.endReasonLabel(null))
     }
+
+    // ---- Game Logic actual (prototipo 1): sin participants, sin color en las jugadas ----
+
+    private fun legacyState(mode: String, playerColor: String?, result: String?, endReason: String?) = GameStateDto(
+        gameId = "g", mode = mode, userId = "me", playerColor = playerColor, botLevel = if (mode == "vs_bot") 5 else null,
+        status = "finished", result = result, endReason = endReason, createdAt = "2026-10-29T15:00:00Z",
+    )
+
+    @Test fun legacyDetailShowsWinLossFromPlayerColor() {
+        assertEquals(Outcome.WIN, GameLabels.outcome(legacyState("vs_bot", "black", "black", "checkmate"), "me"))
+        assertEquals(Outcome.LOSS, GameLabels.outcome(legacyState("vs_bot", "white", "black", "resignation"), "me"))
+        assertEquals(Outcome.WHITE_WON, GameLabels.outcome(legacyState("local", null, "white", "checkmate"), "me"))
+    }
+
+    @Test fun legacyPlayersAndResignationLabel() {
+        val g = legacyState("vs_bot", "black", "white", "resignation")
+        assertEquals("Botcito (nivel 5)", GameLabels.playerLabel(g, "white", "me"))
+        assertEquals("Tú", GameLabels.playerLabel(g, "black", "me"))
+        assertEquals("Tú", GameLabels.playerLabel(legacyState("local", null, null, null), "white", "me"))
+        assertEquals("Rendición", GameLabels.endReasonLabel("resignation"))
+    }
+
+    @Test fun movesWithoutColorUsePlyParity() {
+        val moves = listOf(MoveDto(1, null, "e4", "e2e4"), MoveDto(2, null, "e5", "e7e5"), MoveDto(3, null, "Nf3", "g1f3"))
+        assertEquals("1. e4 e5 2. Nf3", GameLabels.movesText(moves))
+    }
+
+    @Test fun v9DetailUsesParticipantsForUserColor() {
+        val g = GameStateDto(
+            gameId = "g", mode = "multiplayer", status = "finished", result = "black", endReason = "timeout",
+            participants = listOf(ParticipantDto("me", "black"), ParticipantDto("other", "white")),
+            createdAt = "2026-10-29T15:00:00Z",
+        )
+        assertEquals(Outcome.WIN, GameLabels.outcome(g, "me"))
+        assertEquals(Outcome.LOSS, GameLabels.outcome(g, "other"))
+    }
 }

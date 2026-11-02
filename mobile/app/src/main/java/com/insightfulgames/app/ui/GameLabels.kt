@@ -50,8 +50,18 @@ object GameLabels {
     fun outcome(game: GameSummaryDto): Outcome =
         outcome(game.status, game.result, game.endReason, game.color)
 
-    fun outcome(game: GameStateDto): Outcome =
-        outcome(game.status, game.result, game.endReason, color = null)
+    /**
+     * Color del usuario en una partida abierta en detalle. null en local (juega los dos).
+     * v9: sale de participants; Game Logic actual: playerColor.
+     */
+    fun userColor(game: GameStateDto, myUserId: String): String? = when {
+        game.mode == "local" -> null
+        game.playerColor != null -> game.playerColor
+        else -> game.participants.firstOrNull { it.userId == myUserId }?.color
+    }
+
+    fun outcome(game: GameStateDto, myUserId: String): Outcome =
+        outcome(game.status, game.result, game.endReason, userColor(game, myUserId))
 
     fun outcomeLabel(outcome: Outcome): String = when (outcome) {
         Outcome.WIN -> "Victoria"
@@ -68,7 +78,7 @@ object GameLabels {
     fun endReasonLabel(endReason: String?): String? = when (endReason) {
         "checkmate" -> "Jaque mate"
         "stalemate" -> "Ahogado"
-        "surrender" -> "Rendición"
+        "surrender", "resignation" -> "Rendición" // "resignation" lo usa Game Logic actual
         "draw" -> "Tablas acordadas"
         "timeout" -> "Tiempo agotado"
         "abandonment" -> "Abandono"
@@ -80,6 +90,14 @@ object GameLabels {
 
     /** Quién juega con [color]. En vs_bot el bot no es participante. */
     fun playerLabel(game: GameStateDto, color: String, myUserId: String): String {
+        // Game Logic actual no manda participants: dueño en userId y color del humano en playerColor.
+        if (game.participants.isEmpty() && game.userId != null) {
+            return when {
+                game.mode == "local" -> if (game.userId == myUserId) "Tú" else "Jugador"
+                game.playerColor == color -> if (game.userId == myUserId) "Tú" else "Jugador"
+                else -> game.botLevel?.let { "Botcito (nivel $it)" } ?: "Botcito"
+            }
+        }
         val p = game.participants.firstOrNull { it.color == color }
         return when {
             p != null && p.userId == myUserId -> "Tú"
@@ -100,7 +118,8 @@ object GameLabels {
     fun movesText(moves: List<MoveDto>): String = buildString {
         moves.forEachIndexed { i, m ->
             val number = (m.ply + 1) / 2
-            if (m.color == "white") append("$number. ") else if (i == 0) append("$number... ")
+            val white = m.color?.let { it == "white" } ?: (m.ply % 2 == 1)
+            if (white) append("$number. ") else if (i == 0) append("$number... ")
             append(m.san)
             append(' ')
         }

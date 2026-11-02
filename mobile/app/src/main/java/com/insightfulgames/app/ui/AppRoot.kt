@@ -123,7 +123,7 @@ private fun MainScaffold(session: Session) {
                     onOpenHistory = { nav.navigateToTab(ROUTE_HISTORY) },
                 )
             }
-            composable(ROUTE_PROFILE) { ProfileScreen() }
+            composable(ROUTE_PROFILE) { ProfileScreen(sessionUsername = session.username) }
             composable(ROUTE_STATS) { StatsScreen() }
             composable(ROUTE_HISTORY) { HistoryScreen(onOpenGame = { nav.openDetail(it) }) }
             composable(

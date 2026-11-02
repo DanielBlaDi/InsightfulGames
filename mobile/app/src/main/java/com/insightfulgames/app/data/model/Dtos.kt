@@ -100,7 +100,8 @@ data class TimeControlDto(val minutes: Int)
 @Serializable
 data class MoveDto(
     val ply: Int,
-    val color: String,
+    /** v9 lo trae; Game Logic actual no. Si falta, se deduce de ply (impar = blancas). */
+    val color: String? = null,
     val san: String,
     val uci: String,
     val fenAfter: String? = null,
@@ -114,6 +115,9 @@ data class GameStateDto(
     val visibility: String = "private",
     val matchId: String? = null,
     val participants: List<ParticipantDto> = emptyList(),
+    /** Game Logic actual (prototipo 1): dueño y color del humano en vs_bot, en vez de participants. */
+    val userId: String? = null,
+    val playerColor: String? = null,
     val botLevel: Int? = null,
     val timeControl: TimeControlDto? = null,
     val status: String,
