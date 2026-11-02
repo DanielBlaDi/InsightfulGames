@@ -23,6 +23,8 @@ import chess.constants.Status;
  */
 @Document(collection = "games")
 public class Match{
+    public static final String ANONYMOUS_USER_ID = "00000000-0000-0000-0000-000000000000";
+
     /**
      * gameId: UUID v4 en texto
      */
@@ -47,7 +49,7 @@ public class Match{
     /**
      * Los jugadores que hacen parte de esta partida
      */
-    private List<Player> participants;
+    private List<Participant> participants;
 
     /**
      * 1 a 20; solo en vs_bot, null de lo contrario
@@ -126,7 +128,7 @@ public class Match{
     }
 
     /** Crea una partida nueva en la posición inicial. Game Logic genera gameId y createdAt. */
-    public Match(String mode, TimeControl timeControl, String visibility, Integer botLevel, String matchId, List<Player> participants){
+    public Match(String mode, TimeControl timeControl, String visibility, Integer botLevel, String matchId, List<Participant> participants){
         this();
         this.gameId = UUID.randomUUID().toString();
 
@@ -170,6 +172,15 @@ public class Match{
         this.turn = turnAfterMove;
     }
 
+    /** Changes the user's id to ANONYMOUS_USER_ID in this Match, works even if both participants are the same user*/
+    public void anonymizeUser(String userId){
+        for(int i=0; i<participants.size(); i++){
+            if(participants.get(i).userId().equals(userId)){
+                participants.set(i, new Participant(ANONYMOUS_USER_ID, participants.get(i).color()));
+            }
+        }
+    }
+
     /** Cierra la partida */
     public void finish(String result, String endReason){
         this.status = Status.FINISHED.toString();
@@ -207,7 +218,7 @@ public class Match{
         return matchId;
     }
 
-    public List<Player> getParticipants(){
+    public List<Participant> getParticipants(){
         return participants;
     }
 

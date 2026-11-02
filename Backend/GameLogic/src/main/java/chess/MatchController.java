@@ -6,8 +6,10 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.regex.Pattern;
 
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,6 +24,7 @@ import chess.ChessRules.Applied;
 import chess.constants.Color;
 import chess.constants.EndReason;
 import chess.constants.Mode;
+import chess.constants.Status;
 import chess.constants.Visibility;
 
 @RestController
@@ -30,10 +33,12 @@ public class MatchController{
 
     private final MatchRepository repository;
     private final MatchAssembler assembler;
+    private final RabbitTemplate rabbitTemplate;
 
-    MatchController(MatchRepository repository, MatchAssembler assembler){
+    MatchController(MatchRepository repository, MatchAssembler assembler, RabbitTemplate rabbitTemplate){
         this.repository = repository;
         this.assembler = assembler;
+        this.rabbitTemplate = rabbitTemplate;
     }
 
     /** Crea la partida en la posición inicial. GameLogic genera gameId y createdAt. */
@@ -127,6 +132,55 @@ public class MatchController{
         return assembler.toState(repository.save(match));
     }
 
+    @DeleteMapping({"/internal/logic/users/{userId}", "/internal/logic/users/{userId}/"})
+    private ResponseEntity<Void> anonymizeUser(@PathVariable("userId") String userId){
+        List<Match> userMatches = repository.findByParticipantsUserId(userId);
+
+        for(Match match : userMatches){
+            List<Participant> participants = match.getParticipants();
+            for(Participant participant : participants){
+                if(participant.userId().equals(userId)){
+                    if(match.getStatus().equals(Status.IN_PROGRESS.toString()) && match.getMode().equals(Mode.MULTIPLAYER.toString())){
+                        match.finish(Color.WHITE.toString().equals(participant.color()) ? Color.BLACK.toString() : Color.WHITE.toString(), EndReason.ABANDONMENT.toString());
+
+                        match.anonymizeUser(userId);
+
+                        repository.save(match);
+
+                        rabbitTemplate.convertAndSend(
+                            "game.events", 
+                            "game.finished", 
+                            new GameFinishedMessage(
+                                UUID.randomUUID().toString(), 
+                                "game.finished", 
+                                Instant.now().toString(), 
+                                match.getGameId(), 
+                                match.getMatchId(), 
+                                match.getMode(), 
+                                participants, 
+                                match.getResult(), 
+                                match.getEndReason(), 
+                                match.getFinishedAt().toString()
+                            )
+                        );
+                    }else{
+                        if(match.getStatus().equals(Status.WAITING.toString())){
+                            match.finish(null, EndReason.EXPIRED.toString());
+                        }
+                        
+                        match.anonymizeUser(userId);
+
+                        repository.save(match);
+                    }
+                }
+            }
+
+            
+        }
+
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping({"/health", "/health/"})
     Map<String, String> health(){
         return Map.of("status", "ok");
@@ -149,7 +203,7 @@ public class MatchController{
         }
 
         Integer botLevel = null;
-        List<Player> participants = request.participants();
+        List<Participant> participants = request.participants();
         
         if(Mode.LOCAL.toString().equals(mode)){
             if(participants.size() != 2){

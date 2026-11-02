@@ -12,7 +12,7 @@ public record GameState(
     String mode,
     String visibility,
     String matchId,
-    List<Player> participants,
+    List<Participant> participants,
     Integer botLevel,
     TimeControl timeControl,
     Clocks clocks,
