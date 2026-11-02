@@ -60,6 +60,30 @@ class GameLabelsTest {
         assertEquals(Outcome.NO_RESULT, GameLabels.outcome(summary(result = null, endReason = "checkmate")))
     }
 
+    // ---- account_deleted: etiqueta propia (contrato 6.3 y 15) ----
+
+    @Test fun accountDeletedHasItsOwnLabel() {
+        // Sin rival: result es null. No debe caer en "Sin resultado".
+        listOf("white", "black", null).forEach { color ->
+            val o = GameLabels.outcome(summary(result = null, endReason = "account_deleted", color = color))
+            assertEquals(Outcome.ACCOUNT_DELETED, o)
+        }
+        assertEquals("Cuenta eliminada", GameLabels.outcomeLabel(Outcome.ACCOUNT_DELETED))
+        assertEquals("Cuenta eliminada", GameLabels.endReasonLabel("account_deleted"))
+    }
+
+    @Test fun accountDeletedIsNotNoResultNorExpired() {
+        val deleted = GameLabels.outcomeLabel(GameLabels.outcome(summary(result = null, endReason = "account_deleted")))
+        assertEquals(false, deleted == GameLabels.outcomeLabel(Outcome.NO_RESULT))
+        assertEquals(false, deleted == GameLabels.outcomeLabel(Outcome.EXPIRED))
+    }
+
+    @Test fun rivalWinsByAbandonmentWhenOpponentDeletesAccount() {
+        // DP-15: con partida multijugador en curso gana el rival por abandonment, con result del rival.
+        assertEquals(Outcome.WIN, GameLabels.outcome(summary(result = "white", color = "white", endReason = "abandonment")))
+        assertEquals("Abandono", GameLabels.endReasonLabel("abandonment"))
+    }
+
     // ---- jugadores ----
 
     private fun state(

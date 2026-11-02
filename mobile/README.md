@@ -1,6 +1,6 @@
 # Insightful Games — App Android
 
-Contratos v9, sección 16. Kotlin · Jetpack Compose · Material 3 · Navigation · Retrofit/OkHttp · kotlinx.serialization · EncryptedSharedPreferences.
+Contrato técnico definitivo, sección 15 (rutas en 4.11). Kotlin · Jetpack Compose · Material 3 · Navigation · Retrofit/OkHttp · kotlinx.serialization · EncryptedSharedPreferences.
 
 Alcance: perfil, estadísticas, historial y detalle. No juega partidas en vivo, no muestra análisis del Tutor y no borra la cuenta.
 
@@ -41,7 +41,9 @@ app/src/main/java/com/insightfulgames/app/
 ```
 
 ## Pruebas
-`./gradlew test` → `GameLabelsTest`, `FenParserTest`.
+`./gradlew test` → `GameLabelsTest` (incluye la etiqueta de `account_deleted`), `FenParserTest`, `ReplayTest`.
+
+> **Ojo:** el repositorio todavía no trae `gradlew`, `gradlew.bat` ni `gradle/wrapper/gradle-wrapper.jar` (tarea MOB-03). Mientras tanto, abre el proyecto en Android Studio y ejecuta las pruebas desde ahí (clic derecho en `app/src/test` → *Run Tests*).
 
 ## Pendiente
 - Logo, tipografías (Playfair Display / Plus Jakarta Sans) y modo oscuro.

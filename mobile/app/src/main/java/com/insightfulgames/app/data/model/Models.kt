@@ -19,4 +19,4 @@ enum class DetailKind { GAME, MATCH }
 data class DetailTarget(val kind: DetailKind, val id: String)
 
 /** Resultado de una partida desde el punto de vista del usuario. */
-enum class Outcome { WIN, LOSS, DRAW, WAITING, IN_PROGRESS, EXPIRED, NO_RESULT, WHITE_WON, BLACK_WON }
+enum class Outcome { WIN, LOSS, DRAW, WAITING, IN_PROGRESS, EXPIRED, ACCOUNT_DELETED, NO_RESULT, WHITE_WON, BLACK_WON }

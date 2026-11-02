@@ -1,11 +1,11 @@
 # API Gateway móvil
 
-Contratos v9, sección 5. FastAPI, puerto 8090. Solo habla con el gateway interno (`GATEWAY_INTERNAL_URL`,
+Contrato técnico definitivo (secciones 4.11 y 5). FastAPI, puerto 8090. Solo habla con el gateway interno (`GATEWAY_INTERNAL_URL`,
 que en el compose es `api-gateway-component`, rutas `/internal/*`). Ya está en el `compose.yaml` raíz.
 
 **Compatibilidad con el prototipo 1.** Game Logic aún responde `GET /logic/games` como lista simple, sin paginar y
 sin `matchId`/`endReason`/`color`. Mientras sea así, este gateway la pagina (cursor opaco) y completa esos campos con `null`.
-Si Game Logic ya responde `{items, nextCursor}` (contrato v9), la respuesta pasa tal cual. No hay que cambiar nada al migrar.
+Si Game Logic ya responde `{items, nextCursor}` (contrato 4.1), la respuesta pasa tal cual. Esta compatibilidad es temporal: cuando Game Logic migre (GL-04) se retira (GWM-02).
 
 | Ruta pública (app) | Auth | Interna |
 |---|---|---|
@@ -18,22 +18,23 @@ Si Game Logic ya responde `{items, nextCursor}` (contrato v9), la respuesta pasa
 | `GET /games/{id}` | sí | `GET /internal/single-player/games/{id}` (local, vs_bot) |
 | `GET /matches/{id}` | sí | `GET /internal/multiplayer/matches/{id}` (multiplayer) |
 
-- `userId` sale del claim `sub` del JWT (HS256, debe ser UUID). El cliente nunca lo envía.
+- `userId` sale del claim `sub` del JWT (solo HS256, debe ser UUID; HS384/HS512 se rechazan). El cliente nunca lo envía.
 - Descarta cualquier `X-User-Id` del cliente; solo lo pone en los dos detalles (Single Player / Multiplayer lo necesitan).
 - `/internal/*` desde fuera → 404. Sin cookies, sin Tutor, sin borrado de cuenta.
 - `/home`: cada sección es independiente (`null` + nombre en `unavailable`); 503 `SERVICES_UNAVAILABLE`
   solo si no se llega al gateway interno. `recentGames` es el `items` de la lista (5 más recientes).
 - Errores traducidos según el servicio de origen (`GAME_NOT_FOUND` / `MATCH_NOT_FOUND` / `INVALID_CREDENTIALS` / `USERNAME_TAKEN`).
+- Solo emite códigos del catálogo 4.12. Un método no soportado responde 404 `NOT_FOUND`; un 409 o 422 de un servicio sin formato de error común responde 502 `UPSTREAM_ERROR`.
 - Un id de ruta que no es UUID responde 404 sin llegar al gateway interno.
 - No arranca sin `JWT_SECRET`.
 
 ## Variables
-`PORT=8090`, `GATEWAY_INTERNAL_URL`, `JWT_SECRET` (obligatoria), `JWT_ALGORITHM=HS256`, `HTTP_TIMEOUT=15`, `LOG_LEVEL`.
+`PORT=8090`, `GATEWAY_INTERNAL_URL`, `JWT_SECRET` (obligatoria), `JWT_ALGORITHM=HS256` (otro valor impide el arranque), `HTTP_TIMEOUT=15`, `LOG_LEVEL`.
 
 ## Pruebas
 ```bash
 pip install -r requirements-dev.txt
-pytest -q          # 37 pruebas, gateway interno simulado con httpx.MockTransport
+pytest -q          # 54 pruebas, gateway interno simulado con httpx.MockTransport
 ```
 
 ## Desarrollo sin backend completo

@@ -40,6 +40,8 @@ object GameLabels {
         status == "waiting" -> Outcome.WAITING
         status != "finished" -> Outcome.IN_PROGRESS
         endReason == "expired" -> Outcome.EXPIRED
+        // Sin rival al borrar la cuenta (contrato 6.3): result es null y no cuenta en estadísticas.
+        endReason == "account_deleted" -> Outcome.ACCOUNT_DELETED
         result == null -> Outcome.NO_RESULT
         result == "draw" -> Outcome.DRAW
         color == null -> if (result == "white") Outcome.WHITE_WON else Outcome.BLACK_WON
@@ -52,7 +54,7 @@ object GameLabels {
 
     /**
      * Color del usuario en una partida abierta en detalle. null en local (juega los dos).
-     * v9: sale de participants; Game Logic actual: playerColor.
+     * Contrato: sale de participants; Game Logic actual: playerColor.
      */
     fun userColor(game: GameStateDto, myUserId: String): String? = when {
         game.mode == "local" -> null
@@ -70,6 +72,7 @@ object GameLabels {
         Outcome.WAITING -> "Esperando rival"
         Outcome.IN_PROGRESS -> "En curso"
         Outcome.EXPIRED -> "Invitación caducada"
+        Outcome.ACCOUNT_DELETED -> "Cuenta eliminada"
         Outcome.NO_RESULT -> "Sin resultado"
         Outcome.WHITE_WON -> "Ganaron blancas"
         Outcome.BLACK_WON -> "Ganaron negras"
@@ -83,6 +86,7 @@ object GameLabels {
         "timeout" -> "Tiempo agotado"
         "abandonment" -> "Abandono"
         "expired" -> "Caducada sin rival"
+        "account_deleted" -> "Cuenta eliminada"
         else -> null
     }
 

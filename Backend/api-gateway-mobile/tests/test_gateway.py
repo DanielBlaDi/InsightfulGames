@@ -1,4 +1,4 @@
-"""Pruebas del gateway móvil contra los contratos v9 (sección 5).
+"""Pruebas del gateway móvil contra el contrato técnico definitivo (secciones 4.11, 4.12 y 5).
 El gateway interno se simula con httpx.MockTransport."""
 
 import os
@@ -242,7 +242,7 @@ def test_malformed_ids_never_reach_internal(env):
 def test_tutor_and_account_deletion_not_exposed(env):
     client, _ = env
     assert client.get("/tutor/analyses", headers=auth()).status_code == 404
-    assert client.delete("/auth/account", headers=auth()).status_code in (404, 405)
+    assert client.delete("/auth/account", headers=auth()).status_code == 404
 
 
 # ---------------------------------------------------------------------- home
@@ -372,7 +372,7 @@ def test_legacy_list_invalid_cursor_is_400(env):
     assert r.status_code == 400 and r.json()["error"]["code"] == "VALIDATION_ERROR"
 
 
-def test_v9_paginated_list_passes_through_untouched(env):
+def test_paginated_list_passes_through_untouched(env):
     client, internal = env
     page = {"items": [{"gameId": GAME, "mode": "multiplayer", "matchId": MATCH}], "nextCursor": "opaco"}
     internal.on("GET", "/internal/logic/games", json=page)
@@ -394,3 +394,72 @@ def test_home_unexpected_games_shape_is_unavailable(env):
     internal.on("GET", "/internal/logic/games", json={"raro": True})
     body = client.get("/home", headers=auth()).json()
     assert body["recentGames"] is None and body["unavailable"] == ["recentGames"]
+
+
+# ------------------------------------------- JWT solo HS256 y catálogo 4.12
+
+
+@pytest.mark.parametrize("alg", ["HS384", "HS512"])
+def test_jwt_other_hmac_algorithms_are_rejected(env, alg):
+    client, internal = env
+    r = client.get("/profile/me", headers=auth(alg=alg))
+    assert r.status_code == 401 and r.json()["error"]["code"] == "UNAUTHORIZED"
+    assert internal.calls == []
+
+
+@pytest.mark.parametrize("alg", ["HS384", "HS512", "RS256", "none"])
+def test_startup_rejects_non_hs256_algorithm(monkeypatch, alg):
+    monkeypatch.setattr(main, "JWT_ALGORITHM", alg)
+    with pytest.raises(RuntimeError, match="HS256"):
+        main._validate_config()
+
+
+def test_startup_rejects_missing_secret(monkeypatch):
+    monkeypatch.setattr(main, "JWT_SECRET", "")
+    with pytest.raises(RuntimeError, match="JWT_SECRET"):
+        main._validate_config()
+
+
+CATALOG_CODES = {
+    "VALIDATION_ERROR", "UNAUTHORIZED", "INVALID_CREDENTIALS", "NOT_FOUND", "GAME_NOT_FOUND",
+    "MATCH_NOT_FOUND", "USERNAME_TAKEN", "INTERNAL_ERROR", "UPSTREAM_ERROR", "SERVICES_UNAVAILABLE",
+}
+
+
+def test_wrong_method_is_not_found_not_405(env):
+    client, _ = env
+    r = client.post("/profile/me", headers=auth())
+    assert r.status_code == 404 and r.json()["error"]["code"] == "NOT_FOUND"
+
+
+def test_unformatted_409_and_422_become_upstream_error(env):
+    client, internal = env
+    internal.on("GET", f"/internal/single-player/games/{GAME}", status=409, json={"x": 1})
+    r = client.get(f"/games/{GAME}", headers=auth())
+    assert r.status_code == 502 and r.json()["error"]["code"] == "UPSTREAM_ERROR"
+
+    internal.on("GET", f"/internal/single-player/games/{GAME}", status=422, json={"x": 1})
+    r = client.get(f"/games/{GAME}", headers=auth())
+    assert r.status_code == 502 and r.json()["error"]["code"] == "UPSTREAM_ERROR"
+
+
+def test_contract_errors_from_services_pass_through(env):
+    client, internal = env
+    body = {"error": {"code": "GAME_NOT_FOUND", "message": "No existe"}}
+    internal.on("GET", f"/internal/single-player/games/{GAME}", status=404, json=body)
+    r = client.get(f"/games/{GAME}", headers=auth())
+    assert r.status_code == 404 and r.json() == body
+
+
+def test_gateway_only_emits_catalog_codes(env):
+    client, internal = env
+    responses = [
+        client.post("/profile/me", headers=auth()),                      # método no permitido
+        client.get("/no-existe", headers=auth()),                        # ruta inexistente
+        client.get("/profile/me"),                                       # sin sesión
+        client.get("/games?limit=0", headers=auth()),                    # validación
+        client.post("/auth/login", json={}),                             # validación
+        client.get(f"/games/{GAME}", headers=auth()),                    # destino responde 500 sin formato
+    ]
+    for r in responses:
+        assert r.json()["error"]["code"] in CATALOG_CODES, r.json()

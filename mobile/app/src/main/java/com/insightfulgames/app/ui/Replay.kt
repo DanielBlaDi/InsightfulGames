@@ -53,7 +53,7 @@ fun uciSquares(uci: String): Pair<Square, Square>? {
 private fun squareOf(file: Char, rank: Char): Square? =
     if (file in 'a'..'h' && rank in '1'..'8') Square(row = '8' - rank, col = file - 'a') else null
 
-/** v9 trae color en cada jugada; Game Logic actual no. Si falta, se deduce de ply (impar = blancas). */
+/** El contrato trae color en cada jugada; Game Logic actual no. Si falta, se deduce de ply (impar = blancas). */
 fun isWhiteMove(move: MoveDto): Boolean = move.color?.let { it == "white" } ?: (move.ply % 2 == 1)
 
 /** Una jugada dentro de la lista. [position] es el ply que se muestra al tocarla (1 = primera jugada). */

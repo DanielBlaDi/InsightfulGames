@@ -2,7 +2,7 @@ package com.insightfulgames.app.data.model
 
 import kotlinx.serialization.Serializable
 
-// Contratos v9. Las claves desconocidas se ignoran (clocks, legalMoves, etc.).
+// Contrato técnico definitivo. Las claves desconocidas se ignoran (clocks, legalMoves, etc.).
 
 // ---- Auth (secciones 5 y 7) ----
 
@@ -100,7 +100,7 @@ data class TimeControlDto(val minutes: Int)
 @Serializable
 data class MoveDto(
     val ply: Int,
-    /** v9 lo trae; Game Logic actual no. Si falta, se deduce de ply (impar = blancas). */
+    /** El contrato lo trae; Game Logic actual no. Si falta, se deduce de ply (impar = blancas). */
     val color: String? = null,
     val san: String,
     val uci: String,

@@ -1,4 +1,4 @@
-"""API Gateway móvil (contratos v9, sección 5).
+"""API Gateway móvil (contrato técnico definitivo, secciones 4.11 y 5).
 
 Puerta de la app Kotlin:
 - Valida el JWT (solo Authorization: Bearer; no usa cookies).
@@ -54,8 +54,8 @@ UUID_RE = re.compile(
 def _validate_config() -> None:
     if not JWT_SECRET:
         raise RuntimeError("JWT_SECRET es obligatoria: el gateway móvil no arranca sin ella")
-    if JWT_ALGORITHM not in ("HS256", "HS384", "HS512"):
-        raise RuntimeError("JWT_ALGORITHM debe ser HS256 (contrato)")
+    if JWT_ALGORITHM != "HS256":
+        raise RuntimeError("JWT_ALGORITHM debe ser HS256 (contrato, sección 5)")
 
 
 @asynccontextmanager
@@ -120,11 +120,14 @@ async def validation_error_handler(request: Request, _: RequestValidationError):
 
 @app.exception_handler(StarletteHTTPException)
 async def http_error_handler(_: Request, exc: StarletteHTTPException):
-    if exc.status_code == 404:
+    # El catálogo 4.12 no tiene 405: una ruta con método no soportado es una ruta inexistente.
+    if exc.status_code in (404, 405):
         return error_response(404, "NOT_FOUND", "Ruta inexistente")
-    if exc.status_code == 405:
-        return error_response(405, "METHOD_NOT_ALLOWED", "Método no permitido")
-    return error_response(exc.status_code, "HTTP_ERROR", "Error en la petición")
+    if exc.status_code == 400:
+        return error_response(400, "VALIDATION_ERROR", "Campos faltantes o con formato inválido")
+    if exc.status_code == 401:
+        return error_response(401, "UNAUTHORIZED", "Token ausente, inválido o vencido")
+    return error_response(500, "INTERNAL_ERROR", "Error inesperado")
 
 
 # --------------------------------------------------------------------------- #
@@ -163,7 +166,7 @@ def current_user(request: Request) -> str:
         claims = jwt.decode(
             token.strip(),
             JWT_SECRET,
-            algorithms=[JWT_ALGORITHM],
+            algorithms=["HS256"],  # el contrato fija solo HS256
             options={"require": ["exp", "sub"]},
         )
     except jwt.PyJWTError:
@@ -231,11 +234,15 @@ def relay(
     response: httpx.Response,
     *,
     not_found_code: str = "NOT_FOUND",
-    conflict_code: str = "CONFLICT",
+    conflict_code: str | None = None,
     unauthorized_code: str = "UNAUTHORIZED",
 ) -> Response:
     """Entrega la respuesta del servicio. Los errores sin formato se traducen
-    según el servicio de origen (un 404 de Auth no es 'partida no encontrada')."""
+    según el servicio de origen (un 404 de Auth no es 'partida no encontrada').
+
+    Solo se emiten códigos del catálogo 4.12. Un 409 o 422 sin formato de error no
+    tiene código propio en el catálogo, así que se informa como UPSTREAM_ERROR (502),
+    salvo el 409 de registro, que es USERNAME_TAKEN."""
     status = response.status_code
     if status == 204 or not response.content:
         return Response(status_code=status)
@@ -254,8 +261,7 @@ def relay(
         400: (400, "VALIDATION_ERROR", "Campos faltantes o con formato inválido"),
         401: (401, unauthorized_code, "No autorizado"),
         404: (404, not_found_code, "Recurso no encontrado"),
-        409: (409, conflict_code, "Conflicto con el estado actual"),
-        422: (422, "UNPROCESSABLE", "La solicitud no se pudo procesar"),
+        **({409: (409, conflict_code, "Conflicto con el estado actual")} if conflict_code else {}),
         503: (503, "SERVICES_UNAVAILABLE", "Un servicio dependiente no responde"),
         504: (503, "SERVICES_UNAVAILABLE", "Un servicio dependiente no respondió a tiempo"),
     }
@@ -266,13 +272,13 @@ def relay(
 
 
 # --------------------------------------------------------------------------- #
-# Lista de partidas: acepta el contrato v9 y la forma actual de Game Logic
+# Lista de partidas: acepta el contrato (GamesPage) y la forma actual de Game Logic
 # --------------------------------------------------------------------------- #
 #
-# Contrato v9:  GET /internal/logic/games -> { "items": [GameSummary], "nextCursor": "..." | null }
+# Contrato 4.1: GET /internal/logic/games -> { "items": [GameSummary], "nextCursor": "..." | null }
 # Game Logic hoy (prototipo 1): una lista simple [GameSummary], sin paginar y sin matchId,
 # endReason ni color. Mientras responda así, el gateway pagina aquí (cursor opaco = posición)
-# y completa los campos que faltan con null. Cuando Game Logic migre, la respuesta pasa tal cual.
+# y completa los campos que faltan con null. Cuando Game Logic migre (tarea GL-04), este bloque se retira (tarea GWM-02).
 
 
 def _encode_cursor(offset: int) -> str:
@@ -307,7 +313,7 @@ def games_page(payload: Any, limit: int, cursor: str | None) -> dict[str, Any] |
     """Convierte la respuesta de Game Logic en { items, nextCursor }. None si no se entiende.
     Lanza GatewayError 400 si el cursor no es válido y la respuesta es una lista simple."""
     if isinstance(payload, dict) and isinstance(payload.get("items"), list):
-        return payload  # contrato v9: ya viene paginado por Game Logic
+        return payload  # contrato 4.1: ya viene paginado por Game Logic
 
     if isinstance(payload, list):
         offset = _decode_cursor(cursor)

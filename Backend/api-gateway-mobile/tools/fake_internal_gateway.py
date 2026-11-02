@@ -1,7 +1,7 @@
 """Gateway interno SIMULADO, solo para desarrollo de la app y del gateway móvil.
 
 Mientras el gateway web real no publique /internal/* y no existan Profile/Stats y
-Multiplayer, este servidor responde lo mismo que dirían según los contratos v9.
+Multiplayer, este servidor responde lo mismo que dirían según el contrato técnico definitivo.
 
 Uso (puerto 8080 = el que usa GATEWAY_INTERNAL_URL):
     JWT_SECRET=<el mismo del gateway móvil> uvicorn fake_internal_gateway:app --port 8080
