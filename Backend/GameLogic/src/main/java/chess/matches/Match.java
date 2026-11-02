@@ -198,6 +198,10 @@ public class Match{
         return !Status.FINISHED.toString().equals(status) && !Status.WAITING.toString().equals(status);
     }
 
+    public boolean isFinished(){
+        return Status.FINISHED.toString().equals(status);
+    }
+
     /** Las jugadas ya hechas en UCI, en orden. Con ellas e initialFen se reconstruye la posición. */
     public List<String> playedUciMoves(){
         List<String> uciMoves = new ArrayList<>();

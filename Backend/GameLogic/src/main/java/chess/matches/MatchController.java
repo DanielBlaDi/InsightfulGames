@@ -108,7 +108,15 @@ public class MatchController{
         if(cursor == null){
             decodedCursor = 1;
         }else{
-            decodedCursor = Integer.parseInt(new String(Base64.getUrlDecoder().decode(cursor), StandardCharsets.UTF_8));
+            try{
+                decodedCursor = Integer.parseInt(new String(Base64.getUrlDecoder().decode(cursor), StandardCharsets.UTF_8));
+                if(decodedCursor <= 0){
+                    throw new IllegalArgumentException();
+                }
+            }catch(IllegalArgumentException exception){
+                throw new RequestNotValidException("El parámetro cursor no representa un valor válido de cursor en base64url");
+            }
+            
         }
 
         if(matchList.size() > limit*decodedCursor){
@@ -328,9 +336,20 @@ public class MatchController{
 
         return ResponseEntity.ok(assembler.toState(repository.save(match)));
     }
- 
+
+    @GetMapping({"/internal/logic/games/{id}/analysis-input", "/internal/logic/games/{id}/analysis-input/"})
+    ResponseEntity<MatchAnalysis> obtainAnalysisInput(@PathVariable("id") String id){
+        Match match = findMatch(id);
+
+        if(!match.isFinished()){
+            throw MatchNotFinishedException.notFinished();
+        }
+
+        return ResponseEntity.ok(new MatchAnalysis(id, match.getInitialFen(), match.getStatus(), match.getStatus(), match.getMovements()));
+    }
+    
     @PatchMapping({"/internal/logic/games/{id}/visibility", "/internal/logic/games/{id}/visibility/"})
-    private ResponseEntity<GameState> updateVisibility(@PathVariable("id") String id, @RequestBody UpdateVisibilityRequest requestBody){
+    ResponseEntity<GameState> updateVisibility(@PathVariable("id") String id, @RequestBody UpdateVisibilityRequest requestBody){
         Match foundMatch = findMatch(id);
 
         foundMatch.setVisibility(requestBody.visibility());
@@ -341,7 +360,7 @@ public class MatchController{
     }
 
     @DeleteMapping({"/internal/logic/users/{userId}", "/internal/logic/users/{userId}/"})
-    private ResponseEntity<Void> anonymizeUser(@PathVariable("userId") String userId){
+    ResponseEntity<Void> anonymizeUser(@PathVariable("userId") String userId){
         List<Match> userMatches = repository.findByParticipantsUserId(userId);
 
         for(Match match : userMatches){
