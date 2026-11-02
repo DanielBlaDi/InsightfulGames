@@ -1,4 +1,4 @@
-package chess;
+package chess.matches;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -6,11 +6,11 @@ import java.util.Map;
 
 import org.springframework.stereotype.Component;
 
-import chess.GameState.MoveEntry;
+import chess.matches.GameState.MoveEntry;
+import chess.movements.Movement;
 
 /**
  * Convierte una Match (lo guardado en Mongo) en los objetos JSON del contrato.
- * Antes armaba los enlaces HATEOAS; el contrato no los usa, así que ahora arma GameState y GameSummary.
  */
 @Component
 public class MatchAssembler{
@@ -25,16 +25,22 @@ public class MatchAssembler{
         }
 
         return new GameState(
-            match.getId(),
-            match.getUserId(),
+            match.getGameId(),
             match.getMode(),
+            match.getVisibility(),
+            match.getMatchId(),
+            match.getParticipants(),
             match.getBotLevel(),
-            match.getPlayerColor(),
+            match.getTimeControl(),
+            match.getClocks(),
             match.getStatus(),
             match.getTurn(),
             match.getFen(),
+            match.getInitialFen(),
             legalMoves,
             moves,
+            match.getDrawOffer(),
+            match.getExpectedVersion(),
             match.getResult(),
             match.getEndReason(),
             match.getCreatedAt().toString(),
@@ -43,6 +49,6 @@ public class MatchAssembler{
     }
 
     public GameSummary toSummary(Match match){
-        return new GameSummary(match.getId(), match.getMode(), match.getStatus(), match.getResult(), match.getCreatedAt().toString());
+        return new GameSummary(match.getGameId(), match.getMode(), match.getStatus(), match.getResult(), match.getCreatedAt().toString());
     }
 }

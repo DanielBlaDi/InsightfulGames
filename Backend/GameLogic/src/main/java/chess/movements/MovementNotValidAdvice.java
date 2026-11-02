@@ -1,4 +1,4 @@
-package chess;
+package chess.movements;
 
 import java.util.Map;
 
@@ -8,11 +8,13 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import chess.matches.RequestNotValidException;
+
 /** Errores de petición: 422 para jugadas que no se aceptan y 400 VALIDATION_ERROR para peticiones mal formadas. */
 @RestControllerAdvice
 public class MovementNotValidAdvice{
 	@ExceptionHandler(MovementNotValidException.class)
-	@ResponseStatus(HttpStatus.UNPROCESSABLE_ENTITY)
+	@ResponseStatus(HttpStatus.UNPROCESSABLE_CONTENT)
 	Map<String, Object> movementNotValidHandler(MovementNotValidException exception){
 		return error(exception.getCode(), exception.getMessage());
 	}
@@ -30,7 +32,6 @@ public class MovementNotValidAdvice{
 		return error("VALIDATION_ERROR", "El cuerpo de la petición no es un JSON válido");
 	}
 
-	/** Forma de error del contrato: { "error": { "code": "...", "message": "..." } } */
 	private static Map<String, Object> error(String code, String message){
 		return Map.of("error", Map.of("code", code, "message", message));
 	}
