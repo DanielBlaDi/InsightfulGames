@@ -204,6 +204,44 @@ public class MatchController{
         return assembler.toState(repository.save(match));
     }
 
+    @PostMapping({"/internal/logic/games/{id}/abandon", "/internal/logic/games/{id}/abandon/"})
+    ResponseEntity<GameState> abandonMatch(@PathVariable("id") String id, @RequestBody MatchResultRequest requestBody){
+        Match match = findMatch(id);
+
+        if(requestBody == null || !isColor(requestBody.side())){
+            throw new RequestNotValidException("side debe ser \"" + Color.WHITE.toString() + "\" o \"" + Color.BLACK.toString() + "\"");
+        }
+
+        if(!match.canBeOperatedOn()){
+            throw MatchNotInProgressException.matchNotInProgress();
+        }
+
+        match.finish(Color.WHITE.toString().equals(requestBody.side()) ? Color.BLACK.toString() : Color.WHITE.toString(), EndReason.ABANDONMENT.toString());
+
+        return ResponseEntity.ok(assembler.toState(repository.save(match)));
+    }
+
+    @PostMapping({"/internal/logic/games/{id}/draw/offer", "/internal/logic/games/{id}/draw/offer/"})
+    ResponseEntity<GameState> offerDraw(@PathVariable("id") String id, @RequestBody MatchResultRequest requestBody){
+        Match match = findMatch(id);
+
+        if(requestBody == null || !isColor(requestBody.side())){
+            throw new RequestNotValidException("side debe ser \"" + Color.WHITE.toString() + "\" o \"" + Color.BLACK.toString() + "\"");
+        }
+
+        if(!match.canBeOperatedOn()){
+            throw MatchNotInProgressException.matchNotInProgress();
+        }
+
+        if(match.getDrawOffer() != null){
+            throw CannotOfferDrawException.alreadyOffered();
+        }
+
+        match.setDrawOffer(Color.WHITE.toString().equals(requestBody.side()) ? Color.BLACK.toString() : Color.WHITE.toString());
+
+        return ResponseEntity.ok(assembler.toState(repository.save(match)));
+    }
+
     @PatchMapping({"/internal/logic/games/{id}/visibility", "/internal/logic/games/{id}/visibility/"})
     private ResponseEntity<GameState> updateVisibility(@PathVariable("id") String id, @RequestBody UpdateVisibilityRequest requestBody){
         Match foundMatch = findMatch(id);
