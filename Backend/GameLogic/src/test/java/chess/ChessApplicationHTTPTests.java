@@ -23,6 +23,7 @@ import chess.matches.CreateMatchRequest;
 import chess.matches.Match;
 import chess.matches.MatchAssembler;
 import chess.matches.MatchController;
+import chess.matches.MatchNotInProgressException;
 import chess.matches.MatchRepository;
 import chess.matches.Participant;
 import chess.matches.TimeControl;
@@ -371,12 +372,12 @@ public class ChessApplicationHTTPTests{
 
 		postMove(finishedMatch.getGameId(), "e2e4")
 			.andExpect(status().isUnprocessableContent())
-			.andExpect(jsonPath("$.error.code").value("GAME_FINISHED"))
+			.andExpect(jsonPath("$.error.code").value(MatchNotInProgressException.GAME_NOT_IN_PROGRESS))
 			.andDo(
 				document(
 					"attemptMoveOnFinishedMatch",
 					responseFields(
-						fieldWithPath("error.code").description("Machine-readable code of the error, for this case \"GAME_FINISHED\"."),
+						fieldWithPath("error.code").description("Machine-readable code of the error, for this case \"" + MatchNotInProgressException.GAME_NOT_IN_PROGRESS + "\"."),
 						fieldWithPath("error.message").description("Human-readable description of the error.")
 					)
 				)
@@ -462,7 +463,7 @@ public class ChessApplicationHTTPTests{
 
 		this.mockMvc.perform(post("/internal/logic/games/" + finishedMatch.getGameId() + "/resign").contentType(MediaType.APPLICATION_JSON).content("{\"side\": \"" + Color.BLACK.toString() + "\"}"))
 			.andExpect(status().isUnprocessableContent())
-			.andExpect(jsonPath("$.error.code").value("GAME_FINISHED"));
+			.andExpect(jsonPath("$.error.code").value(MatchNotInProgressException.GAME_NOT_IN_PROGRESS));
 	}
 
 	/**Test for the function finishMatch(@PathVariable String id, @RequestBody MatchResultRequest body) with an invalid side*/
