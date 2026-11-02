@@ -118,43 +118,37 @@ public class MatchController{
 
     @PostMapping({"/internal/logic/games/{id}/join", "/internal/logic/games/{id}/join/"})
     ResponseEntity<GameState> joinMatch(@PathVariable("id") String id, @RequestBody JoinMatchRequestBody requestBody){
-        Optional<Match> foundMatch = repository.findByGameId(id);
+        Match foundMatch = findMatch(id);
 
-        if(foundMatch.isPresent()){
-            Match matchToJoin = foundMatch.get();
-
-            if(!matchToJoin.getStatus().equals(Status.WAITING.toString())){
-                throw new CannotJoinMatchException(id, "GAME_NOT_WAITING");
-            }
-
-            List<Participant> participants = matchToJoin.getParticipants();
-            String remainingColor = "";
-
-            for(int i=0; i<participants.size(); i++){
-                if(participants.get(i).userId().equals(requestBody.userId())){
-                    throw new CannotJoinMatchException(id, "ALREADY_PARTICIPANT");
-                }else{
-                    remainingColor = participants.get(i).color().equals(Color.BLACK.toString()) ? Color.WHITE.toString() : Color.BLACK.toString();
-                }
-            }
-
-            matchToJoin.addParticipant(new Participant(requestBody.userId(), remainingColor));
-            matchToJoin.setStatus(Status.IN_PROGRESS.toString());
-            
-            if(matchToJoin.getTimeControl() != null){
-                Clocks clock = matchToJoin.getClocks();
-                Instant turnStart = Instant.now();
-
-                clock.setTurnStartedAt(turnStart.toString());
-                clock.setDeadline(turnStart.plusMillis(clock.getWhite()).toString());
-            }
-
-            repository.save(matchToJoin);
-
-            return ResponseEntity.ok(assembler.toState(matchToJoin));
-        }else{
-            throw new MatchNotFoundException(id);
+        if(!foundMatch.getStatus().equals(Status.WAITING.toString())){
+            throw new CannotJoinMatchException(id, "GAME_NOT_WAITING");
         }
+
+        List<Participant> participants = foundMatch.getParticipants();
+        String remainingColor = "";
+
+        for(int i=0; i<participants.size(); i++){
+            if(participants.get(i).userId().equals(requestBody.userId())){
+                throw new CannotJoinMatchException(id, "ALREADY_PARTICIPANT");
+            }else{
+                remainingColor = participants.get(i).color().equals(Color.BLACK.toString()) ? Color.WHITE.toString() : Color.BLACK.toString();
+            }
+        }
+
+        foundMatch.addParticipant(new Participant(requestBody.userId(), remainingColor));
+        foundMatch.setStatus(Status.IN_PROGRESS.toString());
+        
+        if(foundMatch.getTimeControl() != null){
+            Clocks clock = foundMatch.getClocks();
+            Instant turnStart = Instant.now();
+
+            clock.setTurnStartedAt(turnStart.toString());
+            clock.setDeadline(turnStart.plusMillis(clock.getWhite()).toString());
+        }
+
+        repository.save(foundMatch);
+
+        return ResponseEntity.ok(assembler.toState(foundMatch));
     }
 
 
@@ -166,8 +160,8 @@ public class MatchController{
         if(movement == null || movement.uci() == null || movement.uci().isBlank()){
             throw new RequestNotValidException("Falta el campo uci");
         }
-        if(match.isFinished()){
-            throw MovementNotValidException.matchFinished();
+        if(!match.canBeOperatedOn()){
+            throw MatchNotInProgressException.matchNotInProgress();
         }
 
         //La posición se reconstruye desde initialFen y las jugadas guardadas (así se detecta la repetición triple)
@@ -201,28 +195,24 @@ public class MatchController{
         if(body == null || !isColor(body.side())){
             throw new RequestNotValidException("side debe ser \"" + Color.WHITE.toString() + "\" o \"" + Color.BLACK.toString() + "\"");
         }
-        if(match.isFinished()){
-            throw MovementNotValidException.matchFinished();
+        if(!match.canBeOperatedOn()){
+            throw MatchNotInProgressException.matchNotInProgress();
         }
 
         match.finish(Color.WHITE.toString().equals(body.side()) ? Color.BLACK.toString() : Color.WHITE.toString(), EndReason.SURRENDER.toString());
 
         return assembler.toState(repository.save(match));
     }
- 
+
     @PatchMapping({"/internal/logic/games/{id}/visibility", "/internal/logic/games/{id}/visibility/"})
     private ResponseEntity<GameState> updateVisibility(@PathVariable("id") String id, @RequestBody UpdateVisibilityRequest requestBody){
-        Optional<Match> foundMatch = repository.findByGameId(id);
+        Match foundMatch = findMatch(id);
 
-        if(foundMatch.isPresent()){
-            foundMatch.get().setVisibility(requestBody.visibility());
+        foundMatch.setVisibility(requestBody.visibility());
 
-            Match savedMatch = repository.save(foundMatch.get());
+        repository.save(foundMatch);
 
-            return ResponseEntity.ok(assembler.toState(savedMatch));
-        }else{
-            throw new MatchNotFoundException(id);
-        }
+        return ResponseEntity.ok(assembler.toState(foundMatch));
     }
 
     @DeleteMapping({"/internal/logic/users/{userId}", "/internal/logic/users/{userId}/"})
@@ -337,7 +327,7 @@ public class MatchController{
         }
         
         if(!Visibility.PRIVATE.toString().equals(request.visibility()) && !Visibility.SHARED.toString().equals(request.visibility())){
-            throw new RequestNotValidException("visbility debe ser");
+            throw new RequestNotValidException("visibility debe ser \"" + Visibility.PRIVATE + "\" o \"" + Visibility.SHARED + "\"");
         }
 
         return new Match(mode, request.timeControl(), request.visibility(), botLevel, request.matchId(), participants);

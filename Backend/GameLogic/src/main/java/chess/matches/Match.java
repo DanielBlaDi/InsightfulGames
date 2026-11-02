@@ -194,8 +194,8 @@ public class Match{
         this.finishedAt = now();
     }
 
-    public boolean isFinished(){
-        return Status.FINISHED.toString().equals(status);
+    public boolean canBeOperatedOn(){
+        return !Status.FINISHED.toString().equals(status) && !Status.WAITING.toString().equals(status);
     }
 
     /** Las jugadas ya hechas en UCI, en orden. Con ellas e initialFen se reconstruye la posición. */
@@ -289,6 +289,10 @@ public class Match{
 
     public void setVisibility(String visibility){
         this.visibility = visibility;
+    }
+
+    public void setDrawOffer(String drawOffer){
+        this.drawOffer = drawOffer;
     }
 
     @Override public boolean equals(Object other){
