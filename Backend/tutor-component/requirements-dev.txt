@@ -1,0 +1,4 @@
+-r requirements.txt
+mongomock-motor==0.0.36
+pytest==9.2.0
+pytest-asyncio==1.4.1.post1
