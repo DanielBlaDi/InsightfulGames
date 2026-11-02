@@ -20,7 +20,9 @@ services:
   api-gateway-component:
 
     ports:
-      - "${API_GATEWAY_PORT}:${API_GATEWAY_PORT}"
+      # Solo desde esta máquina: las rutas /internal/* del gateway no validan JWT y no deben
+      # quedar alcanzables desde la red (contratos v9, sección 4).
+      - "127.0.0.1:${API_GATEWAY_PORT}:${API_GATEWAY_PORT}"
         # <--- for testing with curl
 
     container_name: api-gateway-component
@@ -40,6 +42,16 @@ services:
       AUTH_URL: http://auth-component:${AUTH_PORT}
       SINGLE_PLAYER_URL: http://single-player-component:${SINGLE_PLAYER_PORT}
       BOTCITO_COMPONENT_URL: http://botcito-component:${BOTCITO_PORT}
+
+      # Rutas /internal/* (las usa el gateway móvil). Contrato v9, sección 4.
+      GAME_LOGIC_URL: http://game-logic-component:${GAME_LOGIC_PORT}
+      # Servicios que aún no existen: al crearlos, descomentar su URL.
+      # PROFILE_URL: http://profile-stats-component:${PROFILE_STATS_PORT}
+      # MULTIPLAYER_URL: http://multiplayer-component:${MULTIPLAYER_PORT}
+      # Servicios que todavía exponen las rutas del prototipo 1 (/auth, /logic, /games, /engine).
+      # Cuando uno migre a /internal/<servicio>/*, quitarlo de esta lista.
+      INTERNAL_COMPAT: "auth,logic,single-player,engine"
+
       HTTP_TIMEOUT: 15
       LOG_LEVEL: INFO
       CORS_ORIGINS: http://localhost:80,http://localhost:5173,http://localhost:3000
@@ -55,6 +67,36 @@ services:
       # - tutor-component
       - game-logic-component
       - botcito-component
+    networks:
+      - app
+
+
+
+  api-gateway-mobile:
+    container_name: api-gateway-mobile
+    restart: unless-stopped
+    build:
+      context: ./Backend/api-gateway-mobile
+      dockerfile: Dockerfile
+    image: api-gateway-mobile:dev
+    ports:
+      # La app Android entra por aquí (BASE_URL de mobile/app/build.gradle.kts).
+      - "${MOBILE_GATEWAY_PORT:-8090}:8090"
+    environment:
+      PORT: "8090"
+      GATEWAY_INTERNAL_URL: http://api-gateway-component:${API_GATEWAY_PORT}
+      JWT_SECRET: "${JWT_SECRET:?JWT_SECRET es obligatoria}"
+      JWT_ALGORITHM: HS256
+      HTTP_TIMEOUT: "15"
+      LOG_LEVEL: INFO
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8090/health', timeout=3).status == 200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    depends_on:
+      - api-gateway-component
     networks:
       - app
 
