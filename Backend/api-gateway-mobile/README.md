@@ -1,6 +1,11 @@
 # API Gateway móvil
 
-Contratos v9, sección 5. FastAPI, puerto 8090. Solo habla con el gateway interno (`GATEWAY_INTERNAL_URL`).
+Contratos v9, sección 5. FastAPI, puerto 8090. Solo habla con el gateway interno (`GATEWAY_INTERNAL_URL`,
+que en el compose es `api-gateway-component`, rutas `/internal/*`). Ya está en el `compose.yaml` raíz.
+
+**Compatibilidad con el prototipo 1.** Game Logic aún responde `GET /logic/games` como lista simple, sin paginar y
+sin `matchId`/`endReason`/`color`. Mientras sea así, este gateway la pagina (cursor opaco) y completa esos campos con `null`.
+Si Game Logic ya responde `{items, nextCursor}` (contrato v9), la respuesta pasa tal cual. No hay que cambiar nada al migrar.
 
 | Ruta pública (app) | Auth | Interna |
 |---|---|---|

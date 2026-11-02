@@ -319,3 +319,78 @@ def test_refuses_to_start_without_jwt_secret(monkeypatch):
     with pytest.raises(RuntimeError):
         with TestClient(main.app):
             pass
+
+
+# ------------------------------------------------ Game Logic actual (lista simple)
+# Hoy Game Logic responde una lista [GameSummary] sin paginar y sin matchId/endReason/color.
+
+
+def legacy_games(n):
+    return [
+        {
+            "gameId": f"00000000-0000-4000-8000-{i:012d}",
+            "mode": "vs_bot" if i % 2 else "local",
+            "status": "finished",
+            "result": "white",
+            "createdAt": "2026-10-29T15:00:00Z",
+            **({"playerColor": "white"} if i % 2 else {}),
+        }
+        for i in range(n)
+    ]
+
+
+def test_legacy_list_is_paginated_by_the_gateway(env):
+    client, internal = env
+    internal.on("GET", "/internal/logic/games", json=legacy_games(45))
+
+    seen, cursor, pages = [], None, 0
+    while True:
+        r = client.get("/games" + (f"?cursor={cursor}" if cursor else ""), headers=auth())
+        assert r.status_code == 200
+        body = r.json()
+        seen += [g["gameId"] for g in body["items"]]
+        pages += 1
+        cursor = body["nextCursor"]
+        if cursor is None:
+            break
+    assert pages == 3 and len(seen) == 45 and len(set(seen)) == 45
+
+
+def test_legacy_items_are_completed_with_contract_fields(env):
+    client, internal = env
+    internal.on("GET", "/internal/logic/games", json=legacy_games(3))
+    items = client.get("/games", headers=auth()).json()["items"]
+    local, bot = items[0], items[1]
+    assert local["matchId"] is None and local["endReason"] is None and local["color"] is None
+    assert bot["color"] == "white" and "playerColor" not in bot  # playerColor -> color
+
+
+def test_legacy_list_invalid_cursor_is_400(env):
+    client, internal = env
+    internal.on("GET", "/internal/logic/games", json=legacy_games(30))
+    r = client.get("/games?cursor=%21%21%21", headers=auth())
+    assert r.status_code == 400 and r.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_v9_paginated_list_passes_through_untouched(env):
+    client, internal = env
+    page = {"items": [{"gameId": GAME, "mode": "multiplayer", "matchId": MATCH}], "nextCursor": "opaco"}
+    internal.on("GET", "/internal/logic/games", json=page)
+    assert client.get("/games?cursor=abc", headers=auth()).json() == page
+
+
+def test_home_works_with_legacy_list(env):
+    client, internal = env
+    home_routes(internal)
+    internal.on("GET", "/internal/logic/games", json=legacy_games(12))
+    body = client.get("/home", headers=auth()).json()
+    assert len(body["recentGames"]) == 5 and body["unavailable"] == []
+    assert body["recentGames"][0]["matchId"] is None
+
+
+def test_home_unexpected_games_shape_is_unavailable(env):
+    client, internal = env
+    home_routes(internal)
+    internal.on("GET", "/internal/logic/games", json={"raro": True})
+    body = client.get("/home", headers=auth()).json()
+    assert body["recentGames"] is None and body["unavailable"] == ["recentGames"]

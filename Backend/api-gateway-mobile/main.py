@@ -9,11 +9,13 @@ Puerta de la app Kotlin:
 """
 
 import asyncio
+import base64
+import binascii
 import logging
 import os
 import re
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, Callable
 
 import httpx
 import jwt
@@ -38,7 +40,7 @@ GATEWAY_INTERNAL_URL = os.getenv(
     "GATEWAY_INTERNAL_URL", "http://api-gateway-component:8080"
 ).rstrip("/")
 JWT_SECRET = os.getenv("JWT_SECRET", "")
-JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
+JWT_ALGORITHM = os.getenv("JWT_ALGORITHM") or "HS256"
 HTTP_TIMEOUT = float(os.getenv("HTTP_TIMEOUT", "15"))
 
 MAX_PAGE_SIZE = 20  # contrato: limit máximo 20
@@ -264,6 +266,63 @@ def relay(
 
 
 # --------------------------------------------------------------------------- #
+# Lista de partidas: acepta el contrato v9 y la forma actual de Game Logic
+# --------------------------------------------------------------------------- #
+#
+# Contrato v9:  GET /internal/logic/games -> { "items": [GameSummary], "nextCursor": "..." | null }
+# Game Logic hoy (prototipo 1): una lista simple [GameSummary], sin paginar y sin matchId,
+# endReason ni color. Mientras responda así, el gateway pagina aquí (cursor opaco = posición)
+# y completa los campos que faltan con null. Cuando Game Logic migre, la respuesta pasa tal cual.
+
+
+def _encode_cursor(offset: int) -> str:
+    return base64.urlsafe_b64encode(str(offset).encode()).decode().rstrip("=")
+
+
+def _decode_cursor(cursor: str | None) -> int | None:
+    """Posición codificada en el cursor, 0 si no hay cursor, None si no es un cursor válido."""
+    if not cursor:
+        return 0
+    try:
+        padded = cursor + "=" * (-len(cursor) % 4)
+        offset = int(base64.urlsafe_b64decode(padded.encode()).decode())
+    except (ValueError, binascii.Error, UnicodeDecodeError):
+        return None
+    return offset if offset >= 0 else None
+
+
+def _normalize_summary(item: Any) -> dict[str, Any]:
+    if not isinstance(item, dict):
+        return item
+    out = dict(item)
+    out.setdefault("matchId", None)
+    out.setdefault("endReason", None)
+    if "color" not in out:
+        out["color"] = out.get("playerColor")  # Game Logic hoy: playerColor solo en vs_bot
+    out.pop("playerColor", None)
+    return out
+
+
+def games_page(payload: Any, limit: int, cursor: str | None) -> dict[str, Any] | None:
+    """Convierte la respuesta de Game Logic en { items, nextCursor }. None si no se entiende.
+    Lanza GatewayError 400 si el cursor no es válido y la respuesta es una lista simple."""
+    if isinstance(payload, dict) and isinstance(payload.get("items"), list):
+        return payload  # contrato v9: ya viene paginado por Game Logic
+
+    if isinstance(payload, list):
+        offset = _decode_cursor(cursor)
+        if offset is None:
+            raise GatewayError(400, "VALIDATION_ERROR", "Cursor inválido")
+        page = payload[offset : offset + limit]
+        end = offset + limit
+        return {
+            "items": [_normalize_summary(i) for i in page],
+            "nextCursor": _encode_cursor(end) if end < len(payload) else None,
+        }
+    return None
+
+
+# --------------------------------------------------------------------------- #
 # Modelos de entrada
 # --------------------------------------------------------------------------- #
 
@@ -344,6 +403,11 @@ async def list_games(
     if cursor:
         params["cursor"] = cursor
     response = await call_internal(request, "GET", "/internal/logic/games", params=params)
+    if response.is_success:
+        page = games_page(_payload(response), params["limit"], cursor)
+        if page is None:
+            return error_response(502, "UPSTREAM_ERROR", "Respuesta inesperada del servicio")
+        return JSONResponse(status_code=200, content=page)
     return relay(response)
 
 
@@ -378,13 +442,18 @@ async def get_match(match_id: str, request: Request, user_id: str = Depends(curr
 # --- Inicio: agrega tres servicios, cada sección es independiente ---
 
 
+def _recent_games(payload: Any) -> list[Any] | None:
+    page = games_page(payload, HOME_RECENT_GAMES, None)
+    return None if page is None else page["items"][:HOME_RECENT_GAMES]
+
+
 async def _home_section(
     request: Request,
     name: str,
     path: str,
     *,
     params: dict[str, Any] | None = None,
-    extract: str | None = None,
+    extract: Callable[[Any], Any] | None = None,
 ) -> tuple[str, Any, str | None]:
     """Devuelve (nombre, datos, fallo). fallo: None | 'unreachable' | 'failed'."""
     try:
@@ -398,9 +467,10 @@ async def _home_section(
         return name, None, "failed"
     data = _payload(response)
     if extract is not None:
-        data = data.get(extract) if isinstance(data, dict) else None
-        if not isinstance(data, list):
-            return name, None, "failed"
+        try:
+            data = extract(data)
+        except GatewayError:
+            data = None
     if data is None:
         return name, None, "failed"
     return name, data, None
@@ -416,7 +486,7 @@ async def home(request: Request, user_id: str = Depends(current_user)):
             "recentGames",
             "/internal/logic/games",
             params={"userId": user_id, "limit": HOME_RECENT_GAMES},
-            extract="items",
+            extract=_recent_games,
         ),
     )
 
