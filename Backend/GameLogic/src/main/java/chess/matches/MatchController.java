@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 import chess.constants.Color;
 import chess.constants.EndReason;
 import chess.constants.Mode;
+import chess.constants.Result;
 import chess.constants.Status;
 import chess.constants.Visibility;
 import chess.matches.ChessRules.Applied;
@@ -185,6 +186,10 @@ public class MatchController{
             match.finish(result.outcome().result(), result.outcome().endReason());
         }
 
+        if(match.getDrawOffer() != null){
+            match.setDrawOffer(null);
+        }
+
         return assembler.toState(repository.save(match));
     }
 
@@ -239,6 +244,81 @@ public class MatchController{
         }
 
         match.setDrawOffer(Color.WHITE.toString().equals(requestBody.side()) ? Color.BLACK.toString() : Color.WHITE.toString());
+
+        return ResponseEntity.ok(assembler.toState(repository.save(match)));
+    }
+
+    @PostMapping({"/internal/logic/games/{id}/draw/accept", "/internal/logic/games/{id}/draw/accept/"})
+    ResponseEntity<GameState> acceptDraw(@PathVariable("id") String id, @RequestBody MatchResultRequest requestBody){
+        Match match = findMatch(id);
+
+        if(requestBody == null || !isColor(requestBody.side())){
+            throw new RequestNotValidException("side debe ser \"" + Color.WHITE.toString() + "\" o \"" + Color.BLACK.toString() + "\"");
+        }
+
+        if(!match.canBeOperatedOn()){
+            throw MatchNotInProgressException.matchNotInProgress();
+        }
+
+        if(match.getDrawOffer() == null){
+            throw CannotReplyToDrawException.notOffered(true);
+        }
+
+        if(match.getDrawOffer().equals(requestBody.side())){
+            throw CannotReplyToDrawException.notAllowed();
+        }
+
+        match.finish(Result.DRAW.toString(), EndReason.DRAW.toString());
+
+        return ResponseEntity.ok(assembler.toState(repository.save(match)));
+    }
+
+    @PostMapping({"/internal/logic/games/{id}/draw/decline", "/internal/logic/games/{id}/draw/decline/"})
+    ResponseEntity<GameState> declineDraw(@PathVariable("id") String id, @RequestBody MatchResultRequest requestBody){
+        Match match = findMatch(id);
+
+        if(requestBody == null || !isColor(requestBody.side())){
+            throw new RequestNotValidException("side debe ser \"" + Color.WHITE.toString() + "\" o \"" + Color.BLACK.toString() + "\"");
+        }
+
+        if(!match.canBeOperatedOn()){
+            throw MatchNotInProgressException.matchNotInProgress();
+        }
+
+        if(match.getDrawOffer() == null){
+            throw CannotReplyToDrawException.notOffered(false);
+        }
+
+        if(match.getDrawOffer().equals(requestBody.side())){
+            throw CannotReplyToDrawException.notAllowed();
+        }
+
+        match.setDrawOffer(null);
+
+        return ResponseEntity.ok(assembler.toState(repository.save(match)));
+    }
+
+    @PostMapping({"/internal/logic/games/{id}/draw/cancel", "/internal/logic/games/{id}/draw/cancel/"})
+    ResponseEntity<GameState> cancelDraw(@PathVariable("id") String id, @RequestBody MatchResultRequest requestBody){
+        Match match = findMatch(id);
+
+        if(requestBody == null || !isColor(requestBody.side())){
+            throw new RequestNotValidException("side debe ser \"" + Color.WHITE.toString() + "\" o \"" + Color.BLACK.toString() + "\"");
+        }
+
+        if(!match.canBeOperatedOn()){
+            throw MatchNotInProgressException.matchNotInProgress();
+        }
+
+        if(match.getDrawOffer() == null){
+            throw CannotReplyToDrawException.notOffered(false);
+        }
+
+        if(!match.getDrawOffer().equals(requestBody.side())){
+            throw CannotReplyToDrawException.notAllowed();
+        }
+
+        match.setDrawOffer(null);
 
         return ResponseEntity.ok(assembler.toState(repository.save(match)));
     }

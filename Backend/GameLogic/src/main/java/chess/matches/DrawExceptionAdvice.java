@@ -9,9 +9,9 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice
 public class DrawExceptionAdvice{
-	@ExceptionHandler(DrawNotOfferedException.class)
+	@ExceptionHandler(CannotReplyToDrawException.class)
 	@ResponseStatus(HttpStatus.UNPROCESSABLE_CONTENT)
-	Map<String, Object> drawExceptionHandler(DrawNotOfferedException exception){
+	Map<String, Object> drawExceptionHandler(CannotReplyToDrawException exception){
 		return error(exception.getCode(), exception.getMessage());
 	}
 
