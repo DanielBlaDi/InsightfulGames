@@ -463,3 +463,19 @@ def test_gateway_only_emits_catalog_codes(env):
     ]
     for r in responses:
         assert r.json()["error"]["code"] in CATALOG_CODES, r.json()
+
+
+# ----------------------------------------------- secreto mínimo de 32 bytes (contrato 8.5)
+
+
+@pytest.mark.parametrize("secret", ["corto", "x" * 31, "ñ" * 15])  # 15 ñ = 30 bytes
+def test_startup_rejects_short_secret(monkeypatch, secret):
+    monkeypatch.setattr(main, "JWT_SECRET", secret)
+    with pytest.raises(RuntimeError, match="32 bytes"):
+        main._validate_config()
+
+
+@pytest.mark.parametrize("secret", ["x" * 32, "ñ" * 16])  # 16 ñ = 32 bytes
+def test_startup_accepts_32_bytes(monkeypatch, secret):
+    monkeypatch.setattr(main, "JWT_SECRET", secret)
+    main._validate_config()

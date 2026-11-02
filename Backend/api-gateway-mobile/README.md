@@ -3,9 +3,12 @@
 Contrato técnico definitivo (secciones 4.11 y 5). FastAPI, puerto 8090. Solo habla con el gateway interno (`GATEWAY_INTERNAL_URL`,
 que en el compose es `api-gateway-component`, rutas `/internal/*`). Ya está en el `compose.yaml` raíz.
 
-**Compatibilidad con el prototipo 1.** Game Logic aún responde `GET /logic/games` como lista simple, sin paginar y
-sin `matchId`/`endReason`/`color`. Mientras sea así, este gateway la pagina (cursor opaco) y completa esos campos con `null`.
-Si Game Logic ya responde `{items, nextCursor}` (contrato 4.1), la respuesta pasa tal cual. Esta compatibilidad es temporal: cuando Game Logic migre (GL-04) se retira (GWM-02).
+**Lista de partidas.** El contrato (4.1) define `GET /internal/logic/games` → `{items, nextCursor}`. Game Logic **todavía no**
+lo cumple (GL-04): responde `{matches, cursor}` con `cursor` entero obligatorio, así que contra el Game Logic real actual
+`/games` y `recentGames` de `/home` fallan (502). Este gateway conserva, de forma temporal, el soporte de una lista simple del
+prototipo 1 (la pagina con cursor opaco y completa `matchId`, `endReason` y `color` con `null`) y deja pasar `{items, nextCursor}`
+sin tocarlo. No se agregó una tercera compatibilidad para `{matches, cursor}`: lo correcto es que Game Logic migre.
+Para probar mientras tanto, el gateway interno mixto (abajo) hace esa conversión fuera del gateway móvil.
 
 | Ruta pública (app) | Auth | Interna |
 |---|---|---|
@@ -32,16 +35,74 @@ Si Game Logic ya responde `{items, nextCursor}` (contrato 4.1), la respuesta pas
 `PORT=8090`, `GATEWAY_INTERNAL_URL`, `JWT_SECRET` (obligatoria), `JWT_ALGORITHM=HS256` (otro valor impide el arranque), `HTTP_TIMEOUT=15`, `LOG_LEVEL`.
 
 ## Pruebas
+
 ```bash
 pip install -r requirements-dev.txt
-pytest -q          # 54 pruebas, gateway interno simulado con httpx.MockTransport
+pytest -q     # unitarias + cadena mixta sin red; las e2e se omiten si no defines MOBILE_GATEWAY_URL
 ```
 
-## Desarrollo sin backend completo
-Mientras el gateway web real no publique `/internal/*` (ni existan Profile/Stats y Multiplayer):
+| Archivo | Qué prueba | Necesita |
+|---|---|---|
+| `tests/test_gateway.py` | El gateway móvil contra un gateway interno simulado con `httpx.MockTransport` | nada |
+| `tests/test_mixed_harness.py` | Cadena gateway móvil → gateway interno mixto → servicios "reales" imitados con las respuestas que hoy dan Auth, Profile y Game Logic | nada |
+| `tests/test_e2e_mixed.py` | Registro, login, perfil, estadísticas, inicio, historial paginado y detalle contra **procesos reales** | `MOBILE_GATEWAY_URL` |
+
+## Probar con lo que ya sirve y simular lo que falta
+
+El gateway web real aún no tiene el passthrough `/internal/*` (GW-04), así que el gateway móvil no puede llegar a los
+servicios por el camino de producción. `tools/mixed_internal_gateway.py` ocupa ese lugar: cada ruta `/internal/*` va al
+servicio **real** si defines su URL, y si no, a la simulación (`tools/fake_internal_gateway.py`).
+
+| Servicio | Estado hoy | Cómo se prueba |
+|---|---|---|
+| Auth | real, `/internal/auth/*` | `AUTH_URL=http://localhost:8081` |
+| Profile/Stats | real, `/internal/profile/*` | `PROFILE_URL=http://localhost:8087` |
+| Game Logic | real, `/internal/logic/*`, pero la lista es `{matches, cursor}` (GL-04 pendiente) | `LOGIC_URL=http://localhost:8082`; el mixto convierte la lista (`LOGIC_ADAPT=1`) |
+| Single Player | **no sirve**: llama a `/logic/*`, que ya no existe | `SINGLE_PLAYER_MODE=via-logic` lee la partida real de Game Logic y aplica la visibilidad |
+| Multiplayer | no existe | simulado, o `MULTIPLAYER_MODE=via-logic` (lee `by-match` de Game Logic) |
+
+Con `LOGIC_ADAPT=0` el mixto deja pasar la respuesta real sin convertir: así se ve el 502 que hoy da el gateway móvil
+con Game Logic sin GL-04.
+
+**1. Servicios reales** (opcional; sin esto todo queda simulado). Desde la raíz del repo, con `.env` completo:
 ```bash
-export JWT_SECRET=una-clave-larga-de-desarrollo-123456789
-uvicorn --app-dir tools fake_internal_gateway:app --port 8080        # gateway interno simulado
-GATEWAY_INTERNAL_URL=http://localhost:8080 uvicorn main:app --port 8090
-MOCK_FAIL=stats uvicorn --app-dir tools fake_internal_gateway:app --port 8080   # para ver "No disponible"
+docker compose -f compose.yaml -f Backend/api-gateway-mobile/tools/compose.mixed.yaml up -d --build \
+  mysql postgres-profile rabbitmq mongo auth-component profile-stats-component game-logic-component
 ```
+`compose.mixed.yaml` publica Auth (8081), Game Logic (8082) y Profile/Stats (8087) solo en 127.0.0.1 (requiere Docker
+Compose 2.24 o más nuevo por `!override`). Comprueba con `curl localhost:8081/health`, `:8082/health`, `:8087/health`.
+
+**2. Gateway interno mixto** (puerto 8080). Quita de la línea lo que NO esté levantado:
+```bash
+cd Backend/api-gateway-mobile
+export JWT_SECRET=<el mismo de tu .env, 32 bytes o más>
+AUTH_URL=http://localhost:8081 PROFILE_URL=http://localhost:8087 LOGIC_URL=http://localhost:8082 \
+  uvicorn --app-dir tools mixed_internal_gateway:app --port 8080
+curl localhost:8080/health      # muestra qué es real y qué es simulado
+```
+
+**3. Gateway móvil** (puerto 8090) apuntando al mixto:
+```bash
+GATEWAY_INTERNAL_URL=http://localhost:8080 uvicorn main:app --port 8090
+```
+
+**4. Pruebas de punta a punta**:
+```bash
+MOBILE_GATEWAY_URL=http://localhost:8090 \
+LOGIC_URL=http://localhost:8082 PROFILE_URL=http://localhost:8087 \
+  pytest tests/test_e2e_mixed.py -v
+```
+`LOGIC_URL` hace que la prueba cree dos partidas del usuario nuevo directamente en Game Logic (un usuario recién registrado
+no tiene historial). `PROFILE_URL` hace que espere hasta 20 s (`E2E_PROFILE_WAIT`) a que RabbitMQ cree el perfil. Sin
+ninguna de las dos, todo es simulado y las pruebas pasan sin Docker.
+
+**5. La app**: emulador con `BASE_URL=http://10.0.2.2:8090/` (ya configurado).
+
+Notas: en modo mixto con Auth real y Profile simulado, el perfil se inventa (`usuario-<id>`) porque el simulado no
+conoce a usuarios que registró Auth. Para ver "No disponible" en Inicio con el simulado puro: `MOCK_FAIL=stats,recentGames`.
+
+## Retiro pendiente (GWM-02)
+`_normalize_summary` y la paginación local siguen en `main.py` a propósito: hoy Game Logic responde `{matches, cursor}` y
+el contrato manda retirarlas solo cuando entregue `GamesPage` (GL-04). Cuando eso pase, borra esa rama y las pruebas
+`test_legacy_*` y `test_home_works_with_legacy_list` de `tests/test_gateway.py`; `tests/test_mixed_harness.py` seguirá sirviendo
+(la prueba `test_gamespage_from_game_logic_passes_untouched` ya cubre el formato nuevo).

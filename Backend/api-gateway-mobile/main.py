@@ -43,6 +43,7 @@ JWT_SECRET = os.getenv("JWT_SECRET", "")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM") or "HS256"
 HTTP_TIMEOUT = float(os.getenv("HTTP_TIMEOUT", "15"))
 
+MIN_SECRET_BYTES = 32  # contrato 8.5: JWT_SECRET obligatoria, mínimo 32 bytes
 MAX_PAGE_SIZE = 20  # contrato: limit máximo 20
 HOME_RECENT_GAMES = 5  # contrato: /home trae las 5 más recientes
 
@@ -54,6 +55,10 @@ UUID_RE = re.compile(
 def _validate_config() -> None:
     if not JWT_SECRET:
         raise RuntimeError("JWT_SECRET es obligatoria: el gateway móvil no arranca sin ella")
+    if len(JWT_SECRET.encode("utf-8")) < MIN_SECRET_BYTES:
+        raise RuntimeError(
+            f"JWT_SECRET debe tener al menos {MIN_SECRET_BYTES} bytes (contrato, sección 8.5)"
+        )
     if JWT_ALGORITHM != "HS256":
         raise RuntimeError("JWT_ALGORITHM debe ser HS256 (contrato, sección 5)")
 
