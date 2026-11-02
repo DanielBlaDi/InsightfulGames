@@ -1,8 +1,10 @@
 package chess.matches;
 
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -87,7 +89,7 @@ public class MatchController{
 
     /** Las partidas de un usuario, la más reciente primero. */
     @GetMapping({"/internal/logic/games", "/internal/logic/games/"})
-    ResponseEntity<PagedMatches> getMatchesByUserIdPaged(@RequestParam(name = "userId", required = false) String userId, @RequestParam(name = "limit", required = false) Integer limit, @RequestParam(name = "cursor", required = false) Integer cursor){
+    ResponseEntity<GamesPage> getMatchesByUserIdPaged(@RequestParam(name = "userId", required = false) String userId, @RequestParam(name = "limit", required = false) Integer limit, @RequestParam(name = "cursor", required = false) String cursor){
         if(userId == null || userId.isBlank()){
             throw new RequestNotValidException("Falta el parámetro userId");
         }
@@ -98,20 +100,24 @@ public class MatchController{
             throw new RequestNotValidException("El parámetro limit debe ser un valor entre 1 y 20 inclusivos");
         }
 
-        if(cursor == null){
-            throw new RequestNotValidException("Falta el parámetro cursor");
-        }
-
         List<GameSummary> matchList = repository.findByParticipantsUserIdOrderByCreatedAtDesc(userId).stream().map(assembler::toSummary).toList();
 
-        PagedMatches result;
+        GamesPage result;
+        int decodedCursor;
 
-        if(matchList.size() > limit*cursor){
-            result = new PagedMatches(matchList.subList(limit * (cursor - 1), (limit * cursor)), cursor + 1);
-        }else if(matchList.size() == limit*cursor){
-            result = new PagedMatches(matchList.subList(limit * (cursor - 1), (limit * cursor)), null);
+        if(cursor == null){
+            decodedCursor = 1;
         }else{
-            result = new PagedMatches(matchList.subList(limit * (cursor - 1), matchList.size()), null);
+            decodedCursor = Integer.parseInt(new String(Base64.getUrlDecoder().decode(cursor), StandardCharsets.UTF_8));
+        }
+
+        if(matchList.size() > limit*decodedCursor){
+            String encodedResponseCursor = Base64.getUrlEncoder().withoutPadding().encodeToString(String.valueOf(decodedCursor + 1).getBytes(StandardCharsets.UTF_8));
+            result = new GamesPage(matchList.subList(limit * (decodedCursor - 1), (limit * decodedCursor)), encodedResponseCursor);
+        }else if(matchList.size() == limit*decodedCursor){
+            result = new GamesPage(matchList.subList(limit * (decodedCursor - 1), (limit * decodedCursor)), null);
+        }else{
+            result = new GamesPage(matchList.subList(limit * (decodedCursor - 1), matchList.size()), null);
         }
 
         return ResponseEntity.ok(result);
@@ -322,7 +328,7 @@ public class MatchController{
 
         return ResponseEntity.ok(assembler.toState(repository.save(match)));
     }
-
+ 
     @PatchMapping({"/internal/logic/games/{id}/visibility", "/internal/logic/games/{id}/visibility/"})
     private ResponseEntity<GameState> updateVisibility(@PathVariable("id") String id, @RequestBody UpdateVisibilityRequest requestBody){
         Match foundMatch = findMatch(id);
