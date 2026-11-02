@@ -45,7 +45,9 @@ fun Throwable.userMessage(): String {
         "USERNAME_TAKEN" -> "Ese nombre de usuario ya existe."
         "VALIDATION_ERROR" -> "Revisa los datos: usuario de 3 a 20 caracteres y contraseña de al menos 8 al registrarte."
         "UNAUTHORIZED" -> "Tu sesión expiró. Inicia sesión de nuevo."
-        "SERVICES_UNAVAILABLE", "SERVICE_UNAVAILABLE" -> "El servidor no está disponible. Inténtalo más tarde."
+        "SERVICES_UNAVAILABLE" -> "El servidor no está disponible. Inténtalo más tarde."
+        // Contrato 6.4.2: PROFILE_NOT_FOUND es "no disponible", no sesión expirada ni un error técnico.
+        "PROFILE_NOT_FOUND" -> "No disponible en este momento."
         "NETWORK" -> "Sin conexión con el servidor. Revisa tu red."
         "GAME_NOT_FOUND", "MATCH_NOT_FOUND" -> "La partida no existe o ya no es visible."
         else -> message ?: "Ocurrió un error inesperado."
