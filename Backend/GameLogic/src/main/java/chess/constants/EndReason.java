@@ -7,7 +7,8 @@ public enum EndReason{
     DRAW(),
     TIMEOUT(),
     ABANDONMENT(),
-    EXPIRED();
+    EXPIRED(),
+    ACCOUNT_DELETED();
 
     public static int size(){
         return EndReason.values().length;
@@ -39,6 +40,8 @@ public enum EndReason{
                 return "abandonment";
             case EXPIRED:
                 return "expired";
+            case ACCOUNT_DELETED:
+                return "account_deleted";
             default:
                 return null;
         }

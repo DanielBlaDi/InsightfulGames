@@ -32,13 +32,19 @@ public class Movement{
      */
     private Instant timestamp;
 
+    /**
+     * El color del participante que tiene el turno antes de realizar el movimiento
+     */
+    private String color;
+
     @PersistenceCreator
-    public Movement(int ply, String san, String uci, String fenAfter, Instant timestamp){
+    public Movement(int ply, String san, String uci, String fenAfter, Instant timestamp, String color){
         this.ply = ply;
         this.san = san;
         this.uci = uci;
         this.fenAfter = fenAfter;
         this.timestamp = timestamp;
+        this.color = color;
     }
 
     public int getPly(){
@@ -59,6 +65,10 @@ public class Movement{
 
     public Instant getTimestamp(){
         return timestamp;
+    }
+
+    public String getColor(){
+        return color;
     }
 
     @Override public boolean equals(Object other){

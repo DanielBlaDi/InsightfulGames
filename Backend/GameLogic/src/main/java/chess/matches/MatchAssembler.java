@@ -21,7 +21,7 @@ public class MatchAssembler{
 
         List<MoveEntry> moves = new ArrayList<>();
         for(Movement movement : match.getMovements()){
-            moves.add(new MoveEntry(movement.getPly(), movement.getSan(), movement.getUci(), movement.getFenAfter(), movement.getTimestamp().toString()));
+            moves.add(new MoveEntry(movement.getPly(), movement.getSan(), movement.getUci(), movement.getFenAfter(), movement.getTimestamp().toString(), movement.getColor()));
         }
 
         return new GameState(

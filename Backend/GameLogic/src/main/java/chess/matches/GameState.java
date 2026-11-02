@@ -30,6 +30,6 @@ public record GameState(
     String finishedAt
 ){
     /** Una jugada dentro de "moves" */
-    public record MoveEntry(int ply, String san, String uci, String fenAfter, String timestamp){
+    public record MoveEntry(int ply, String san, String uci, String fenAfter, String timestamp, String color){
     }
 }
