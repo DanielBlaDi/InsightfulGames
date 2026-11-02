@@ -86,12 +86,34 @@ public class MatchController{
 
     /** Las partidas de un usuario, la más reciente primero. */
     @GetMapping({"/internal/logic/games", "/internal/logic/games/"})
-    List<GameSummary> getMatchesByUserId(@RequestParam(name = "userId", required = false) String userId){
+    ResponseEntity<PagedMatches> getMatchesByUserIdPaged(@RequestParam(name = "userId", required = false) String userId, @RequestParam(name = "limit", required = false) Integer limit, @RequestParam(name = "cursor", required = false) Integer cursor){
         if(userId == null || userId.isBlank()){
             throw new RequestNotValidException("Falta el parámetro userId");
         }
 
-        return repository.findByParticipantsUserIdOrderByCreatedAtDesc(userId).stream().map(assembler::toSummary).toList();
+        if(limit == null){
+            limit = 20;
+        }else if(limit > 20 || limit < 1){
+            throw new RequestNotValidException("El parámetro limit debe ser un valor entre 1 y 20 inclusivos");
+        }
+
+        if(cursor == null){
+            throw new RequestNotValidException("Falta el parámetro cursor");
+        }
+
+        List<GameSummary> matchList = repository.findByParticipantsUserIdOrderByCreatedAtDesc(userId).stream().map(assembler::toSummary).toList();
+
+        PagedMatches result;
+
+        if(matchList.size() > limit*cursor){
+            result = new PagedMatches(matchList.subList(limit * (cursor - 1), (limit * cursor)), cursor + 1);
+        }else if(matchList.size() == limit*cursor){
+            result = new PagedMatches(matchList.subList(limit * (cursor - 1), (limit * cursor)), null);
+        }else{
+            result = new PagedMatches(matchList.subList(limit * (cursor - 1), matchList.size()), null);
+        }
+
+        return ResponseEntity.ok(result);
     }
 
     @PostMapping({"/internal/logic/games/{id}/join", "/internal/logic/games/{id}/join/"})
@@ -186,6 +208,21 @@ public class MatchController{
         match.finish(Color.WHITE.toString().equals(body.side()) ? Color.BLACK.toString() : Color.WHITE.toString(), EndReason.SURRENDER.toString());
 
         return assembler.toState(repository.save(match));
+    }
+ 
+    @PatchMapping({"/internal/logic/games/{id}/visibility", "/internal/logic/games/{id}/visibility/"})
+    private ResponseEntity<GameState> updateVisibility(@PathVariable("id") String id, @RequestBody UpdateVisibilityRequest requestBody){
+        Optional<Match> foundMatch = repository.findByGameId(id);
+
+        if(foundMatch.isPresent()){
+            foundMatch.get().setVisibility(requestBody.visibility());
+
+            Match savedMatch = repository.save(foundMatch.get());
+
+            return ResponseEntity.ok(assembler.toState(savedMatch));
+        }else{
+            throw new MatchNotFoundException(id);
+        }
     }
 
     @DeleteMapping({"/internal/logic/users/{userId}", "/internal/logic/users/{userId}/"})

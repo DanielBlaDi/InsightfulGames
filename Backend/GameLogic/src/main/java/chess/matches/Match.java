@@ -287,6 +287,10 @@ public class Match{
         this.status = status;
     }
 
+    public void setVisibility(String visibility){
+        this.visibility = visibility;
+    }
+
     @Override public boolean equals(Object other){
         if(this == other){
             return true;

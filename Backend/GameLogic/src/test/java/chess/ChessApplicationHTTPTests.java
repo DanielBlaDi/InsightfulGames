@@ -214,7 +214,7 @@ public class ChessApplicationHTTPTests{
 			);
 	}
 
-	/**Test for the function getMatchesByUserId(@RequestParam String userId)*/
+	/**Test for the function getMatchesByUserIdPaged(@RequestParam(name = "userId", required = false) String userId, @RequestParam(name = "limit", required = false) Integer limit, @RequestParam(name = "cursor", required = false) Integer cursor)*/
 	@Test public void shouldReturnExistingMatchesForGivenUser() throws Exception{
 		List<Participant> testParticipants = new ArrayList<>(2);
 		testParticipants.add(new Participant(TEST_USER_ID, Color.WHITE.toString()));
@@ -229,18 +229,20 @@ public class ChessApplicationHTTPTests{
 
 		when(repository.findByParticipantsUserIdOrderByCreatedAtDesc(TEST_USER_ID)).thenReturn(mockMatches);
 
-		this.mockMvc.perform(get("/internal/logic/games").param("userId", TEST_USER_ID)).andExpect(status().isOk())
-			.andExpect(jsonPath("$.length()").value(2))
-			.andExpect(jsonPath("$[0].gameId").value(mockMatches.get(0).getGameId()))
+		this.mockMvc.perform(get("/internal/logic/games").param("userId", TEST_USER_ID).param("cursor", "1")).andExpect(status().isOk())
+			.andExpect(jsonPath("$.matches.length()").value(2))
+			.andExpect(jsonPath("$.matches[0].gameId").value(mockMatches.get(0).getGameId()))
+			.andExpect(jsonPath("$.cursor").value(nullValue()))
 			.andDo(
 				document(
 					"obtainMatchesByUserId",
 					responseFields(
-						fieldWithPath("[].gameId").description("The identifier for each of the returned matches."),
-						fieldWithPath("[].mode").description("\"" + Mode.LOCAL.toString() + "\" | \"" + Mode.VS_BOT.toString() + "\""),
-						fieldWithPath("[].status").description(Status.allPossibleStatuses()),
-						fieldWithPath("[].result").description("String that describes the end result of this match. Takes one of " + (Result.size() + 1) + " values: " + Result.allPossibleResults() + " | Null (in the case that the match hasn't ended)"),
-						fieldWithPath("[].createdAt").description("The date and time in which each of the returned matches started.")
+						fieldWithPath("matches.[].gameId").description("The identifier for each of the returned matches."),
+						fieldWithPath("matches.[].mode").description("\"" + Mode.LOCAL.toString() + "\" | \"" + Mode.VS_BOT.toString() + "\""),
+						fieldWithPath("matches.[].status").description(Status.allPossibleStatuses()),
+						fieldWithPath("matches.[].result").description("String that describes the end result of this match. Takes one of " + (Result.size() + 1) + " values: " + Result.allPossibleResults() + " | Null (in the case that the match hasn't ended)"),
+						fieldWithPath("matches.[].createdAt").description("The date and time in which each of the returned matches started."),
+						fieldWithPath("cursor").description("The current page number for the query, starts on 1, null if there are no more Matches to show")
 					)
 				)
 			);
