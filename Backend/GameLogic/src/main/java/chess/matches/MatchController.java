@@ -73,6 +73,17 @@ public class MatchController{
         return assembler.toState(findMatch(id));
     }
 
+    @GetMapping({"/internal/logic/games/by-match/{matchId}", "/internal/logic/games/by-match/{matchId}/"})
+    ResponseEntity<GameState> getGameIdByMatchId(@PathVariable("matchId") String matchId){
+        Optional<Match> foundMatch = repository.findByMatchId(matchId);
+
+        if(foundMatch.isPresent()){
+            return ResponseEntity.ok(assembler.toState(foundMatch.get()));
+        }else{
+            throw new MatchNotFoundException(matchId);
+        }
+    }
+
     /** Las partidas de un usuario, la más reciente primero. */
     @GetMapping({"/internal/logic/games", "/internal/logic/games/"})
     List<GameSummary> getMatchesByUserId(@RequestParam(name = "userId", required = false) String userId){
@@ -82,6 +93,48 @@ public class MatchController{
 
         return repository.findByParticipantsUserIdOrderByCreatedAtDesc(userId).stream().map(assembler::toSummary).toList();
     }
+
+    @PostMapping({"/internal/logic/games/{id}/join", "/internal/logic/games/{id}/join/"})
+    ResponseEntity<GameState> joinMatch(@PathVariable("id") String id, @RequestBody JoinMatchRequestBody requestBody){
+        Optional<Match> foundMatch = repository.findByGameId(id);
+
+        if(foundMatch.isPresent()){
+            Match matchToJoin = foundMatch.get();
+
+            if(!matchToJoin.getStatus().equals(Status.WAITING.toString())){
+                throw new CannotJoinMatchException(id, "GAME_NOT_WAITING");
+            }
+
+            List<Participant> participants = matchToJoin.getParticipants();
+            String remainingColor = "";
+
+            for(int i=0; i<participants.size(); i++){
+                if(participants.get(i).userId().equals(requestBody.userId())){
+                    throw new CannotJoinMatchException(id, "ALREADY_PARTICIPANT");
+                }else{
+                    remainingColor = participants.get(i).color().equals(Color.BLACK.toString()) ? Color.WHITE.toString() : Color.BLACK.toString();
+                }
+            }
+
+            matchToJoin.addParticipant(new Participant(requestBody.userId(), remainingColor));
+            matchToJoin.setStatus(Status.IN_PROGRESS.toString());
+            
+            if(matchToJoin.getTimeControl() != null){
+                Clocks clock = matchToJoin.getClocks();
+                Instant turnStart = Instant.now();
+
+                clock.setTurnStartedAt(turnStart.toString());
+                clock.setDeadline(turnStart.plusMillis(clock.getWhite()).toString());
+            }
+
+            repository.save(matchToJoin);
+
+            return ResponseEntity.ok(assembler.toState(matchToJoin));
+        }else{
+            throw new MatchNotFoundException(id);
+        }
+    }
+
 
     /** Aplica una jugada UCI sobre la posición guardada. Rechaza las ilegales y las de partidas terminadas. */
     @PostMapping({"/internal/logic/games/{id}/moves", "/internal/logic/games/{id}/moves/"})

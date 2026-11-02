@@ -173,6 +173,10 @@ public class Match{
         this.turn = turnAfterMove;
     }
 
+    public void addParticipant(Participant participant){
+        this.participants.add(participant);
+    }
+
     /** Changes the user's id to ANONYMOUS_USER_ID in this Match, works even if both participants are the same user*/
     public void anonymizeUser(String userId){
         for(int i=0; i<participants.size(); i++){
@@ -277,6 +281,10 @@ public class Match{
 
     public Instant getFinishedAt(){
         return finishedAt;
+    }
+
+    public void setStatus(String status){
+        this.status = status;
     }
 
     @Override public boolean equals(Object other){
