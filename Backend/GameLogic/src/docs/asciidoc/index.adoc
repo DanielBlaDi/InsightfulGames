@@ -78,13 +78,19 @@ include::{snippets}/obtainMissingMatch/response-fields.adoc[]
 This is an example output for the ability to consult all of the Matches of a user, the most recent first:
 
 .request
-include::{snippets}/obtainMatchesByUserId/http-request.adoc[]
+include::{snippets}/obtainMatchesByUserIdNoNextCursor/http-request.adoc[]
 
 .response
-include::{snippets}/obtainMatchesByUserId/http-response.adoc[]
+include::{snippets}/obtainMatchesByUserIdNoNextCursor/http-response.adoc[]
+
+.request
+include::{snippets}/obtainMatchesByUserIdWithNextCursor/http-request.adoc[]
+
+.response
+include::{snippets}/obtainMatchesByUserIdWithNextCursor/http-response.adoc[]
 
 .response-fields
-include::{snippets}/obtainMatchesByUserId/response-fields.adoc[]
+include::{snippets}/obtainMatchesByUserIdWithNextCursor/response-fields.adoc[]
 
 == POST | Perform a move in the Match if valid
 
