@@ -3,7 +3,7 @@ import { logout } from '../auth/session';
 
 interface AccountNavProps {
   /** Página actual, para marcarla en la barra. */
-  current: 'perfil' | 'estadisticas';
+  current?: 'perfil' | 'estadisticas';
 }
 
 const linkClass = (active: boolean) =>
