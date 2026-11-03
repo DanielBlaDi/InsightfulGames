@@ -77,17 +77,16 @@ export default function StatsView({ data }: { data: Exclude<StatsPageData, { kin
           </div>
         )}
 
-        {data.kind === 'ok' && data.stats.gamesPlayed > 0 && (
-          <>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-space-sm">
-              <StatCard label="Jugadas" value={data.stats.gamesPlayed} tone="text-on-surface" />
-              <StatCard label="Victorias" value={data.stats.wins} tone="text-secondary" />
-              <StatCard label="Derrotas" value={data.stats.losses} tone="text-primary" />
-              <StatCard label="Tablas" value={data.stats.draws} tone="text-tertiary" />
-            </div>
-            <Breakdown stats={data.stats} />
-          </>
+        {data.kind === 'ok' && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-space-sm">
+            <StatCard label="Jugadas" value={data.stats.gamesPlayed} tone="text-on-surface" />
+            <StatCard label="Victorias" value={data.stats.wins} tone="text-secondary" />
+            <StatCard label="Derrotas" value={data.stats.losses} tone="text-primary" />
+            <StatCard label="Tablas" value={data.stats.draws} tone="text-tertiary" />
+          </div>
         )}
+
+        {data.kind === 'ok' && data.stats.gamesPlayed > 0 && <Breakdown stats={data.stats} />}
       </div>
     </div>
   );
