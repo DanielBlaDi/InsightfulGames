@@ -18,10 +18,10 @@ SINGLE_PLAYER_MODE = fake | via-logic | real
                participante). Hoy Single Player no sirve de verdad porque llama a /logic/*, que ya no existe.
     real       reenvía a SINGLE_PLAYER_URL /games/{id} (cuando Single Player migre).
 MULTIPLAYER_MODE   = fake | via-logic   (Multiplayer no existe; via-logic lee by-match de Game Logic)
-LOGIC_ADAPT        = 1 (por omisión) | 0
-    1  simula GL-04: convierte { matches, cursor } en { items, nextCursor } y completa matchId,
-       endReason y color consultando cada partida. Si Game Logic ya responde { items }, pasa tal cual.
-    0  deja pasar la respuesta real sin tocarla (verás el 502 que hoy da el gateway móvil).
+LOGIC_ADAPT        = 0 (por omisión) | 1
+    0  Game Logic ya entrega { items, nextCursor } (GL-04): la respuesta real pasa sin tocarla.
+    1  solo para un Game Logic ANTIGUO: convierte { matches, cursor } en { items, nextCursor } y completa
+       matchId, endReason y color consultando cada partida.
 
 Uso (puerto 8080 = GATEWAY_INTERNAL_URL del gateway móvil):
     JWT_SECRET=<el mismo del gateway móvil> AUTH_URL=... uvicorn --app-dir tools mixed_internal_gateway:app --port 8080
@@ -211,7 +211,7 @@ def _from_env() -> FastAPI:
         real,
         single_player_mode=os.getenv("SINGLE_PLAYER_MODE") or None,
         multiplayer_mode=os.getenv("MULTIPLAYER_MODE") or None,
-        adapt=os.getenv("LOGIC_ADAPT", "1") != "0",
+        adapt=os.getenv("LOGIC_ADAPT", "0") == "1",
     )
 
 

@@ -9,8 +9,6 @@ Puerta de la app Kotlin:
 """
 
 import asyncio
-import base64
-import binascii
 import logging
 import os
 import re
@@ -277,59 +275,18 @@ def relay(
 
 
 # --------------------------------------------------------------------------- #
-# Lista de partidas: acepta el contrato (GamesPage) y la forma actual de Game Logic
+# Lista de partidas: contrato 4.1 (GamesPage)
 # --------------------------------------------------------------------------- #
 #
-# Contrato 4.1: GET /internal/logic/games -> { "items": [GameSummary], "nextCursor": "..." | null }
-# Game Logic hoy (prototipo 1): una lista simple [GameSummary], sin paginar y sin matchId,
-# endReason ni color. Mientras responda así, el gateway pagina aquí (cursor opaco = posición)
-# y completa los campos que faltan con null. Cuando Game Logic migre (tarea GL-04), este bloque se retira (tarea GWM-02).
+# GET /internal/logic/games -> { "items": [GameSummary], "nextCursor": "..." | null }
+# Game Logic ya entrega ese formato (GL-04): el gateway lo deja pasar sin transformarlo.
+# Cualquier otra forma se considera una respuesta inesperada del servicio.
 
 
-def _encode_cursor(offset: int) -> str:
-    return base64.urlsafe_b64encode(str(offset).encode()).decode().rstrip("=")
-
-
-def _decode_cursor(cursor: str | None) -> int | None:
-    """Posición codificada en el cursor, 0 si no hay cursor, None si no es un cursor válido."""
-    if not cursor:
-        return 0
-    try:
-        padded = cursor + "=" * (-len(cursor) % 4)
-        offset = int(base64.urlsafe_b64decode(padded.encode()).decode())
-    except (ValueError, binascii.Error, UnicodeDecodeError):
-        return None
-    return offset if offset >= 0 else None
-
-
-def _normalize_summary(item: Any) -> dict[str, Any]:
-    if not isinstance(item, dict):
-        return item
-    out = dict(item)
-    out.setdefault("matchId", None)
-    out.setdefault("endReason", None)
-    if "color" not in out:
-        out["color"] = out.get("playerColor")  # Game Logic hoy: playerColor solo en vs_bot
-    out.pop("playerColor", None)
-    return out
-
-
-def games_page(payload: Any, limit: int, cursor: str | None) -> dict[str, Any] | None:
-    """Convierte la respuesta de Game Logic en { items, nextCursor }. None si no se entiende.
-    Lanza GatewayError 400 si el cursor no es válido y la respuesta es una lista simple."""
+def games_page(payload: Any) -> dict[str, Any] | None:
+    """Devuelve la página tal como la entregó Game Logic, o None si no tiene la forma { items, nextCursor }."""
     if isinstance(payload, dict) and isinstance(payload.get("items"), list):
-        return payload  # contrato 4.1: ya viene paginado por Game Logic
-
-    if isinstance(payload, list):
-        offset = _decode_cursor(cursor)
-        if offset is None:
-            raise GatewayError(400, "VALIDATION_ERROR", "Cursor inválido")
-        page = payload[offset : offset + limit]
-        end = offset + limit
-        return {
-            "items": [_normalize_summary(i) for i in page],
-            "nextCursor": _encode_cursor(end) if end < len(payload) else None,
-        }
+        return payload
     return None
 
 
@@ -415,7 +372,7 @@ async def list_games(
         params["cursor"] = cursor
     response = await call_internal(request, "GET", "/internal/logic/games", params=params)
     if response.is_success:
-        page = games_page(_payload(response), params["limit"], cursor)
+        page = games_page(_payload(response))
         if page is None:
             return error_response(502, "UPSTREAM_ERROR", "Respuesta inesperada del servicio")
         return JSONResponse(status_code=200, content=page)
@@ -454,7 +411,7 @@ async def get_match(match_id: str, request: Request, user_id: str = Depends(curr
 
 
 def _recent_games(payload: Any) -> list[Any] | None:
-    page = games_page(payload, HOME_RECENT_GAMES, None)
+    page = games_page(payload)
     return None if page is None else page["items"][:HOME_RECENT_GAMES]
 
 
