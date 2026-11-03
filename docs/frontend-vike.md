@@ -19,6 +19,9 @@ Nginx, `index.html` y `game.html` ya no existen.
 | `/estadisticas` | **Renderizado en servidor**: el HTML ya trae los números. Sin sesión, 302 a `/login?next=%2Festadisticas` | `pages/estadisticas/` |
 | `/` | La aplicación actual (`App.tsx`: portada, login y ajedrez) como aplicación de una sola página. Sesión por cookie y menú de la cuenta en el ícono de usuario (Mi perfil, Estadísticas, Cerrar sesión) | `pages/index/` |
 | `/perfil` | Aplicación de una sola página: pide `GET /api/profile/me` en el navegador. 401 → `/login?next=%2Fperfil`; 404 → "perfil todavía no disponible" (la sesión sigue); 503 → aviso con reintento | `pages/perfil/`, `src/profile/` |
+| `/multijugador` | Crear partida online: color, 1 a 10 minutos y visibilidad. `POST /api/matches` con `Idempotency-Key` (la misma clave al reintentar) | `pages/multijugador/`, `src/multiplayer/` |
+| `/unirse/{matchId}` | Invitación: sin sesión va a `/login?next=/unirse/{id}`; `POST /api/matches/{id}/join` sin GET previo | `pages/unirse/@matchId/` |
+| `/partida/{matchId}` | Sala de espera con enlace para copiar y tablero multijugador por `WS /api/ws/matches/{id}` (relojes, tablas, rendición, reconexión automática) | `pages/partida/@matchId/` |
 | `/login` | Provisional: monta `Login.tsx` y vuelve a `next` (solo rutas del propio sitio) tras iniciar sesión | `pages/login/` |
 | `/dev/partida` | Simulador del módulo de juego (antes `game.html`). Solo existe con `npm run dev`; en producción da 404 y su código no está en el build | `pages/dev-partida/` |
 
@@ -238,3 +241,33 @@ ajedrez completa por la nueva cadena (Single Player aún no usa el protocolo del
    sin cambios y no guarda el token. Frontend A la reemplaza.
 5. **`/partida/{id}`** (ya señalado en el contrato, 24.3): no se define cómo se conoce `mode` al abrir
    la URL directamente.
+
+## 6. Multijugador online (Frontend B)
+
+Módulo `src/multiplayer/`, separado del de Single Player (`src/game/`), del que reutiliza `ChessBoard`.
+
+- **Identidad**: el color sale de `GameState.participants` comparando con el `userId` de
+  `GET /api/profile/me` (nunca se lee el JWT ni se asume el orden). Si el perfil no existe, el
+  creador en espera se reconoce por ser el único participante; si no, se puede ver pero no mover.
+- **WebSocket**: cada `state` del servidor reemplaza al anterior (uno con versión menor se ignora);
+  una sola acción en vuelo, con el `expectedVersion` del último `state`; `move_rejected` y `error`
+  desbloquean sin tocar el tablero. Cortes (1001, 1006, 1011…) se reintentan solos con espera
+  creciente; 4401 lleva al login; 4403, 4404 y el cierre normal (1000, fin de partida u otra
+  pestaña) no se reintentan ni se muestran como error. Mensaje `ping` cada 25 s.
+- **Relojes**: solo presentación, a partir de `clocks.deadline`/`turnStartedAt`. El frontend no
+  declara la derrota por tiempo.
+
+### Problemas de backend detectados (no corregidos aquí)
+
+1. **Game Logic, `requestFingerPrint`** (`chess/matches/CreateMatchRequest.java`): Multiplayer envía
+   `requestFingerprint`. Jackson no los empareja, el campo llega `null` y un reintento con la misma
+   `Idempotency-Key` hace `null.equals(...)` en `MatchController.newMatch` → 500 (el usuario ve 502)
+   en vez del replay 200 o el 409 `IDEMPOTENCY_KEY_REUSED`. La primera creación sí funciona.
+   Corrección mínima: renombrar el componente a `requestFingerprint` (o `@JsonProperty("requestFingerprint")`)
+   y comparar con `Objects.equals`. Responsable: Game Logic.
+2. **Multiplayer, aviso de rival conectado**: `opponent_connected` solo se envía a quien ya estaba
+   conectado; quien se conecta después no sabe si el rival está en línea hasta un cambio. El
+   frontend lo muestra solo cuando lo sabe. Responsable: Multiplayer.
+3. **Compose**: `multiplayer-component` recibe `SERVER_PORT`, pero el servicio Go lee `PORT`
+   (funciona porque su valor por defecto también es 8084). Responsable: Infra/Multiplayer.
+
