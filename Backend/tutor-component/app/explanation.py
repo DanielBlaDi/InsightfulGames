@@ -3,7 +3,7 @@
 En esta entrega ``LLM_PROVIDER=mock``: el texto es determinista y se construye
 a partir del ``summary`` que calcula el Analysis Worker. Se guarda en el
 documento la primera vez que se lee el resultado, para no regenerarlo en cada
-consulta. Un proveedor real de LLM queda fuera de esta entrega (sección 13).
+consulta. Un proveedor real de LLM queda fuera de esta entrega (sección 16).
 """
 
 from __future__ import annotations
@@ -49,14 +49,21 @@ def _counts(side: Any) -> dict[str, int]:
     return counts
 
 
-def _number(value: Any) -> float:
+def _optional_number(value: Any) -> float | None:
+    """Devuelve el número o ``None`` si el dato no está disponible."""
     if isinstance(value, (int, float)) and not isinstance(value, bool):
         return float(value)
-    return 0.0
+    return None
 
 
 def _format_number(value: float) -> str:
     return str(int(value)) if float(value).is_integer() else f"{value:.1f}"
+
+
+def _loss_text(value: float | None, lang: str) -> str:
+    if value is None:
+        return "not available" if lang == "en" else "no disponible"
+    return f"{_format_number(value)} cp"
 
 
 def _join(parts: list[str], conjunction: str) -> str:
@@ -96,8 +103,10 @@ def build_explanation(
     data = summary if isinstance(summary, dict) else {}
     white = _counts(data.get("white"))
     black = _counts(data.get("black"))
-    white_loss = _number((data.get("white") or {}).get("averageCpLoss") if isinstance(data.get("white"), dict) else 0)
-    black_loss = _number((data.get("black") or {}).get("averageCpLoss") if isinstance(data.get("black"), dict) else 0)
+    white_data = data.get("white") if isinstance(data.get("white"), dict) else {}
+    black_data = data.get("black") if isinstance(data.get("black"), dict) else {}
+    white_loss = _optional_number(white_data.get("averageCpLoss"))
+    black_loss = _optional_number(black_data.get("averageCpLoss"))
 
     pieces = [
         _side_phrase(words["white"], white, words),
@@ -108,30 +117,36 @@ def build_explanation(
         if lang == "en":
             pieces.append(
                 "Average loss per move: "
-                f"{_format_number(white_loss)} cp for White and "
-                f"{_format_number(black_loss)} cp for Black."
+                f"{_loss_text(white_loss, lang)} for White and "
+                f"{_loss_text(black_loss, lang)} for Black."
             )
         else:
             pieces.append(
                 "Pérdida media por jugada: "
-                f"{_format_number(white_loss)} cp con blancas y "
-                f"{_format_number(black_loss)} cp con negras."
+                f"{_loss_text(white_loss, lang)} con blancas y "
+                f"{_loss_text(black_loss, lang)} con negras."
             )
 
-        if white_loss == black_loss:
-            pieces.append(
-                "Both sides were equally precise."
-                if lang == "en"
-                else "Ambos bandos tuvieron una precisión parecida."
-            )
-        else:
-            more_precise = words["white"] if white_loss < black_loss else words["black"]
-            if lang == "en":
-                pieces.append(f"Overall, {more_precise} played more precisely.")
-            else:
+        # Solo se compara la precisión cuando ambos promedios existen.
+        if white_loss is not None and black_loss is not None:
+            if white_loss == black_loss:
                 pieces.append(
-                    f"En conjunto, el bando de {more_precise.lower()} fue más preciso."
+                    "Both sides were equally precise."
+                    if lang == "en"
+                    else "Ambos bandos tuvieron una precisión parecida."
                 )
+            else:
+                more_precise = (
+                    words["white"] if white_loss < black_loss else words["black"]
+                )
+                if lang == "en":
+                    pieces.append(
+                        f"Overall, {more_precise} played more precisely."
+                    )
+                else:
+                    pieces.append(
+                        f"En conjunto, el bando de {more_precise.lower()} fue más preciso."
+                    )
 
     if mode == "detailed":
         if lang == "en":

@@ -1,9 +1,10 @@
-"""Lógica del Tutor (contrato v9, sección 13).
+"""Lógica del Tutor (contrato, sección 16.4).
 
 Responsabilidades:
-- validar que la partida exista, esté terminada y sea visible;
+- validar que la partida exista, esté terminada y sea analizable;
 - crear el análisis una sola vez por (gameId, engineVersion, language,
   detailLevel, depth), publicar el evento y responder 202/200;
+- reactivar un fallo transitorio con una actualización atómica;
 - verificar la visibilidad en cada lectura;
 - entregar el informe y generar la explicación mock;
 - atender el borrado de cuenta de forma idempotente.
@@ -18,8 +19,8 @@ from typing import Any
 from app.config import ANONYMOUS_USER_ID, Settings
 from app.errors import ApiError
 from app.explanation import build_explanation
-from app.game_logic import is_visible, participant_ids, visibility_snapshot
-from app.models import AnalysisRequest, result_parts, status_payload
+from app.game_logic import is_visible, participant_ids
+from app.models import AnalysisRequest, is_retryable, result_parts, status_payload
 from app.repository import AnalysisRepository
 from app.timeutils import to_iso, utcnow
 from app.validation import normalize_depth, normalize_text, normalize_uuid
@@ -44,7 +45,7 @@ class TutorService:
     async def request_analysis(
         self, request: AnalysisRequest, user_id: str
     ) -> tuple[dict[str, Any], bool]:
-        """Crea o recupera el análisis. Devuelve (vista, creado)."""
+        """Crea, recupera o reactiva el análisis. Devuelve (vista, creado)."""
         game_id = normalize_uuid(request.gameId, "gameId")
         depth = normalize_depth(
             request.depth,
@@ -56,7 +57,7 @@ class TutorService:
 
         game = await self._game_logic.get_game(game_id)
         if not is_visible(game, user_id):
-            # El contrato no distingue "no existe" de "no visible" (sección 13).
+            # El contrato no distingue "no existe" de "no visible" (sección 16.4).
             raise ApiError(
                 404,
                 "GAME_NOT_FOUND",
@@ -68,13 +69,20 @@ class TutorService:
                 "GAME_NOT_FINISHED",
                 "La partida debe estar terminada para pedir su análisis.",
             )
+        moves = game.get("moves")
+        if game.get("endReason") == "expired" or not isinstance(moves, list) or not moves:
+            raise ApiError(
+                409,
+                "GAME_NOT_ANALYZABLE",
+                "La partida expiró o no tiene jugadas; no hay nada que analizar.",
+            )
 
         engine_version = self._settings.engine_version
         existing = await self._repository.find_by_key(
             game_id, engine_version, language, detail_level, depth
         )
         if existing is not None:
-            return status_payload(existing), False
+            return await self._existing_response(existing)
 
         now = utcnow()
         analysis_id = str(uuid.uuid4())
@@ -88,17 +96,12 @@ class TutorService:
             "depth": depth,
             "status": "pending",
             "requestedBy": user_id,
-            # Snapshot para el borrado de cuenta; la visibilidad de lectura se
-            # consulta siempre a Game Logic (sección 13).
             "participantIds": participant_ids(game),
-            "visibility": visibility_snapshot(game),
-            "result": None,
             "error": None,
             "explanation": None,
             "createdAt": now,
             "updatedAt": now,
-            "startedAt": None,
-            "completedAt": None,
+            "reactivations": 0,
         }
 
         created = await self._repository.insert(document)
@@ -109,7 +112,7 @@ class TutorService:
                 game_id, engine_version, language, detail_level, depth
             )
             if existing is not None:
-                return status_payload(existing), False
+                return await self._existing_response(existing)
             raise ApiError(
                 503,
                 "SERVICES_UNAVAILABLE",
@@ -123,12 +126,52 @@ class TutorService:
                 "el polling del Analysis Worker lo recuperará.",
                 analysis_id,
             )
-        return status_payload(document), True
+        return self._status(document), True
+
+    async def _existing_response(
+        self, document: dict[str, Any]
+    ) -> tuple[dict[str, Any], bool]:
+        """Responde con el existente o lo reactiva si procede (sección 16.4.3)."""
+        if not is_retryable(
+            document, self._settings.analysis_max_reactivations
+        ):
+            return self._status(document), False
+
+        analysis_id = document["analysisId"]
+        reactivated = await self._repository.reactivate(
+            analysis_id, self._settings.analysis_max_reactivations
+        )
+        if not reactivated:
+            # Otro POST simultáneo reactivó primero: el que pierde responde 200.
+            current = await self._repository.get(analysis_id)
+            if current is None:
+                raise ApiError(
+                    404,
+                    "ANALYSIS_NOT_FOUND",
+                    "El análisis no existe o no es visible para el usuario.",
+                )
+            return self._status(current), False
+
+        current = await self._repository.get(analysis_id) or document
+        # El evento nuevo conserva el requestedBy original y lleva otro eventId.
+        published = await self._publisher.publish_analysis_requested(current)
+        if not published:
+            LOGGER.warning(
+                "Análisis %s reactivado en pending sin evento publicado; "
+                "el polling del Analysis Worker lo recuperará.",
+                analysis_id,
+            )
+        return self._status(current), True
+
+    def _status(self, document: dict[str, Any]) -> dict[str, Any]:
+        return status_payload(
+            document, self._settings.analysis_max_reactivations
+        )
 
     # --------------------------------------------------------------- GETs
     async def get_analysis(self, analysis_id: str, user_id: str) -> dict[str, Any]:
         document = await self._load_visible(analysis_id, user_id)
-        return status_payload(document)
+        return self._status(document)
 
     async def get_result(self, analysis_id: str, user_id: str) -> dict[str, Any]:
         document = await self._load_visible(analysis_id, user_id)
@@ -195,7 +238,7 @@ class TutorService:
         except ApiError as exc:
             if exc.code == "GAME_NOT_FOUND":
                 # La partida desapareció o dejó de ser visible: para el usuario
-                # el análisis tampoco existe (sección 13).
+                # el análisis tampoco existe (sección 16.4.2).
                 raise ApiError(
                     404,
                     "ANALYSIS_NOT_FOUND",
@@ -213,16 +256,48 @@ class TutorService:
 
     # -------------------------------------------------------------- DELETE
     async def delete_user(self, user_id: str) -> None:
-        """Borrado de cuenta: anonimiza y elimina lo privado. Idempotente."""
+        """Borrado de cuenta según la visibilidad actual (sección 16.4.4).
+
+        Primero se resuelve la visibilidad de todas las partidas y solo después
+        se muta. Si Game Logic no responde, la petición falla con 503 sin tocar
+        ningún análisis.
+        """
         normalized = normalize_uuid(user_id, "userId")
         if normalized == ANONYMOUS_USER_ID:
             return
 
-        anonymized = await self._repository.anonymize_requested_by(normalized)
-        deleted = await self._repository.delete_private_for_participant(normalized)
+        game_ids = await self._repository.game_ids_for_participant(normalized)
+        decisions: list[tuple[str, bool]] = []
+        for game_id in game_ids:
+            try:
+                game = await self._game_logic.get_game(game_id)
+            except ApiError as exc:
+                if exc.code == "GAME_NOT_FOUND":
+                    # Partida inexistente: se borran todos sus análisis.
+                    decisions.append((game_id, True))
+                    continue
+                raise
+
+            # Solo shared se conserva; private y cualquier valor inesperado se
+            # tratan como privados (fail-closed).
+            decisions.append((game_id, game.get("visibility") != "shared"))
+
+        deleted = 0
+        for game_id, must_delete in decisions:
+            if must_delete:
+                deleted += await self._repository.delete_by_game(game_id)
+
+        anonymized_participants = await self._repository.anonymize_participant(
+            normalized
+        )
+        anonymized_requested_by = await self._repository.anonymize_requested_by(
+            normalized
+        )
         LOGGER.info(
-            "Borrado del usuario %s en Tutor: %s análisis anonimizados, %s eliminados",
+            "Borrado del usuario %s en Tutor: %s análisis eliminados, "
+            "%s participantIds anonimizados, %s requestedBy anonimizados",
             normalized,
-            anonymized,
             deleted,
+            anonymized_participants,
+            anonymized_requested_by,
         )
