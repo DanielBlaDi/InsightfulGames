@@ -1,6 +1,7 @@
 # Frontend web con Vike y Express
 
-Rama `frontend-B`, 3 de noviembre de 2026. Referencia normativa: *Contrato técnico definitivo*,
+Rama de integración: `frontend-B-vike`, basada en `containers` (3 de noviembre de 2026).
+Referencia normativa: *Contrato técnico definitivo*,
 secciones 4.4, 5 y 7.4.3. Este documento explica qué quedó hecho, cómo agregar páginas (Frontend A)
 y qué tiene que cambiar en el despliegue (Infra).
 
@@ -38,6 +39,18 @@ npm run lint
 el contenedor no se define y el proceso escucha en 80.
 
 ## 3. Para Frontend A
+
+### 3.0 Pasos, en orden
+
+1. Partir de `frontend-B-vike` (`git switch -c <tu-rama> origin/frontend-B-vike`), `npm ci` y
+   `npm run dev`. Vike y el proxy ya funcionan; no hace falta tocar `server/` ni `vite.config.ts`.
+2. Crear cada pantalla como página en `Frontend/pages/<ruta>/+Page.tsx` (3.1), reutilizando los
+   componentes de `src/`.
+3. Navegar con enlaces `<a href>` o `navigate()` en vez del estado `view` de `App.tsx` (3.2).
+4. Quitar `localStorage` y pasar a la sesión por cookie (3.3).
+5. Montar el ajedrez sin token en `/jugar` (3.4).
+6. Reemplazar la `/login` provisional por la definitiva, conservando el parámetro `next`.
+7. Antes de cada commit: `npm run build && npm run lint && npm test`.
 
 ### 3.1 Dónde van las páginas
 
@@ -87,10 +100,27 @@ así cualquier página con renderizado en servidor ve la cookie nueva. Es lo que
   `accessToken` del cuerpo se ignora; para mostrar el nombre se usa `user.username` de esa respuesta.
 - **Logout**: `POST /api/auth/logout` (204, borra la cookie). Hoy `App.tsx` solo borra su estado.
 - **401 o cierre WebSocket 4401**: ir a `/login?next=<ruta actual>`.
-- **Por cambiar en lo existente** (tarea «Retiro del token del navegador»): `src/authSession.ts` y
-  sus llamadas en `App.tsx` siguen guardando el token en `localStorage`. Hay que quitarlos y borrar
-  las claves antiguas `accessToken` y `user`. No lo cambié porque es la migración de autenticación
-  que les corresponde.
+- **Por cambiar en lo existente** (tarea «Retiro del token del navegador»). No lo cambié porque es la
+  migración de autenticación que les corresponde:
+  1. Borrar `src/authSession.ts` y sus importaciones en `App.tsx` (`loadSession`, `saveSession`,
+     `clearSession`).
+  2. Al cargar, limpiar una sola vez las claves antiguas: `localStorage.removeItem('accessToken')` y
+     `localStorage.removeItem('user')`.
+  3. Guardar en el estado de React solo el `user` de la respuesta del login, nunca `accessToken`.
+  4. Saber si hay sesión con la sonda de abajo, en un efecto.
+  5. Al salir, llamar a `POST /api/auth/logout` y luego navegar.
+  6. Comprobar en el navegador que `localStorage` queda vacío y que `document.cookie` no muestra
+     `session`.
+
+```ts
+// Sonda de sesión (contrato 5.4.4). Solo en efectos o manejadores, nunca al renderizar.
+async function hasSession(): Promise<boolean | 'unavailable'> {
+  const res = await fetch('/api/stats/me', { credentials: 'same-origin' });
+  if (res.status === 200) return true;
+  if (res.status === 401) return false;
+  return 'unavailable'; // 503 u otros: mostrar reintento, no mandar al login
+}
+```
 
 ### 3.4 Ajedrez sin JWT
 
@@ -128,7 +158,7 @@ ignora mientras `App.tsx` la siga pasando.
 
 ## 4. Para Infra
 
-Ya en el repositorio (rama `frontend-B`): `Frontend/Dockerfile` (con D mayúscula, como espera
+Ya en la rama `frontend-B-vike`: `Frontend/Dockerfile` (con D mayúscula, como espera
 `compose.yaml` en `containers`) y `Frontend/.dockerignore`. **No modifiqué `compose.yaml`.**
 
 | Aspecto | Valor |
@@ -141,13 +171,42 @@ Ya en el repositorio (rama `frontend-B`): `Frontend/Dockerfile` (con D mayúscul
 | Healthcheck | Ya en el Dockerfile: `wget -q --spider http://127.0.0.1/health` |
 | Nginx | Eliminado; no hace falta montar plantillas ni `envsubst` |
 
-Cambios en el bloque `frontend` de `compose.yaml` (rama `containers`):
+Cambios en `compose.yaml` y `.env.example` (revisados sobre `containers`, commit `89c0d8e`):
 
-1. Quitar `profiles: ["pendiente"]` para que arranque con el resto.
-2. `depends_on: api-gateway-component: condition: service_healthy`.
-3. En el gateway web, `WS_ALLOWED_ORIGINS` debe ser el origen del navegador: `http://localhost` si
-   `FRONTEND_PORT=80`, o `http://localhost:<FRONTEND_PORT>` si no. El proxy no cambia `Origin`.
-4. `COOKIE_SECURE=false` en local; `true` solo detrás de HTTPS.
+1. **Primero, un healthcheck en `api-gateway-component`.** Hoy no tiene. Con
+   `condition: service_healthy` sin healthcheck, el frontend nunca arrancaría. El gateway ya
+   responde `GET /health` y su imagen (`python:3.10-slim`) tiene Python:
+
+   ```yaml
+   api-gateway-component:
+     healthcheck:
+       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3)"]
+       interval: 10s
+       timeout: 5s
+       retries: 5
+       start_period: 10s
+   ```
+
+2. **Después**, en `frontend`:
+   - quitar `profiles: ["pendiente"]` para que arranque con el resto;
+   - añadir `depends_on: { api-gateway-component: { condition: service_healthy } }`;
+   - cambiar `${FRONTEND_PORT}` por `${FRONTEND_PORT:?}`, como el gateway móvil: vacío hace fallar
+     Compose.
+3. **`.env.example`**: declarar las variables que Compose ya exige con `:?` y hoy faltan:
+   `WS_ALLOWED_ORIGINS`, `COOKIE_SECURE`, `HTTP_TIMEOUT` y `LOG_LEVEL`. Valores locales:
+   - `FRONTEND_PORT=80`;
+   - `WS_ALLOWED_ORIGINS=http://localhost` (con otro puerto: `http://localhost:<FRONTEND_PORT>`;
+     el proxy no cambia `Origin`);
+   - `COOKIE_SECURE=false` (`true` solo detrás de HTTPS);
+   - `HTTP_TIMEOUT=15` y `LOG_LEVEL=INFO`.
+4. **Restos que el contrato manda retirar en el gateway** (no bloquean al frontend):
+   - `CORS_ORIGINS`;
+   - el puerto publicado `127.0.0.1:8080`, que va a `compose.override.yaml`;
+   - las rutas públicas `/engine/*`: hoy Vike las reenvía como `/api/engine/*`.
+
+Comprobación sugerida sin Compose: `docker build -t frontend:dev Frontend` y
+`docker run --rm -e API_GATEWAY_URL=http://host.docker.internal:8080 -p 8000:80 frontend:dev`;
+`http://localhost:8000/health` debe responder `{"status":"ok"}`.
 
 ## 5. Pruebas ejecutadas (3 de noviembre, Windows, Node 20.19.5)
 
@@ -158,6 +217,7 @@ Cambios en el bloque `frontend` de `compose.yaml` (rama `containers`):
 | La misma suite sobre una copia con solo `npm ci --omit=dev`, sin código fuente | 15/15 |
 | `npm run dev`: `/`, 302 de `/estadisticas`, aviso con gateway caído, 404 de `/api/internal`, `/dev/partida` | Correcto |
 | Chrome real → Vike → **gateway real de `containers`** → Auth, Profile/Stats y Single Player simulados | 14/14 |
+| Repetido en `frontend-B-vike` (`npm ci` limpio, build, lint, `npm test` y Chrome con el `main.py` de la rama) | 15/15 y 14/14 |
 
 El recorrido en Chrome comprobó: 302 sin sesión; login por `Login.tsx` y vuelta a `/estadisticas`;
 estadísticas en pantalla; cookie HttpOnly y SameSite=Lax invisible para `document.cookie`;
