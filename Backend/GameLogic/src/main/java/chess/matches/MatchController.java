@@ -31,12 +31,14 @@ import chess.constants.Visibility;
 import chess.exceptions.CannotJoinMatchException;
 import chess.exceptions.CannotOfferDrawException;
 import chess.exceptions.CannotReplyToDrawException;
+import chess.exceptions.CreationKeyException;
 import chess.exceptions.MatchNotFinishedException;
 import chess.exceptions.MatchNotFoundException;
 import chess.exceptions.MatchNotInProgressException;
 import chess.exceptions.MovementNotValidException;
 import chess.exceptions.ParticipantsInvalidException;
 import chess.exceptions.RequestNotValidException;
+import chess.exceptions.VersionConflictException;
 import chess.matches.ChessRules.Applied;
 import chess.movements.Movement;
 import chess.movements.MovementCreationEssentials;
@@ -61,12 +63,16 @@ public class MatchController{
         Match saved = null;
         boolean matchAlreadyExists = false;
 
-        if(request.matchId() != null){
-            Optional<Match> alreadyExistingMatch = repository.findByMatchId(request.matchId());
-                
+        if(request.creationKey() != null){
+            Optional<Match> alreadyExistingMatch = repository.findByCreationKey(request.creationKey());
+
             if(alreadyExistingMatch.isPresent()){
-                saved = alreadyExistingMatch.get();
-                matchAlreadyExists = true;
+                if(alreadyExistingMatch.get().getRequestFingerPrint().equals(request.requestFingerPrint())){
+                    saved = alreadyExistingMatch.get();
+                    matchAlreadyExists = true;
+                }else{
+                    throw CreationKeyException.keyReused();
+                }
             }
         }
         
@@ -170,6 +176,8 @@ public class MatchController{
             clock.setDeadline(turnStart.plusMillis(clock.getWhite()).toString());
         }
 
+        foundMatch.updateVersion();
+
         repository.save(foundMatch);
 
         return ResponseEntity.ok(assembler.toState(foundMatch));
@@ -186,6 +194,9 @@ public class MatchController{
         }
         if(!match.canBeOperatedOn()){
             throw MatchNotInProgressException.matchNotInProgress();
+        }
+        if(match.getVersion() != movement.expectedVersion()){
+            throw VersionConflictException.versionConflict();
         }
 
         //La posición se reconstruye desde initialFen y las jugadas guardadas (así se detecta la repetición triple)
@@ -213,6 +224,8 @@ public class MatchController{
             match.setDrawOffer(null);
         }
 
+        match.updateVersion();
+
         return assembler.toState(repository.save(match));
     }
 
@@ -228,7 +241,7 @@ public class MatchController{
             throw MatchNotInProgressException.matchNotInProgress();
         }
 
-        match.finish(Color.WHITE.toString().equals(body.side()) ? Color.BLACK.toString() : Color.WHITE.toString(), EndReason.SURRENDER.toString());
+        match.finishAndUpdateVersion(Color.WHITE.toString().equals(body.side()) ? Color.BLACK.toString() : Color.WHITE.toString(), EndReason.SURRENDER.toString());
 
         return assembler.toState(repository.save(match));
     }
@@ -245,7 +258,7 @@ public class MatchController{
             throw MatchNotInProgressException.matchNotInProgress();
         }
 
-        match.finish(Color.WHITE.toString().equals(requestBody.side()) ? Color.BLACK.toString() : Color.WHITE.toString(), EndReason.ABANDONMENT.toString());
+        match.finishAndUpdateVersion(Color.WHITE.toString().equals(requestBody.side()) ? Color.BLACK.toString() : Color.WHITE.toString(), EndReason.ABANDONMENT.toString());
 
         return ResponseEntity.ok(assembler.toState(repository.save(match)));
     }
@@ -267,6 +280,8 @@ public class MatchController{
         }
 
         match.setDrawOffer(Color.WHITE.toString().equals(requestBody.side()) ? Color.BLACK.toString() : Color.WHITE.toString());
+
+        match.updateVersion();
 
         return ResponseEntity.ok(assembler.toState(repository.save(match)));
     }
@@ -291,7 +306,7 @@ public class MatchController{
             throw CannotReplyToDrawException.notAllowed();
         }
 
-        match.finish(Result.DRAW.toString(), EndReason.DRAW.toString());
+        match.finishAndUpdateVersion(Result.DRAW.toString(), EndReason.DRAW.toString());
 
         return ResponseEntity.ok(assembler.toState(repository.save(match)));
     }
@@ -318,6 +333,8 @@ public class MatchController{
 
         match.setDrawOffer(null);
 
+        match.updateVersion();
+
         return ResponseEntity.ok(assembler.toState(repository.save(match)));
     }
 
@@ -343,6 +360,8 @@ public class MatchController{
 
         match.setDrawOffer(null);
 
+        match.updateVersion();
+
         return ResponseEntity.ok(assembler.toState(repository.save(match)));
     }
 
@@ -361,7 +380,13 @@ public class MatchController{
     ResponseEntity<GameState> updateVisibility(@PathVariable("id") String id, @RequestBody UpdateVisibilityRequest requestBody){
         Match foundMatch = findMatch(id);
 
+        if(foundMatch.getVersion() != requestBody.expectedVersion()){
+            throw VersionConflictException.versionConflict();
+        }
+
         foundMatch.setVisibility(requestBody.visibility());
+
+        foundMatch.updateVersion();
 
         repository.save(foundMatch);
 
@@ -377,9 +402,9 @@ public class MatchController{
             for(Participant participant : participants){
                 if(participant.userId().equals(userId)){
                     if(match.getStatus().equals(Status.IN_PROGRESS.toString()) && match.getMode().equals(Mode.MULTIPLAYER.toString())){
-                        match.finish(Color.WHITE.toString().equals(participant.color()) ? Color.BLACK.toString() : Color.WHITE.toString(), EndReason.ABANDONMENT.toString());
+                        match.finishAndUpdateVersion(Color.WHITE.toString().equals(participant.color()) ? Color.BLACK.toString() : Color.WHITE.toString(), EndReason.ABANDONMENT.toString());
 
-                        match.anonymizeUser(userId);
+                        match.anonymize(userId);
 
                         repository.save(match);
 
@@ -387,7 +412,7 @@ public class MatchController{
                             "game.events", 
                             "game.finished", 
                             new MatchFinishedMessage(
-                                UUID.randomUUID().toString(), 
+                                UUID.randomUUID().toString(),
                                 "game.finished", 
                                 Instant.now().toString(), 
                                 match.getGameId(), 
@@ -404,14 +429,14 @@ public class MatchController{
                             match.finish(null, EndReason.ACCOUNT_DELETED.toString());
                         }
                         
-                        match.anonymizeUser(userId);
+                        match.anonymize(userId);
+
+                        match.updateVersion();
 
                         repository.save(match);
                     }
                 }
             }
-
-            
         }
 
         return ResponseEntity.noContent().build();
@@ -496,7 +521,7 @@ public class MatchController{
             throw RequestNotValidException.notValid("userId debe ser un UUID");
         }
         
-        return new Match(mode, request.timeControl(), request.visibility(), botLevel, request.matchId(), participants);
+        return new Match(mode, request.timeControl(), request.visibility(), botLevel, request.matchId(), request.creationKey(), request.requestFingerPrint(), participants);
     }
 
     private static boolean isColor(String value){

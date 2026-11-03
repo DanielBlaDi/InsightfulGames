@@ -85,8 +85,13 @@ public class ChessApplicationHTTPTests{
 		return match;
 	}
 
-	private ResultActions postMove(String matchId, String uci) throws Exception{
-		return this.mockMvc.perform(post("/internal/logic/games/" + matchId + "/moves").contentType(MediaType.APPLICATION_JSON).content("{\"uci\": \"" + uci + "\"}"));
+	private ResultActions postMove(String matchId, String uci, int expectedVersion) throws Exception{
+		return this.mockMvc.perform(post("/internal/logic/games/" + matchId + "/moves").contentType(MediaType.APPLICATION_JSON).content("{\"uci\": \"" + uci + "\", \"expectedVersion\": " + expectedVersion + "}"));
+	}
+
+	/**	Returns a Match with the specified values and default settings on the rest of them*/
+	private Match createTestMatch(String mode, Integer botLevel, List<Participant> participants){
+		return new Match(mode, new TimeControl(10), Visibility.SHARED.toString(), botLevel, null, null, null, participants);
 	}
 
 	/**Test for the function newMatch(@RequestBody CreateMatchRequest request)*/
@@ -96,7 +101,7 @@ public class ChessApplicationHTTPTests{
 		List<Participant> testParticipants = new ArrayList<>(1);
 		testParticipants.add(new Participant(TEST_USER_ID, Color.WHITE.toString()));
 
-		CreateMatchRequest request = new CreateMatchRequest(Mode.VS_BOT.toString(), null, Visibility.SHARED.toString(), 8, null, testParticipants);
+		CreateMatchRequest request = new CreateMatchRequest(Mode.VS_BOT.toString(), null, Visibility.SHARED.toString(), 8, null, testParticipants, null, null);
 
 		ObjectMapper objectMapper = new ObjectMapper();
 
@@ -146,7 +151,7 @@ public class ChessApplicationHTTPTests{
 		testParticipants.add(new Participant(TEST_USER_ID, Color.WHITE.toString()));
 		testParticipants.add(new Participant(TEST_USER_ID, Color.BLACK.toString()));
 
-		CreateMatchRequest request = new CreateMatchRequest(Mode.LOCAL.toString(), null, Visibility.SHARED.toString(), null, null, testParticipants);
+		CreateMatchRequest request = new CreateMatchRequest(Mode.LOCAL.toString(), null, Visibility.SHARED.toString(), null, null, testParticipants, null, null);
 
 		ObjectMapper objectMapper = new ObjectMapper();
 
@@ -164,7 +169,7 @@ public class ChessApplicationHTTPTests{
 		testParticipants.add(new Participant(TEST_USER_ID, Color.WHITE.toString()));
 		testParticipants.add(new Participant(TEST_USER_ID, Color.BLACK.toString()));
 
-		Match testMatch = givenStoredMatch(new Match(Mode.LOCAL.toString(), new TimeControl(10), Visibility.SHARED.toString(), null, null, testParticipants));
+		Match testMatch = givenStoredMatch(createTestMatch(Mode.LOCAL.toString(), null, testParticipants));
 
 		this.mockMvc.perform(get("/internal/logic/games/" + testMatch.getGameId())).andExpect(status().isOk())
 			.andExpect(jsonPath("$.gameId").value(testMatch.getGameId()))
@@ -226,8 +231,8 @@ public class ChessApplicationHTTPTests{
 		botTestParticipants.add(new Participant(TEST_USER_ID, Color.BLACK.toString()));
 
 		List<Match> mockMatches = List.of(
-			new Match(Mode.LOCAL.toString(), new TimeControl(10), Visibility.SHARED.toString(), null, null, testParticipants),
-			new Match(Mode.VS_BOT.toString(), new TimeControl(10), Visibility.SHARED.toString(), 8, null, botTestParticipants)
+			createTestMatch(Mode.LOCAL.toString(), null, testParticipants),
+			createTestMatch(Mode.VS_BOT.toString(), 8, botTestParticipants)
 		);
 
 		when(repository.findByParticipantsUserIdOrderByCreatedAtDesc(TEST_USER_ID)).thenReturn(mockMatches);
@@ -252,9 +257,9 @@ public class ChessApplicationHTTPTests{
 		botTestParticipants.add(new Participant(TEST_USER_ID, Color.BLACK.toString()));
 
 		List<Match> mockMatches = List.of(
-			new Match(Mode.LOCAL.toString(), new TimeControl(10), Visibility.SHARED.toString(), null, null, testParticipants),
-			new Match(Mode.LOCAL.toString(), new TimeControl(10), Visibility.SHARED.toString(), null, null, testParticipants),
-			new Match(Mode.VS_BOT.toString(), new TimeControl(10), Visibility.SHARED.toString(), 8, null, botTestParticipants)
+			createTestMatch(Mode.LOCAL.toString(), null, testParticipants),
+			createTestMatch(Mode.LOCAL.toString(), null, testParticipants),
+			createTestMatch(Mode.VS_BOT.toString(), 8, botTestParticipants)
 		);
 
 		String encodedNextCursor = Base64.getUrlEncoder().withoutPadding().encodeToString(String.valueOf(2).getBytes(StandardCharsets.UTF_8));
@@ -289,9 +294,9 @@ public class ChessApplicationHTTPTests{
 		botTestParticipants.add(new Participant(TEST_USER_ID, Color.BLACK.toString()));
 
 		List<Match> mockMatches = List.of(
-			new Match(Mode.LOCAL.toString(), new TimeControl(10), Visibility.SHARED.toString(), null, null, testParticipants),
-			new Match(Mode.LOCAL.toString(), new TimeControl(10), Visibility.SHARED.toString(), null, null, testParticipants),
-			new Match(Mode.VS_BOT.toString(), new TimeControl(10), Visibility.SHARED.toString(), 8, null, botTestParticipants)
+			createTestMatch(Mode.LOCAL.toString(), null, testParticipants),
+			createTestMatch(Mode.LOCAL.toString(), null, testParticipants),
+			createTestMatch(Mode.VS_BOT.toString(), 8, botTestParticipants)
 		);
 
 		String encodedPreviousCursor = Base64.getUrlEncoder().withoutPadding().encodeToString(String.valueOf(2).getBytes(StandardCharsets.UTF_8));
@@ -336,9 +341,9 @@ public class ChessApplicationHTTPTests{
 		testParticipants.add(new Participant(TEST_USER_ID, Color.WHITE.toString()));
 		testParticipants.add(new Participant(TEST_USER_ID, Color.BLACK.toString()));
 
-		Match testMatch = givenStoredMatch(new Match(Mode.LOCAL.toString(), new TimeControl(10), Visibility.SHARED.toString(), null, null, testParticipants));
+		Match testMatch = givenStoredMatch(createTestMatch(Mode.LOCAL.toString(), null, testParticipants));
 
-		postMove(testMatch.getGameId(), "e2e4")
+		postMove(testMatch.getGameId(), "e2e4", 0)
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.fen").value(FEN_AFTER_E4))
 			.andExpect(jsonPath("$.turn").value(Color.BLACK.toString()))
@@ -384,9 +389,9 @@ public class ChessApplicationHTTPTests{
 		testParticipants.add(new Participant(TEST_USER_ID, Color.WHITE.toString()));
 		testParticipants.add(new Participant(TEST_USER_ID, Color.BLACK.toString()));
 
-		Match testMatch = givenStoredMatch(new Match(Mode.LOCAL.toString(), new TimeControl(10), Visibility.SHARED.toString(), null, null, testParticipants));
+		Match testMatch = givenStoredMatch(createTestMatch(Mode.LOCAL.toString(), null, testParticipants));
 
-		postMove(testMatch.getGameId(), "e2e5")
+		postMove(testMatch.getGameId(), "e2e5", 0)
 			.andExpect(status().isUnprocessableContent())
 			.andExpect(jsonPath("$.error.code").value("INVALID_MOVE"))
 			.andDo(
@@ -406,10 +411,10 @@ public class ChessApplicationHTTPTests{
 		testParticipants.add(new Participant(TEST_USER_ID, Color.WHITE.toString()));
 		testParticipants.add(new Participant(TEST_USER_ID, Color.BLACK.toString()));
 
-		Match testMatch = givenStoredMatch(new Match(Mode.LOCAL.toString(), new TimeControl(10), Visibility.SHARED.toString(), null, null, testParticipants));
+		Match testMatch = givenStoredMatch(createTestMatch(Mode.LOCAL.toString(), null, testParticipants));
 
-		postMove(testMatch.getGameId(), "hola").andExpect(status().isUnprocessableContent()).andExpect(jsonPath("$.error.code").value("INVALID_MOVE"));
-		postMove(testMatch.getGameId(), "e7e5").andExpect(status().isUnprocessableContent()).andExpect(jsonPath("$.error.code").value("INVALID_MOVE"));
+		postMove(testMatch.getGameId(), "hola", 0).andExpect(status().isUnprocessableContent()).andExpect(jsonPath("$.error.code").value("INVALID_MOVE"));
+		postMove(testMatch.getGameId(), "e7e5", 0).andExpect(status().isUnprocessableContent()).andExpect(jsonPath("$.error.code").value("INVALID_MOVE"));
 	}
 
 	/**Test for the function addMovement(@PathVariable String id, @RequestBody MovementCreationEssentials movement) without the uci field*/
@@ -418,7 +423,7 @@ public class ChessApplicationHTTPTests{
 		testParticipants.add(new Participant(TEST_USER_ID, Color.WHITE.toString()));
 		testParticipants.add(new Participant(TEST_USER_ID, Color.BLACK.toString()));
 
-		Match testMatch = givenStoredMatch(new Match(Mode.LOCAL.toString(), new TimeControl(10), Visibility.SHARED.toString(), null, null, testParticipants));
+		Match testMatch = givenStoredMatch(createTestMatch(Mode.LOCAL.toString(), null, testParticipants));
 
 		this.mockMvc.perform(post("/internal/logic/games/" + testMatch.getGameId() + "/moves").contentType(MediaType.APPLICATION_JSON).content("{}"))
 			.andExpect(status().isBadRequest())
@@ -429,7 +434,7 @@ public class ChessApplicationHTTPTests{
 	@Test public void shouldReturnNotFoundWhenMovingOnMissingMatch() throws Exception{
 		when(repository.findByGameId("noExiste")).thenReturn(Optional.empty());
 
-		postMove("noExiste", "e2e4")
+		postMove("noExiste", "e2e4", 0)
 			.andExpect(status().isNotFound())
 			.andExpect(jsonPath("$.error.code").value("GAME_NOT_FOUND"));
 	}
@@ -440,12 +445,12 @@ public class ChessApplicationHTTPTests{
 		testParticipants.add(new Participant(TEST_USER_ID, Color.WHITE.toString()));
 		testParticipants.add(new Participant(TEST_USER_ID, Color.BLACK.toString()));
 
-		Match finishedMatch = new Match(Mode.LOCAL.toString(), new TimeControl(10), Visibility.SHARED.toString(), null, null, testParticipants);
-		finishedMatch.finish(Color.WHITE.toString(), EndReason.SURRENDER.toString());
+		Match finishedMatch = createTestMatch(Mode.LOCAL.toString(), null, testParticipants);
+		finishedMatch.finishAndUpdateVersion(Color.WHITE.toString(), EndReason.SURRENDER.toString());
 		givenStoredMatch(finishedMatch);
 
-		postMove(finishedMatch.getGameId(), "e2e4")
-			.andExpect(status().isUnprocessableContent())
+		postMove(finishedMatch.getGameId(), "e2e4", 1)
+			.andExpect(status().isConflict())
 			.andExpect(jsonPath("$.error.code").value(MatchNotInProgressException.GAME_NOT_IN_PROGRESS))
 			.andDo(
 				document(
@@ -464,13 +469,13 @@ public class ChessApplicationHTTPTests{
 		testParticipants.add(new Participant(TEST_USER_ID, Color.WHITE.toString()));
 		testParticipants.add(new Participant(TEST_USER_ID, Color.BLACK.toString()));
 		
-		Match testMatch = givenStoredMatch(new Match(Mode.LOCAL.toString(), new TimeControl(10), Visibility.SHARED.toString(), null, null, testParticipants));
+		Match testMatch = givenStoredMatch(createTestMatch(Mode.LOCAL.toString(), null, testParticipants));
 
-		postMove(testMatch.getGameId(), "f2f3").andExpect(status().isOk());
-		postMove(testMatch.getGameId(), "e7e5").andExpect(status().isOk());
-		postMove(testMatch.getGameId(), "g2g4").andExpect(status().isOk());
+		postMove(testMatch.getGameId(), "f2f3", 0).andExpect(status().isOk());
+		postMove(testMatch.getGameId(), "e7e5", 1).andExpect(status().isOk());
+		postMove(testMatch.getGameId(), "g2g4", 2).andExpect(status().isOk());
 
-		postMove(testMatch.getGameId(), "d8h4")
+		postMove(testMatch.getGameId(), "d8h4", 3)
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.status").value(Status.FINISHED.toString()))
 			.andExpect(jsonPath("$.result").value(Color.BLACK.toString()))
@@ -514,7 +519,7 @@ public class ChessApplicationHTTPTests{
 		testParticipants.add(new Participant(TEST_USER_ID, Color.WHITE.toString()));
 		testParticipants.add(new Participant(TEST_USER_ID, Color.BLACK.toString()));
 
-		Match testMatch = givenStoredMatch(new Match(Mode.LOCAL.toString(), new TimeControl(10), Visibility.SHARED.toString(), null, null, testParticipants));
+		Match testMatch = givenStoredMatch(createTestMatch(Mode.LOCAL.toString(), null, testParticipants));
 
 		this.mockMvc.perform(post("/internal/logic/games/" + testMatch.getGameId() + "/resign").contentType(MediaType.APPLICATION_JSON).content("{\"side\": \"" + Color.WHITE.toString() + "\"}"))
 			.andExpect(status().isOk())
@@ -531,12 +536,12 @@ public class ChessApplicationHTTPTests{
 		testParticipants.add(new Participant(TEST_USER_ID, Color.WHITE.toString()));
 		testParticipants.add(new Participant(TEST_USER_ID, Color.BLACK.toString()));
 		
-		Match finishedMatch = new Match(Mode.LOCAL.toString(), new TimeControl(10), Visibility.SHARED.toString(), null, null, testParticipants);
-		finishedMatch.finish(Color.WHITE.toString(), EndReason.SURRENDER.toString());
+		Match finishedMatch = createTestMatch(Mode.LOCAL.toString(), null, testParticipants);
+		finishedMatch.finishAndUpdateVersion(Color.WHITE.toString(), EndReason.SURRENDER.toString());
 		givenStoredMatch(finishedMatch);
 
 		this.mockMvc.perform(post("/internal/logic/games/" + finishedMatch.getGameId() + "/resign").contentType(MediaType.APPLICATION_JSON).content("{\"side\": \"" + Color.BLACK.toString() + "\"}"))
-			.andExpect(status().isUnprocessableContent())
+			.andExpect(status().isConflict())
 			.andExpect(jsonPath("$.error.code").value(MatchNotInProgressException.GAME_NOT_IN_PROGRESS));
 	}
 
@@ -546,7 +551,7 @@ public class ChessApplicationHTTPTests{
 		testParticipants.add(new Participant(TEST_USER_ID, Color.WHITE.toString()));
 		testParticipants.add(new Participant(TEST_USER_ID, Color.BLACK.toString()));
 
-		Match testMatch = givenStoredMatch(new Match(Mode.LOCAL.toString(), new TimeControl(10), Visibility.SHARED.toString(), null, null, testParticipants));
+		Match testMatch = givenStoredMatch(createTestMatch(Mode.LOCAL.toString(), null, testParticipants));
 
 		this.mockMvc.perform(post("/internal/logic/games/" + testMatch.getGameId() + "/resign").contentType(MediaType.APPLICATION_JSON).content("{\"side\": \"green\"}"))
 			.andExpect(status().isBadRequest())

@@ -36,6 +36,12 @@ public class ExceptionWithNamedCodeAdvice{
 		return error(exception.getCode(), exception.getMessage());
 	}
 
+	@ExceptionHandler(MatchNotInProgressException.class)
+	@ResponseStatus(HttpStatus.CONFLICT)
+	Map<String, Object> matchNotInProgressHandler(MatchNotInProgressException exception){
+		return error(exception.getCode(), exception.getMessage());
+	}
+
 	@ExceptionHandler(CannotReplyToDrawException.class)
 	@ResponseStatus(HttpStatus.UNPROCESSABLE_CONTENT)
 	Map<String, Object> drawExceptionHandler(CannotReplyToDrawException exception){
@@ -43,7 +49,7 @@ public class ExceptionWithNamedCodeAdvice{
 	}
 
 	@ExceptionHandler(CannotOfferDrawException.class)
-	@ResponseStatus(HttpStatus.UNPROCESSABLE_CONTENT)
+	@ResponseStatus(HttpStatus.CONFLICT)
 	Map<String, Object> drawExceptionHandler(CannotOfferDrawException exception){
 		return error(exception.getCode(), exception.getMessage());
 	}
@@ -63,12 +69,18 @@ public class ExceptionWithNamedCodeAdvice{
 	@ExceptionHandler(CannotJoinMatchException.class)
 	@ResponseStatus(HttpStatus.CONFLICT)
 	Map<String, Object> cannotJoinMatchHandler(CannotJoinMatchException exception){
-		return Map.of("error", Map.of("code", exception.getCode(), "message", exception.getMessage()));
+		return error(exception.getCode(), exception.getMessage());
 	}
 
-	@ExceptionHandler(MatchNotInProgressException.class)
-	@ResponseStatus(HttpStatus.UNPROCESSABLE_CONTENT)
-	Map<String, Object> matchNotInProgressHandler(MatchNotInProgressException exception){
+	@ExceptionHandler(VersionConflictException.class)
+	@ResponseStatus(HttpStatus.CONFLICT)
+	Map<String, Object> versionConflictHandler(VersionConflictException exception){
+		return error(exception.getCode(), exception.getMessage());
+	}
+
+	@ExceptionHandler(CreationKeyException.class)
+	@ResponseStatus(HttpStatus.CONFLICT)
+	Map<String, Object> creationKeyHandler(CreationKeyException exception){
 		return error(exception.getCode(), exception.getMessage());
 	}
 

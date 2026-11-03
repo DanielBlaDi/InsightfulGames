@@ -9,6 +9,8 @@ import java.util.Objects;
 import java.util.UUID;
 
 import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
+import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.Field;
 
@@ -23,6 +25,9 @@ import chess.movements.Movement;
  * (ver MatchAssembler).
  */
 @Document(collection = "games")
+@CompoundIndex(def = "{'participants.userId': 1, 'createdAt': -1}")
+@CompoundIndex(def = "{'status': 1, 'clocks.deadline': 1}")
+@CompoundIndex(def = "{'status': 1, 'createdAt': 1}")
 public class Match{
     public static final String ANONYMOUS_USER_ID = "00000000-0000-0000-0000-000000000000";
 
@@ -45,7 +50,19 @@ public class Match{
     /**
      * La id que utiliza Multiplayer para cada partida
      */
+    @Indexed(partialFilter = "{'matchId' : {'$ne' : null}}")
     private String matchId;
+
+    /**
+     * Únicamente presente en partidas multijugador, un sha256 hex creado por Multiplayer para evitar crear partidas duplicadas
+     */
+    @Indexed(partialFilter = "{'creationKey' : {'$ne' : null}}")
+    private String creationKey;
+
+    /**
+     * Únicamente presente en partidas multijugador, un sha256 hex creado por Multiplayer para evitar crear partidas duplicadas
+     */
+    private String requestFingerprint;
 
     /**
      * Los jugadores que hacen parte de esta partida
@@ -101,7 +118,7 @@ public class Match{
     /**
      * Versión de la partida, para mantener consistencia con operaciones que modifiquen a la partida
      */
-    private int expectedVersion;
+    private int version;
 
     /**
      * "white" o "black" o "draw" o null (si la partida no ha terminado)
@@ -129,13 +146,15 @@ public class Match{
     }
 
     /** Crea una partida nueva en la posición inicial. Game Logic genera gameId y createdAt. */
-    public Match(String mode, TimeControl timeControl, String visibility, Integer botLevel, String matchId, List<Participant> participants){
+    public Match(String mode, TimeControl timeControl, String visibility, Integer botLevel, String matchId, String creationKey, String requestFingerprint, List<Participant> participants){
         this();
         this.gameId = UUID.randomUUID().toString();
 
         this.mode = mode;
         this.visibility = visibility;
         this.matchId = matchId;
+        this.creationKey = creationKey;
+        this.requestFingerprint = requestFingerprint;
         this.participants = participants;
         this.botLevel = botLevel;
         this.timeControl = timeControl;
@@ -157,7 +176,7 @@ public class Match{
         this.fen = ChessRules.START_FEN;
         this.initialFen = ChessRules.START_FEN;
         this.drawOffer = null;
-        this.expectedVersion = 0;
+        this.version = 0;
         this.createdAt = now();
     }
 
@@ -177,13 +196,20 @@ public class Match{
         this.participants.add(participant);
     }
 
-    /** Changes the user's id to ANONYMOUS_USER_ID in this Match, works even if both participants are the same user*/
-    public void anonymizeUser(String userId){
+    /** Changes the user's id to ANONYMOUS_USER_ID in this Match, works even if both participants are the same user. Additionally removes creationKey and requestFingerprint, as they are linked to the user who created the match if it is a multiplayer one*/
+    public void anonymize(String userId){
         for(int i=0; i<participants.size(); i++){
             if(participants.get(i).userId().equals(userId)){
                 participants.set(i, new Participant(ANONYMOUS_USER_ID, participants.get(i).color()));
             }
         }
+
+        this.creationKey = null;
+        this.requestFingerprint = null;
+    }
+
+    public boolean canBeOperatedOn(){
+        return !Status.FINISHED.toString().equals(status) && !Status.WAITING.toString().equals(status);
     }
 
     /** Cierra la partida */
@@ -194,8 +220,9 @@ public class Match{
         this.finishedAt = now();
     }
 
-    public boolean canBeOperatedOn(){
-        return !Status.FINISHED.toString().equals(status) && !Status.WAITING.toString().equals(status);
+    public void finishAndUpdateVersion(String result, String endReason){
+        this.finish(result, endReason);
+        this.version++;
     }
 
     public boolean isFinished(){
@@ -209,6 +236,10 @@ public class Match{
             uciMoves.add(movement.getUci());
         }
         return uciMoves;
+    }
+
+    public void updateVersion(){
+        this.version++;
     }
 
     public String getGameId(){
@@ -225,6 +256,14 @@ public class Match{
 
     public String getMatchId(){
         return matchId;
+    }
+
+    public String getCreationKey(){
+        return creationKey;
+    }
+
+    public String getRequestFingerPrint(){
+        return requestFingerprint;
     }
 
     public List<Participant> getParticipants(){
@@ -267,8 +306,8 @@ public class Match{
         return drawOffer;
     }
 
-    public int getExpectedVersion(){
-        return expectedVersion;
+    public int getVersion(){
+        return version;
     }
 
     public String getResult(){
