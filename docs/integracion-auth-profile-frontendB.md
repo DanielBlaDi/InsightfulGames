@@ -14,7 +14,7 @@ mocks y un navegador simulado.
 | Profile/Stats (`Backend/profile-stats-component`) | Rutas internas de perfil, stats y borrado; consumo de `user.registered` y `game.finished` con idempotencia, reintentos y `.dlq` | 21 (H2 modo PostgreSQL) |
 | Auth (`Backend/auth-component`) | Rutas `/internal/auth/*`, errores con formato común, outbox de `user.registered`, borrado coordinado | 21 (H2 modo MySQL) |
 | Frontend B (`Frontend/src/game`) | REST `/api/games` y WebSocket `/api/ws/games/{id}` con cookie, `GameState` v9, `expectedVersion` | build, lint y 22 comprobaciones en DOM simulado |
-| Estadísticas (`Frontend/src/stats`) | Vista y cargador de servidor para `/estadisticas`; **sin SSR hasta que exista Vike** | 9 comprobaciones en Node |
+| Estadísticas (`Frontend/src/stats`, `Frontend/pages/estadisticas`) | Renderizado en servidor con Vike (actualizado el 3 de noviembre, ver `frontend-vike.md`) | `npm test` y recorrido en Chrome con el gateway real |
 
 ## 2. Infra (`compose.yaml`, `.env.example`)
 
@@ -60,19 +60,19 @@ mocks y un navegador simulado.
 
 ## 4. Frontend A (Vike, cookies y `/estadisticas`)
 
-1. **Servidor Vike** en el puerto 80 (sección 6): estáticos, proxy `/api/*` → gateway quitando
-   `/api` y reenviando `Set-Cookie`; proxy WebSocket `/api/ws/*` con `Upgrade`, `Connection` y
-   `Origin`; 404 a `/api/internal/*` antes de cualquier proxy.
-2. **`/estadisticas` con SSR**: `+data.ts` llama a `loadStatsPage({ gatewayUrl: API_GATEWAY_URL,
-   cookie })` de `src/stats/loadStatsPage.ts`; si devuelve `unauthenticated`, 302 a
-   `/login?next=/estadisticas`; `+Page.tsx` pinta `<StatsView data={...} />`. Ejemplo en
-   `Frontend/src/stats/README.md`.
-3. **Quitar `localStorage`** de `App.tsx` y `Login.tsx` (y `src/authSession.ts`): la sesión vive
-   solo en la cookie. Para saber si hay sesión al cargar, una petición a `/api/profile/me`
-   (200 = con sesión, 401 = sin sesión). Cerrar sesión = `POST /api/auth/logout`.
-4. **Montar el ajedrez sin token**: `<PlayChess onUnauthorized={irAlLogin} onExit={irAlInicio} />`.
+**Actualizado el 3 de noviembre:** el servidor Express con Vike, los proxies, el 404 de
+`/api/internal/*`, `ws: true` en desarrollo y el renderizado en servidor de `/estadisticas` ya
+están hechos en `frontend-B`. Guía completa en [frontend-vike.md](frontend-vike.md). Queda para
+Frontend A:
+
+1. **Quitar `localStorage`** de `App.tsx` (y `src/authSession.ts`): la sesión vive solo en la
+   cookie. Para saber si hay sesión al cargar, `GET /api/stats/me` (200 = con sesión, 401 = sin
+   sesión), según el contrato definitivo, 5.4.4; no `/api/profile/me`. Cerrar sesión =
+   `POST /api/auth/logout`.
+2. **Montar el ajedrez sin token**: `<PlayChess onUnauthorized={irAlLogin} onExit={irAlInicio} />`.
    La prop `token` sigue aceptándose e ignorándose para no romper el `App.tsx` actual.
-5. **Desarrollo con `npm run dev`**: el proxy de `vite.config.ts` necesita `ws: true` para `/api/ws`.
+3. **Páginas propias** en `Frontend/pages/` (`/login`, `/registro`, `/jugar`, `/historial`,
+   `/perfil`, `/partida/{id}`, `/unirse/{matchId}`). La `/login` actual es provisional.
 
 ## 5. Otros componentes de los que dependemos
 
