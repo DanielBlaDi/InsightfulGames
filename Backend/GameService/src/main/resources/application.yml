@@ -1,10 +1,17 @@
+# Contrato, sección 12.5
 server:
-  port: 8083
-
-# Contrato, sección 7
-gamelogic:
-  url: ${GAME_LOGIC_URL:http://localhost:8082}
+  port: ${SERVER_PORT:8083}
 
 gateway:
-  # Botcito se llama a través del Gateway: POST {GATEWAY_INTERNAL_URL}/engine/best-move
+  # Game Logic (/internal/logic/*) y Botcito-juego (/internal/engine/*) se llaman por el gateway interno.
   internal-url: ${GATEWAY_INTERNAL_URL:http://localhost:8080}
+
+spring:
+  rabbitmq:
+    # amqp://usuario:clave@rabbitmq:5672
+    addresses: ${RABBITMQ_URL:amqp://guest:guest@localhost:5672}
+    listener:
+      simple:
+        # Los fallos se reenvían a retry.events desde el código (19.4). Solo si ese reenvío
+        # falla (broker caído) el mensaje se rechaza y RabbitMQ lo vuelve a entregar.
+        default-requeue-rejected: true

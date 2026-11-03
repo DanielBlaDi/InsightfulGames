@@ -40,6 +40,12 @@ public class GameChannels {
         }
     }
 
+    /** true si hay al menos una sesión abierta en la partida. */
+    public boolean hasOpenSessions(String gameId) {
+        Set<WebSocketSession> set = sessions.get(gameId);
+        return set != null && set.stream().anyMatch(WebSocketSession::isOpen);
+    }
+
     public void broadcast(String gameId, WsMessage message) {
         Set<WebSocketSession> set = sessions.get(gameId);
         if (set == null) {
