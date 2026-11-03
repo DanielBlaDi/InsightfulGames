@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "start": "node server/index.js",
-    "test": "node --test server/server.test.js test/session.test.mjs",
+    "test": "node --test server/server.test.js test/session.test.mjs test/multiplayer.test.mjs",
     "lint": "oxlint",
     "preview": "vite preview"
   },
