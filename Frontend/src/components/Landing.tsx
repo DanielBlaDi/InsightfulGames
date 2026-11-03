@@ -1,14 +1,19 @@
 import { useState, useEffect } from 'react';
+import type { SessionState } from '../auth/session';
+import AccountMenu from './AccountMenu';
 
 interface LandingProps {
   onLogin: () => void;
   onLogout?: () => void;
   /** Abre el módulo de ajedrez (Frontend B). App decide si antes hace falta iniciar sesión. */
   onPlayChess?: () => void;
-  user?: { userId: string; username: string } | null;
+  /** Sesión según el gateway (cookie). Sin ella se muestran los botones de acceso. */
+  session?: SessionState;
+  /** Repite la comprobación de sesión cuando el gateway no respondió. */
+  onRetrySession?: () => void;
 }
 
-export default function Landing({ onLogin, onLogout, onPlayChess, user }: LandingProps) {
+export default function Landing({ onLogin, onLogout, onPlayChess, session, onRetrySession }: LandingProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeBoard, setActiveBoard] = useState<'chess' | 'go' | 'shogi'>('chess');
   const [boardRotated, setBoardRotated] = useState(false);
@@ -91,18 +96,25 @@ export default function Landing({ onLogin, onLogout, onPlayChess, user }: Landin
             </a>
           </nav>
           <div className="flex items-center gap-space-sm md:gap-space-md">
-            {user ? (
-              <>
-                <span className="font-label-lg text-label-lg text-on-surface">Hola, {user.username}</span>
-                <button
-                  onClick={onLogout}
-                  className="px-space-md py-space-xs rounded-lg bg-surface-container-high text-on-surface font-label-lg text-label-lg shadow-sm hover:bg-error-container transition-colors cursor-pointer"
-                >
-                  Salir
-                </button>
-              </>
+            {session?.status === 'authenticated' ? (
+              <AccountMenu username={session.username} onLogout={() => onLogout?.()} />
+            ) : session?.status === 'checking' ? (
+              <span role="status" className="font-label-lg text-label-lg text-on-surface-variant">
+                Comprobando sesión…
+              </span>
             ) : (
               <>
+                {session?.status === 'unavailable' && (
+                  <button
+                    type="button"
+                    onClick={onRetrySession}
+                    title="No se pudo comprobar la sesión: el servicio no respondió"
+                    className="inline-flex items-center gap-space-xs px-space-sm py-space-xs rounded-lg font-label-lg text-label-lg text-error hover:bg-error-container transition-colors cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-[18px]" aria-hidden="true">sync_problem</span>
+                    Reintentar
+                  </button>
+                )}
                 <button
                   onClick={onLogin}
                   className="hidden sm:inline-flex px-space-md py-space-xs rounded-lg font-label-lg text-label-lg text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
@@ -115,11 +127,16 @@ export default function Landing({ onLogin, onLogout, onPlayChess, user }: Landin
                 >
                   Regístrate
                 </button>
+                <button
+                  type="button"
+                  onClick={onLogin}
+                  aria-label="Iniciar sesión"
+                  className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[18px]" aria-hidden="true">person</span>
+                </button>
               </>
             )}
-            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary">
-              <span className="material-symbols-outlined text-[18px]">person</span>
-            </div>
           </div>
         </div>
       </header>
