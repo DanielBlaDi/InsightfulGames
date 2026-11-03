@@ -21,6 +21,7 @@ class FakeGameLogic:
     def __init__(self) -> None:
         self.games: dict[str, dict] = {}
         self.down = False
+        self.failing_ids: set[str] = set()
 
     def add(self, game: dict) -> None:
         self.games[game["gameId"]] = game
@@ -29,7 +30,7 @@ class FakeGameLogic:
         self.games.pop(game_id, None)
 
     async def get_game(self, game_id: str) -> dict:
-        if self.down:
+        if self.down or game_id in self.failing_ids:
             raise ApiError(
                 503, "SERVICES_UNAVAILABLE", "Game Logic no está disponible."
             )
@@ -60,9 +61,10 @@ def build_settings(**overrides) -> Settings:
         mongo_analysis_url="mongodb://unused",
         mongo_analysis_database="tutor_test",
         rabbitmq_url="amqp://unused",
-        engine_version="stockfish-17",
+        engine_version="stockfish-15.1",
         analysis_depth_default=15,
         analysis_depth_max=18,
+        analysis_max_reactivations=3,
         llm_provider="mock",
         http_timeout=5.0,
         log_level="WARNING",

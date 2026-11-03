@@ -1,4 +1,4 @@
-"""Rutas internas del Tutor (prefijo ``/internal/tutor/``, contrato sección 13).
+"""Rutas internas del Tutor (prefijo ``/internal/tutor/``, contrato sección 16.4).
 
 El gateway web traduce las rutas públicas ``/tutor/*`` a estas y añade la
 cabecera ``X-User-Id`` después de validar el JWT. Las rutas internas no se
@@ -54,7 +54,7 @@ def _requesting_user(request: Request) -> str:
 async def request_analysis(
     payload: AnalysisRequest, request: Request, response: Response
 ):
-    """Crea el análisis (202) o devuelve el existente (200)."""
+    """Crea el análisis (202), lo reactiva (202) o devuelve el existente (200)."""
     view, created = await _service(request).request_analysis(
         payload, _requesting_user(request)
     )
@@ -100,6 +100,6 @@ async def get_analysis_result(analysis_id: str, request: Request):
     responses={204: {"description": "Borrado idempotente, exista o no el usuario"}},
 )
 async def delete_user(user_id: str, request: Request):
-    """Anonimiza requestedBy y borra los análisis privados del usuario."""
+    """Borra los análisis privados y anonimiza los conservados del usuario."""
     await _service(request).delete_user(user_id)
     return Response(status_code=204)

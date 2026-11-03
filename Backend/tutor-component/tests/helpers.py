@@ -46,6 +46,18 @@ SAMPLE_MOVES = [
     }
 ]
 
+# Jugada mínima del GameState; sirve para que la partida sea analizable.
+GAME_MOVES = [
+    {
+        "ply": 1,
+        "color": "white",
+        "san": "e4",
+        "uci": "e2e4",
+        "fenAfter": "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1",
+        "timestamp": "2026-11-01T15:00:05Z",
+    }
+]
+
 
 def make_game(
     game_id: str = GAME_1,
@@ -54,6 +66,8 @@ def make_game(
     visibility: str = "private",
     user_ids: tuple[str, ...] = (USER_A,),
     mode: str = "multiplayer",
+    end_reason: str = "checkmate",
+    moves: list | None = None,
     legacy_user_id: str | None = None,
 ) -> dict:
     colors = ("white", "black", "white", "black")
@@ -66,8 +80,9 @@ def make_game(
             {"userId": user_id, "color": colors[index]}
             for index, user_id in enumerate(user_ids)
         ],
+        "moves": GAME_MOVES if moves is None else moves,
         "result": "white",
-        "endReason": "checkmate",
+        "endReason": end_reason,
     }
     if legacy_user_id is not None:
         game["userId"] = legacy_user_id
@@ -123,8 +138,29 @@ async def mark_completed(
     )
 
 
-async def mark_failed(harness, analysis_id: str, message: str = "Motor no disponible") -> None:
+async def mark_failed(
+    harness,
+    analysis_id: str,
+    message: str = "Motor no disponible",
+    *,
+    failure_kind: str | None = "transient",
+    reactivations: int | None = None,
+) -> None:
+    updates: dict = {
+        "status": "failed",
+        "error": message,
+        "leaseUntil": "2026-11-01T15:10:00Z",
+        "leaseOwner": "worker-1",
+        "claimCount": 2,
+    }
+    if failure_kind is not None:
+        updates["failureKind"] = failure_kind
+    if reactivations is not None:
+        updates["reactivations"] = reactivations
+
+    update: dict = {"$set": updates}
+    if failure_kind is None:
+        update["$unset"] = {"failureKind": ""}
     await harness.repository.collection.update_one(
-        {"analysisId": analysis_id},
-        {"$set": {"status": "failed", "error": message}},
+        {"analysisId": analysis_id}, update
     )

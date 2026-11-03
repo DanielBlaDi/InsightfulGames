@@ -1,4 +1,4 @@
-"""Servicio Tutor del Prototipo 2 (contrato v9, sección 13).
+"""Servicio Tutor del Prototipo 2 (contrato, sección 16).
 
 Arranque: ``uvicorn main:app --host 0.0.0.0 --port 8085``.
 
@@ -48,7 +48,8 @@ async def _prepare_indexes(
 
     Si no se consigue, el servicio sigue funcionando: la comprobación previa al
     insert cubre los duplicados salvo en peticiones simultáneas. El índice
-    único es obligatorio para la idempotencia estricta del contrato.
+    único es obligatorio para la idempotencia estricta del contrato y /health
+    lo verifica en cada llamada.
     """
     for attempt in range(1, attempts + 1):
         try:

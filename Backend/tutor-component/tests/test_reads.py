@@ -52,6 +52,7 @@ async def test_estado_processing_y_failed(tutor):
     assert failed.status_code == 200
     assert failed.json()["status"] == "failed"
     assert failed.json()["error"] == "El motor no respondió"
+    assert failed.json()["retryable"] is True
 
 
 async def test_analisis_inexistente_es_analysis_not_found(tutor):
@@ -145,7 +146,7 @@ async def test_resultado_completed_incluye_informe_y_genera_explicacion(tutor):
     body = response.json()
     assert body["analysisId"] == analysis_id
     assert body["gameId"] == GAME_1
-    assert body["engineVersion"] == "stockfish-17"
+    assert body["engineVersion"] == "stockfish-15.1"
     assert body["depth"] == 15
     assert body["language"] == "es"
     assert body["detailLevel"] == "standard"
@@ -210,6 +211,24 @@ async def test_explicacion_en_ingles(tutor):
     assert response.status_code == 200
     assert "White" in response.json()["explanation"]
     assert "Average loss per move" in response.json()["explanation"]
+
+
+async def test_promedio_nulo_se_muestra_como_no_disponible(tutor):
+    tutor.logic.add(make_game())
+    analysis_id = await _create(tutor)
+    summary = {
+        "white": {**SAMPLE_SUMMARY["white"], "averageCpLoss": None},
+        "black": {**SAMPLE_SUMMARY["black"], "averageCpLoss": None},
+    }
+    await mark_completed(tutor, analysis_id, summary=summary)
+
+    response = await get_result(tutor, analysis_id)
+
+    assert response.status_code == 200
+    explanation = response.json()["explanation"]
+    assert "no disponible" in explanation
+    assert "0 cp" not in explanation
+    assert "más preciso" not in explanation
 
 
 async def test_explicacion_brief_y_detailed(tutor):

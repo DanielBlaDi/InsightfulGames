@@ -9,15 +9,18 @@ from motor.motor_asyncio import AsyncIOMotorCollection, AsyncIOMotorDatabase
 from pymongo.errors import DuplicateKeyError
 
 from app.config import ANONYMOUS_USER_ID
+from app.timeutils import utcnow
 
 LOGGER = logging.getLogger("tutor.repository")
 
 COLLECTION_NAME = "analyses"
 
-# Clave de análisis del contrato: (gameId, engineVersion, language, detailLevel, depth).
-# La sección 18 omite depth en el índice, pero las secciones 13 y 14 la incluyen
-# en la clave y el propio contrato pide subir ENGINE_VERSION al cambiar umbrales.
+# Clave de análisis del contrato (sección 16.4): (gameId, engineVersion,
+# language, detailLevel, depth).
 KEY_FIELDS = ("gameId", "engineVersion", "language", "detailLevel", "depth")
+UNIQUE_INDEX_NAME = "uq_analyses_key"
+REQUESTED_BY_INDEX_NAME = "ix_analyses_requested_by_created"
+PARTICIPANT_INDEX_NAME = "ix_analyses_participant_ids"
 
 
 class AnalysisRepository:
@@ -37,26 +40,51 @@ class AnalysisRepository:
         """Crea los índices del Tutor.
 
         El índice único es lo que garantiza la idempotencia ante dos POST
-        simultáneos con la misma clave (sección 14). El nombre es explícito
+        simultáneos con la misma clave (sección 16.4). El nombre es explícito
         para que un cambio de clave falle de forma visible.
         """
         await self._collection.create_index(
             [(field, 1) for field in KEY_FIELDS],
             unique=True,
-            name="uq_analyses_key",
+            name=UNIQUE_INDEX_NAME,
         )
         await self._collection.create_index(
             [("requestedBy", 1), ("createdAt", -1)],
-            name="ix_analyses_requested_by_created",
+            name=REQUESTED_BY_INDEX_NAME,
+        )
+        await self._collection.create_index(
+            [("participantIds", 1)],
+            name=PARTICIPANT_INDEX_NAME,
         )
 
     async def healthy(self) -> bool:
+        """Comprueba Mongo y que el índice único esté realmente creado.
+
+        Sin ``uq_analyses_key`` el servicio sigue aceptando escrituras, pero
+        pierde la protección de idempotencia. ``/health`` debe reflejarlo
+        (sección 16.3).
+        """
         try:
-            await self._collection.find_one({}, {"_id": 1})
-            return True
+            indexes = await self._collection.index_information()
         except Exception:  # pragma: no cover - depende de la red/Mongo
             LOGGER.exception("MongoDB de análisis no responde")
             return False
+
+        info = indexes.get(UNIQUE_INDEX_NAME)
+        if not isinstance(info, dict) or not info.get("unique"):
+            LOGGER.error("Falta el índice único %s", UNIQUE_INDEX_NAME)
+            return False
+
+        key = info.get("key")
+        fields = tuple(name for name, _direction in key) if key else ()
+        if fields != KEY_FIELDS:
+            LOGGER.error(
+                "El índice %s no cubre la clave esperada: %s",
+                UNIQUE_INDEX_NAME,
+                fields,
+            )
+            return False
+        return True
 
     async def find_by_key(
         self,
@@ -96,6 +124,86 @@ class AnalysisRepository:
             {"$set": {"explanation": explanation}},
         )
 
+    async def reactivate(
+        self, analysis_id: str, max_reactivations: int
+    ) -> bool:
+        """Reactiva atómicamente un fallo transitorio (sección 16.4.3).
+
+        La condición incluye el estado, el tipo de fallo y el número de
+        reactivaciones, de modo que dos POST simultáneos solo reactivan una vez.
+        Conserva ``analysisId`` y la clave del análisis.
+        """
+        result = await self._collection.update_one(
+            {
+                "analysisId": analysis_id,
+                "status": "failed",
+                "failureKind": "transient",
+                "reactivations": {"$lt": max_reactivations},
+            },
+            {
+                "$set": {
+                    "status": "pending",
+                    "error": None,
+                    "updatedAt": utcnow(),
+                },
+                "$unset": {
+                    "failureKind": "",
+                    "leaseUntil": "",
+                    "leaseOwner": "",
+                    "claimCount": "",
+                },
+                "$inc": {"reactivations": 1},
+            },
+        )
+        return result.modified_count == 1
+
+    async def game_ids_for_participant(self, user_id: str) -> list[str]:
+        """Partidas distintas con análisis en los que participó el usuario."""
+        game_ids = await self._collection.distinct(
+            "gameId", {"participantIds": user_id}
+        )
+        return [game_id for game_id in game_ids if isinstance(game_id, str)]
+
+    async def delete_by_game(self, game_id: str) -> int:
+        """Borra todos los análisis de una partida (sección 16.4.4)."""
+        result = await self._collection.delete_many({"gameId": game_id})
+        return int(result.deleted_count)
+
+    async def anonymize_participant(self, user_id: str) -> int:
+        """Reemplaza el userId por el anónimo en ``participantIds``.
+
+        Se hace lectura-modificación-escritura porque ``arrayFilters`` no está
+        disponible en mongomock. La operación es idempotente y deduplica el
+        array, ya que el anónimo puede coincidir con otra entrada.
+        """
+        if user_id == ANONYMOUS_USER_ID:
+            return 0
+
+        modified = 0
+        cursor = self._collection.find({"participantIds": user_id})
+        async for document in cursor:
+            participants = document.get("participantIds")
+            if not isinstance(participants, list):
+                continue
+
+            anonymized: list[Any] = []
+            for participant in participants:
+                value = (
+                    ANONYMOUS_USER_ID if participant == user_id else participant
+                )
+                if value not in anonymized:
+                    anonymized.append(value)
+
+            if anonymized == participants:
+                continue
+
+            result = await self._collection.update_one(
+                {"_id": document["_id"]},
+                {"$set": {"participantIds": anonymized}},
+            )
+            modified += int(result.modified_count)
+        return modified
+
     async def anonymize_requested_by(self, user_id: str) -> int:
         """Reemplaza requestedBy por el valor anónimo (borrado de cuenta)."""
         if user_id == ANONYMOUS_USER_ID:
@@ -105,15 +213,3 @@ class AnalysisRepository:
             {"$set": {"requestedBy": ANONYMOUS_USER_ID}},
         )
         return int(result.modified_count)
-
-    async def delete_private_for_participant(self, user_id: str) -> int:
-        """Borra análisis de partidas privadas en las que el usuario participó.
-
-        Se usa el snapshot guardado al crear el análisis, no el estado actual de
-        la partida, porque Game Logic puede haber anonimizado ya al usuario
-        (sección 13).
-        """
-        result = await self._collection.delete_many(
-            {"visibility": "private", "participantIds": user_id}
-        )
-        return int(result.deleted_count)

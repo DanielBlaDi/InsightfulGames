@@ -1,4 +1,4 @@
-"""Modelos de entrada y salida del Tutor (contrato v9, sección 13).
+"""Modelos de entrada y salida del Tutor (contrato, sección 16.4).
 
 El JSON del contrato usa camelCase. Los modelos de este módulo son DTO de
 transporte; el documento interno de MongoDB también usa camelCase para que el
@@ -43,11 +43,33 @@ class AnalysisStatus(BaseModel):
     detailLevel: str
     createdAt: str | None = None
     updatedAt: str | None = None
-    # Mensaje seguro cuando status es failed (sección 14: el usuario lo ve en el estado).
+    # Mensaje seguro cuando status es failed (sección 16.4.2: el usuario lo ve en el estado).
     error: str | None = None
+    # True solo si un POST con la misma clave puede reactivar el análisis.
+    retryable: bool = False
 
 
-def status_payload(document: dict[str, Any]) -> dict[str, Any]:
+def is_retryable(document: dict[str, Any], max_reactivations: int) -> bool:
+    """Indica si el análisis failed puede reactivarse (sección 16.4.3).
+
+    Solo los fallos transitorios lo son y solo mientras queden reactivaciones.
+    Con ``ANALYSIS_MAX_REACTIVATIONS=0`` la reactivación queda desactivada.
+    """
+    if max_reactivations <= 0:
+        return False
+    if document.get("status") != "failed":
+        return False
+    if document.get("failureKind") != "transient":
+        return False
+    reactivations = document.get("reactivations", 0)
+    if not isinstance(reactivations, int) or isinstance(reactivations, bool):
+        return False
+    return reactivations < max_reactivations
+
+
+def status_payload(
+    document: dict[str, Any], max_reactivations: int = 0
+) -> dict[str, Any]:
     """Vista pública del documento de análisis."""
     return {
         "analysisId": document.get("analysisId") or document.get("_id"),
@@ -60,6 +82,7 @@ def status_payload(document: dict[str, Any]) -> dict[str, Any]:
         "createdAt": to_iso(document.get("createdAt")),
         "updatedAt": to_iso(document.get("updatedAt") or document.get("createdAt")),
         "error": document.get("error"),
+        "retryable": is_retryable(document, max_reactivations),
     }
 
 

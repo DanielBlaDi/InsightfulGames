@@ -1,8 +1,9 @@
-"""Publicación de ``tutor.analysis.requested`` en RabbitMQ (contrato, sección 17).
+"""Publicación de ``tutor.analysis.requested`` en RabbitMQ (contrato, sección 16.7).
 
-La publicación nunca hace fallar la petición del usuario: si el broker no está,
-el análisis queda en ``pending`` y el Analysis Worker lo recoge por polling
-(sección 14). Ese es el riesgo aceptado de la sección 24.
+La publicación nunca hace fallar la petición del usuario: si el broker no está
+o el mensaje no es enrutable, el análisis queda en ``pending`` y el Analysis
+Worker lo recoge por polling (sección 17). Se publica con confirmación,
+``mandatory`` y sin reintentos.
 """
 
 from __future__ import annotations
@@ -70,7 +71,10 @@ class EventPublisher:
             connection = await aio_pika.connect_robust(
                 self._url, timeout=self._timeout
             )
-            channel = await connection.channel()
+            channel = await connection.channel(
+                publisher_confirms=True,
+                on_return_raises=True,
+            )
             exchange = await channel.declare_exchange(
                 self._exchange_name,
                 aio_pika.ExchangeType.TOPIC,
@@ -132,6 +136,7 @@ class EventPublisher:
             await exchange.publish(
                 message,
                 routing_key=self._routing_key,
+                mandatory=True,
                 timeout=self._timeout,
             )
         except Exception:

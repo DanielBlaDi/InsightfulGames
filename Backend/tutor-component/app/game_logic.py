@@ -2,8 +2,8 @@
 
 El contrato (sección 11) dice que Game Logic guarda ``visibility`` y
 ``participants`` pero no decide quién puede ver la partida: esa validación la
-hace el Tutor. Por eso aquí solo se obtiene el GameState y la regla de
-visibilidad se aplica en :func:`is_visible`.
+hace el Tutor (sección 16.4.2). Por eso aquí solo se obtiene el GameState y la
+regla de visibilidad se aplica en :func:`is_visible`.
 """
 
 from __future__ import annotations
@@ -85,28 +85,16 @@ def participant_ids(game: dict[str, Any]) -> list[str]:
 
 
 def is_visible(game: dict[str, Any], user_id: str) -> bool:
-    """Regla de visibilidad de la sección 13.
+    """Regla de visibilidad de la sección 16.4.2.
 
     - ``shared``: cualquiera que pueda ver la partida puede pedir y leer el análisis.
     - ``private``: solo los participantes.
-    - Sin ``visibility`` (Game Logic anterior a v9): se usa ``participants`` y,
-      como último recurso, el creador. Así el Tutor sigue funcionando mientras
-      el otro equipo despliega el GameState de v9.
+    - Cualquier otro valor (incluido ``None``): no visible. La decisión es
+      fail-closed y solo usa ``visibility`` y ``participants``.
     """
     visibility = game.get("visibility")
     if visibility == "shared":
         return True
-    if visibility not in (None, "private"):
+    if visibility != "private":
         return False
-
-    ids = participant_ids(game)
-    if ids:
-        return user_id in ids
-
-    creator = game.get("userId") or game.get("createdBy")
-    return isinstance(creator, str) and creator == user_id
-
-
-def visibility_snapshot(game: dict[str, Any]) -> str:
-    """Visibilidad guardada en el análisis en el momento de crearlo."""
-    return "shared" if game.get("visibility") == "shared" else "private"
+    return user_id in participant_ids(game)

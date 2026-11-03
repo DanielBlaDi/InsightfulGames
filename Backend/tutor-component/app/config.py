@@ -1,4 +1,4 @@
-"""Configuración del Tutor leída del entorno (contrato v9, secciones 13 y 21)."""
+"""Configuración del Tutor leída del entorno (contrato, sección 16.5)."""
 
 from __future__ import annotations
 
@@ -51,11 +51,14 @@ class Settings:
     mongo_analysis_url: str = "mongodb://localhost:27017"
     mongo_analysis_database: str = "insightful_analysis"
     rabbitmq_url: str = "amqp://guest:guest@rabbitmq:5672/"
-    engine_version: str = "stockfish-17"
+    engine_version: str = "stockfish-15.1"
     analysis_depth_default: int = 15
     analysis_depth_max: int = 18
+    # Reactivaciones permitidas por análisis fallido. 0 desactiva la
+    # reactivación: retryable siempre será false.
+    analysis_max_reactivations: int = 3
     llm_provider: str = "mock"
-    http_timeout: float = 10.0
+    http_timeout: float = 15.0
     log_level: str = "INFO"
     exchange: str = TUTOR_EVENTS_EXCHANGE
     routing_key: str = ANALYSIS_REQUESTED_ROUTING_KEY
@@ -73,6 +76,10 @@ class Settings:
             raise ValueError(
                 "ANALYSIS_DEPTH_DEFAULT debe estar entre 1 y ANALYSIS_DEPTH_MAX"
             )
+
+        max_reactivations = _int_env("ANALYSIS_MAX_REACTIVATIONS", 3)
+        if max_reactivations < 0:
+            raise ValueError("ANALYSIS_MAX_REACTIVATIONS debe ser mayor o igual a 0")
 
         port = _int_env("PORT", 8085)
         if not 1 <= port <= 65535:
@@ -92,10 +99,11 @@ class Settings:
             rabbitmq_url=_text_env(
                 "RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/"
             ),
-            engine_version=_text_env("ENGINE_VERSION", "stockfish-17"),
+            engine_version=_text_env("ENGINE_VERSION", "stockfish-15.1"),
             analysis_depth_default=depth_default,
             analysis_depth_max=depth_max,
+            analysis_max_reactivations=max_reactivations,
             llm_provider=_text_env("LLM_PROVIDER", "mock"),
-            http_timeout=_float_env("HTTP_TIMEOUT", 10.0),
+            http_timeout=_float_env("HTTP_TIMEOUT", 15.0),
             log_level=_text_env("LOG_LEVEL", "INFO").upper(),
         )

@@ -1,4 +1,4 @@
-"""Salud del servicio y compatibilidad con Game Logic anterior a v9."""
+"""Salud del servicio, índices y visibilidad fail-closed."""
 
 from __future__ import annotations
 
@@ -12,6 +12,22 @@ async def test_health_ok(tutor):
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+async def test_health_falla_si_falta_el_indice_unico(tutor):
+    await tutor.repository.collection.drop_index("uq_analyses_key")
+
+    response = await tutor.http.get("/health")
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "SERVICES_UNAVAILABLE"
+
+
+async def test_los_indices_incluyen_participant_ids(tutor):
+    indexes = await tutor.repository.collection.index_information()
+
+    assert indexes["uq_analyses_key"]["unique"] is True
+    assert indexes["ix_analyses_participant_ids"]["key"] == [("participantIds", 1)]
 
 
 async def test_health_falla_si_mongo_no_responde(tutor, monkeypatch):
@@ -48,26 +64,6 @@ async def test_openapi_se_genera_sin_errores(tutor):
     assert "/internal/tutor/analyses" in paths
     assert "/internal/tutor/analyses/{analysis_id}/result" in paths
     assert "/internal/tutor/users/{user_id}" in paths
-
-
-async def test_game_state_anterior_a_v9_sin_visibility_ni_participants(tutor):
-    """Mientras el otro equipo despliega v9, un GameState con solo userId sigue sirviendo."""
-    legacy_game = {
-        "gameId": GAME_1,
-        "userId": USER_A,
-        "mode": "local",
-        "status": "finished",
-        "result": "white",
-        "endReason": "checkmate",
-    }
-    tutor.logic.add(legacy_game)
-
-    response = await post_analysis(tutor, user=USER_A)
-
-    assert response.status_code == 202
-    document = await tutor.repository.get(response.json()["analysisId"])
-    assert document["participantIds"] == []
-    assert document["visibility"] == "private"
 
 
 async def test_local_del_creador_es_visible_aunque_repita_user_id(tutor):
