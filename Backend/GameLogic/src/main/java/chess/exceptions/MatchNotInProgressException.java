@@ -1,20 +1,13 @@
-package chess.matches;
+package chess.exceptions;
 
-public class MatchNotInProgressException extends RuntimeException{
+public class MatchNotInProgressException extends ExceptionWithNamedCode{
 	public static final String GAME_NOT_IN_PROGRESS = "GAME_NOT_IN_PROGRESS";
 
-	private final String code;
-
 	private MatchNotInProgressException(String code, String message){
-		super(message);
-		this.code = code;
+		super(code, message);
 	}
 
 	public static MatchNotInProgressException matchNotInProgress(){
 		return new MatchNotInProgressException(GAME_NOT_IN_PROGRESS, "La partida no está en progreso");
-	}
-
-	public String getCode(){
-		return code;
 	}
 }

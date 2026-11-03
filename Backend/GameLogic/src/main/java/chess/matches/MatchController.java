@@ -28,10 +28,18 @@ import chess.constants.Mode;
 import chess.constants.Result;
 import chess.constants.Status;
 import chess.constants.Visibility;
+import chess.exceptions.CannotJoinMatchException;
+import chess.exceptions.CannotOfferDrawException;
+import chess.exceptions.CannotReplyToDrawException;
+import chess.exceptions.MatchNotFinishedException;
+import chess.exceptions.MatchNotFoundException;
+import chess.exceptions.MatchNotInProgressException;
+import chess.exceptions.MovementNotValidException;
+import chess.exceptions.ParticipantsInvalidException;
+import chess.exceptions.RequestNotValidException;
 import chess.matches.ChessRules.Applied;
 import chess.movements.Movement;
 import chess.movements.MovementCreationEssentials;
-import chess.movements.MovementNotValidException;
 
 @RestController
 public class MatchController{
@@ -83,7 +91,7 @@ public class MatchController{
         if(foundMatch.isPresent()){
             return ResponseEntity.ok(assembler.toState(foundMatch.get()));
         }else{
-            throw new MatchNotFoundException(matchId);
+            throw MatchNotFoundException.notFound(matchId);
         }
     }
 
@@ -91,13 +99,13 @@ public class MatchController{
     @GetMapping({"/internal/logic/games", "/internal/logic/games/"})
     ResponseEntity<GamesPage> getMatchesByUserIdPaged(@RequestParam(name = "userId", required = false) String userId, @RequestParam(name = "limit", required = false) Integer limit, @RequestParam(name = "cursor", required = false) String cursor){
         if(userId == null || userId.isBlank()){
-            throw new RequestNotValidException("Falta el parámetro userId");
+            throw RequestNotValidException.notValid("Falta el parámetro userId");
         }
 
         if(limit == null){
             limit = 20;
         }else if(limit > 20 || limit < 1){
-            throw new RequestNotValidException("El parámetro limit debe ser un valor entre 1 y 20 inclusivos");
+            throw RequestNotValidException.notValid("El parámetro limit debe ser un valor entre 1 y 20 inclusivos");
         }
 
         List<GameSummary> matchList = repository.findByParticipantsUserIdOrderByCreatedAtDesc(userId).stream().map(assembler::toSummary).toList();
@@ -114,7 +122,7 @@ public class MatchController{
                     throw new IllegalArgumentException();
                 }
             }catch(IllegalArgumentException exception){
-                throw new RequestNotValidException("El parámetro cursor no representa un valor válido de cursor en base64url");
+                throw RequestNotValidException.notValid("El parámetro cursor no representa un valor válido de cursor en base64url");
             }
             
         }
@@ -136,7 +144,7 @@ public class MatchController{
         Match foundMatch = findMatch(id);
 
         if(!foundMatch.getStatus().equals(Status.WAITING.toString())){
-            throw new CannotJoinMatchException(id, "GAME_NOT_WAITING");
+            throw CannotJoinMatchException.notWaiting();
         }
 
         List<Participant> participants = foundMatch.getParticipants();
@@ -144,7 +152,7 @@ public class MatchController{
 
         for(int i=0; i<participants.size(); i++){
             if(participants.get(i).userId().equals(requestBody.userId())){
-                throw new CannotJoinMatchException(id, "ALREADY_PARTICIPANT");
+                throw CannotJoinMatchException.alreadyParticipant();
             }else{
                 remainingColor = participants.get(i).color().equals(Color.BLACK.toString()) ? Color.WHITE.toString() : Color.BLACK.toString();
             }
@@ -173,7 +181,7 @@ public class MatchController{
         Match match = findMatch(id);
 
         if(movement == null || movement.uci() == null || movement.uci().isBlank()){
-            throw new RequestNotValidException("Falta el campo uci");
+            throw RequestNotValidException.notValid("Falta el campo uci");
         }
         if(!match.canBeOperatedOn()){
             throw MatchNotInProgressException.matchNotInProgress();
@@ -213,7 +221,7 @@ public class MatchController{
         Match match = findMatch(id);
 
         if(body == null || !isColor(body.side())){
-            throw new RequestNotValidException("side debe ser \"" + Color.WHITE.toString() + "\" o \"" + Color.BLACK.toString() + "\"");
+            throw RequestNotValidException.notValid("side debe ser \"" + Color.WHITE.toString() + "\" o \"" + Color.BLACK.toString() + "\"");
         }
         if(!match.canBeOperatedOn()){
             throw MatchNotInProgressException.matchNotInProgress();
@@ -229,7 +237,7 @@ public class MatchController{
         Match match = findMatch(id);
 
         if(requestBody == null || !isColor(requestBody.side())){
-            throw new RequestNotValidException("side debe ser \"" + Color.WHITE.toString() + "\" o \"" + Color.BLACK.toString() + "\"");
+            throw RequestNotValidException.notValid("side debe ser \"" + Color.WHITE.toString() + "\" o \"" + Color.BLACK.toString() + "\"");
         }
 
         if(!match.canBeOperatedOn()){
@@ -246,7 +254,7 @@ public class MatchController{
         Match match = findMatch(id);
 
         if(requestBody == null || !isColor(requestBody.side())){
-            throw new RequestNotValidException("side debe ser \"" + Color.WHITE.toString() + "\" o \"" + Color.BLACK.toString() + "\"");
+            throw RequestNotValidException.notValid("side debe ser \"" + Color.WHITE.toString() + "\" o \"" + Color.BLACK.toString() + "\"");
         }
 
         if(!match.canBeOperatedOn()){
@@ -267,7 +275,7 @@ public class MatchController{
         Match match = findMatch(id);
 
         if(requestBody == null || !isColor(requestBody.side())){
-            throw new RequestNotValidException("side debe ser \"" + Color.WHITE.toString() + "\" o \"" + Color.BLACK.toString() + "\"");
+            throw RequestNotValidException.notValid("side debe ser \"" + Color.WHITE.toString() + "\" o \"" + Color.BLACK.toString() + "\"");
         }
 
         if(!match.canBeOperatedOn()){
@@ -292,7 +300,7 @@ public class MatchController{
         Match match = findMatch(id);
 
         if(requestBody == null || !isColor(requestBody.side())){
-            throw new RequestNotValidException("side debe ser \"" + Color.WHITE.toString() + "\" o \"" + Color.BLACK.toString() + "\"");
+            throw RequestNotValidException.notValid("side debe ser \"" + Color.WHITE.toString() + "\" o \"" + Color.BLACK.toString() + "\"");
         }
 
         if(!match.canBeOperatedOn()){
@@ -317,7 +325,7 @@ public class MatchController{
         Match match = findMatch(id);
 
         if(requestBody == null || !isColor(requestBody.side())){
-            throw new RequestNotValidException("side debe ser \"" + Color.WHITE.toString() + "\" o \"" + Color.BLACK.toString() + "\"");
+            throw RequestNotValidException.notValid("side debe ser \"" + Color.WHITE.toString() + "\" o \"" + Color.BLACK.toString() + "\"");
         }
 
         if(!match.canBeOperatedOn()){
@@ -414,27 +422,27 @@ public class MatchController{
     }
 
     private Match findMatch(String gameId){
-        return repository.findByGameId(gameId).orElseThrow(() -> new MatchNotFoundException(gameId));
+        return repository.findByGameId(gameId).orElseThrow(() -> MatchNotFoundException.notFound(gameId));
     }
 
     /** Valida el cuerpo de POST /internal/logic/games y arma la partida nueva o retorna la partida existente si una con el mismo matchId ya existe. */
     private Match buildNewMatch(CreateMatchRequest request){
         if(request == null){
-            throw new RequestNotValidException("Falta el cuerpo de la petición");
+            throw RequestNotValidException.notValid("Falta el cuerpo de la petición");
         }
 
         String mode = request.mode();
 
         if(!Mode.LOCAL.toString().equals(mode) && !Mode.VS_BOT.toString().equals(mode) && !Mode.MULTIPLAYER.toString().equals(mode)){
-            throw new RequestNotValidException("mode debe ser \"" + Mode.LOCAL.toString() + "\", \"" + Mode.VS_BOT.toString() + "\" o \"" + Mode.MULTIPLAYER.toString() + "\"");
+            throw RequestNotValidException.notValid("mode debe ser \"" + Mode.LOCAL.toString() + "\", \"" + Mode.VS_BOT.toString() + "\" o \"" + Mode.MULTIPLAYER.toString() + "\"");
         }
 
         if(!Visibility.PRIVATE.toString().equals(request.visibility()) && !Visibility.SHARED.toString().equals(request.visibility())){
-            throw new RequestNotValidException("visibility debe ser \"" + Visibility.PRIVATE + "\" o \"" + Visibility.SHARED + "\"");
+            throw RequestNotValidException.notValid("visibility debe ser \"" + Visibility.PRIVATE + "\" o \"" + Visibility.SHARED + "\"");
         }
 
         if(request.participants() == null){
-            throw new ParticipantsInvalidException("Falta información sobre los participantes de la partida");
+            throw ParticipantsInvalidException.participantsInvalid("Falta información sobre los participantes de la partida");
         }
 
         Integer botLevel = null;
@@ -442,49 +450,49 @@ public class MatchController{
         
         if(Mode.LOCAL.toString().equals(mode)){
             if(participants.size() != 2){
-                throw new ParticipantsInvalidException("Una partida en modo local debe tener exactamente 2 participantes");
+                throw ParticipantsInvalidException.participantsInvalid("Una partida en modo local debe tener exactamente 2 participantes");
             }
 
             if(!participants.get(0).userId().equals(participants.get(1).userId())){
-                throw new ParticipantsInvalidException("En una partida en modo local los 2 participantes deben tener la misma userId");
+                throw ParticipantsInvalidException.participantsInvalid("En una partida en modo local los 2 participantes deben tener la misma userId");
             }
 
             if(!isColor(participants.get(0).color()) || !isColor(participants.get(1).color())){
-                throw new ParticipantsInvalidException("El color de los participantes debe ser \"" + Color.WHITE.toString() + "\" o \"" + Color.BLACK.toString() + "\"");
+                throw ParticipantsInvalidException.participantsInvalid("El color de los participantes debe ser \"" + Color.WHITE.toString() + "\" o \"" + Color.BLACK.toString() + "\"");
             }
 
             if(participants.get(0).color().equals(participants.get(1).color())){
-                throw new ParticipantsInvalidException("Los participantes de la partida deben tener colores distintos");
+                throw ParticipantsInvalidException.participantsInvalid("Los participantes de la partida deben tener colores distintos");
             }
         }else{
             if(Mode.VS_BOT.toString().equals(mode)){
                 botLevel = request.botLevel();
 
                 if(botLevel == null || botLevel < 1 || botLevel > 20){
-                    throw new RequestNotValidException("botLevel debe ser un entero de 1 a 20");
+                    throw RequestNotValidException.notValid("botLevel debe ser un entero de 1 a 20");
                 }
             }else{
                 if(request.matchId() == null){
-                    throw new RequestNotValidException("matchId debe estar presente para partidas en multijugador");
+                    throw RequestNotValidException.notValid("matchId debe estar presente para partidas en multijugador");
                 }
 
                 if(request.timeControl() == null){
-                    throw new RequestNotValidException("timeControl debe estar presente para partidas en multijugador");
+                    throw RequestNotValidException.notValid("timeControl debe estar presente para partidas en multijugador");
                 }
             }
 
             if(participants.size() != 1){
-                throw new ParticipantsInvalidException("Una partida en modo " + (Mode.VS_BOT.toString().equals(mode) ? "vs bot" : "multijugador") + " debe ser creada con exactamente 1 participante");
+                throw ParticipantsInvalidException.participantsInvalid("Una partida en modo " + (Mode.VS_BOT.toString().equals(mode) ? "vs bot" : "multijugador") + " debe ser creada con exactamente 1 participante");
             }
 
             if(!isColor(participants.get(0).color())){
-                throw new ParticipantsInvalidException("El color del jugador debe ser \"" + Color.WHITE.toString() + "\" o \"" + Color.BLACK.toString() + "\"");
+                throw ParticipantsInvalidException.participantsInvalid("El color del jugador debe ser \"" + Color.WHITE.toString() + "\" o \"" + Color.BLACK.toString() + "\"");
             }
         }
 
         //The check is performed here, because at this point, the number of participants has been confirmed, and in local matches, both userId have been confirmed to be equal, so checking only the first one works for every case
         if(participants.get(0).userId() == null || !UUID_FORMAT.matcher(participants.get(0).userId()).matches()){
-            throw new RequestNotValidException("userId debe ser un UUID");
+            throw RequestNotValidException.notValid("userId debe ser un UUID");
         }
         
         return new Match(mode, request.timeControl(), request.visibility(), botLevel, request.matchId(), participants);
