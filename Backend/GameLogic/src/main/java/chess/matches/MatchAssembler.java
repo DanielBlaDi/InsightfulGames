@@ -40,7 +40,7 @@ public class MatchAssembler{
             legalMoves,
             moves,
             match.getDrawOffer(),
-            match.getExpectedVersion(),
+            match.getVersion(),
             match.getResult(),
             match.getEndReason(),
             match.getCreatedAt().toString(),

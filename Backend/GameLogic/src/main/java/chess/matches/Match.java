@@ -101,7 +101,7 @@ public class Match{
     /**
      * Versión de la partida, para mantener consistencia con operaciones que modifiquen a la partida
      */
-    private int expectedVersion;
+    private int version;
 
     /**
      * "white" o "black" o "draw" o null (si la partida no ha terminado)
@@ -157,7 +157,7 @@ public class Match{
         this.fen = ChessRules.START_FEN;
         this.initialFen = ChessRules.START_FEN;
         this.drawOffer = null;
-        this.expectedVersion = 0;
+        this.version = 0;
         this.createdAt = now();
     }
 
@@ -186,6 +186,10 @@ public class Match{
         }
     }
 
+    public boolean canBeOperatedOn(){
+        return !Status.FINISHED.toString().equals(status) && !Status.WAITING.toString().equals(status);
+    }
+
     /** Cierra la partida */
     public void finish(String result, String endReason){
         this.status = Status.FINISHED.toString();
@@ -194,8 +198,9 @@ public class Match{
         this.finishedAt = now();
     }
 
-    public boolean canBeOperatedOn(){
-        return !Status.FINISHED.toString().equals(status) && !Status.WAITING.toString().equals(status);
+    public void finishAndUpdateVersion(String result, String endReason){
+        this.finish(result, endReason);
+        this.version++;
     }
 
     public boolean isFinished(){
@@ -209,6 +214,10 @@ public class Match{
             uciMoves.add(movement.getUci());
         }
         return uciMoves;
+    }
+
+    public void updateVersion(){
+        this.version++;
     }
 
     public String getGameId(){
@@ -267,8 +276,8 @@ public class Match{
         return drawOffer;
     }
 
-    public int getExpectedVersion(){
-        return expectedVersion;
+    public int getVersion(){
+        return version;
     }
 
     public String getResult(){

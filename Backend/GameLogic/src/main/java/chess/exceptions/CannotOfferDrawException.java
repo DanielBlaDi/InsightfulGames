@@ -1,6 +1,6 @@
 package chess.exceptions;
 
-/** HTTP 409 errors relating to draw operations */
+/** HTTP 409 errors relating to offering a draw*/
 public class CannotOfferDrawException extends ExceptionWithNamedCode{
     public static final String DRAW_ALREADY_OFFERED = "DRAW_ALREADY_OFFERED";
 
