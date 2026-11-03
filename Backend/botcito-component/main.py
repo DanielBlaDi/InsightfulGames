@@ -25,6 +25,9 @@ class MoveRequest(BaseModel):
     fen: str = Field(min_length=1, max_length=200, strict=True)
     level: int = Field(ge=1, le=20, strict=True)
 
+class InternalMoveRequest(BaseModel):
+    fen: str = Field(min_length=1, max_length=200, strict=True)
+    botLevel: int = Field(ge=1, le=20, strict=True)
 
 class Evaluation(BaseModel):
     type: Literal["cp", "mate"]
@@ -36,6 +39,13 @@ class MoveResponse(BaseModel):
     san: str
     evaluation: Evaluation
 
+class InternalEvaluation(Evaluation):
+    perspective: Literal["side_to_move"] = "side_to_move"
+
+class InternalMoveResponse(BaseModel):
+    uci: str
+    san: str
+    evaluation: InternalEvaluation
 
 class LegacyMoveResponse(MoveResponse):
     move: str
@@ -60,15 +70,22 @@ class StockfishEngine:
 
     def __init__(self):
         self.path = os.getenv("STOCKFISH_PATH", "/usr/games/stockfish")
+
+        self.engine_threads = int(os.getenv("ENGINE_THREADS", "1"))
+        self.engine_timeout_ms = int(os.getenv("ENGINE_TIMEOUT_MS", "2000"))
+
+        if self.engine_threads < 1 or self.engine_timeout_ms < 1:
+            raise ValueError("La configuración del motor debe ser positiva.")
+
         self.lock = threading.Lock()
         self.engine: chess.engine.SimpleEngine | None = None
 
     def start(self, startup_timeout: float = 5.0):
         self.engine = chess.engine.SimpleEngine.popen_uci(self.path, timeout=startup_timeout)
         try:
-            self.engine.configure({"Threads": 1, "Hash": 32, "UCI_LimitStrength": False})
+            self.engine.configure({"Threads": self.engine_threads, "Hash": 32, "UCI_LimitStrength": False})
             # Arrancar en Docker puede tardar más que una consulta normal.
-            self.engine.timeout = 2.0
+            self.engine.timeout = self.engine_timeout_ms / 1000
         except Exception:
             self.close()
             raise
@@ -143,7 +160,7 @@ async def bot_error_handler(_request: Request, exc: BotError):
 async def validation_error_handler(_request: Request, _exc: RequestValidationError):
     return JSONResponse(status_code=400, content={"error": {
         "code": "VALIDATION_ERROR",
-        "message": "Envía fen como texto y level como entero entre 1 y 20.",
+        "message": "Datos inválidos: verifica el FEN y el nivel de dificultad (entero entre 1 y 20).",
     }})
 
 
@@ -153,6 +170,20 @@ def health(request: Request):
         raise BotError(503, "ENGINE_UNAVAILABLE", "El motor no está disponible.")
     return {"status": "ok"}
 
+@app.post("/internal/engine/best-move", response_model=InternalMoveResponse)
+def internal_best_move(data: InternalMoveRequest, request: Request):
+    result = request.app.state.engine.best_move(
+        parse_position(data.fen),
+        data.botLevel
+    )
+
+    return InternalMoveResponse(
+        uci=result.uci,
+        san=result.san,
+        evaluation=InternalEvaluation(
+            **result.evaluation.model_dump()
+        )
+    )
 
 @app.post("/engine/best-move", response_model=MoveResponse)
 def best_move(data: MoveRequest, request: Request):
