@@ -31,6 +31,7 @@ import chess.constants.Visibility;
 import chess.exceptions.CannotJoinMatchException;
 import chess.exceptions.CannotOfferDrawException;
 import chess.exceptions.CannotReplyToDrawException;
+import chess.exceptions.ClockException;
 import chess.exceptions.CreationKeyException;
 import chess.exceptions.MatchNotFinishedException;
 import chess.exceptions.MatchNotFoundException;
@@ -79,7 +80,13 @@ public class MatchController{
         if(matchAlreadyExists){
             return ResponseEntity.ok(assembler.toState(saved));
         }else{
-            saved = repository.save(buildNewMatch(request));
+            Match newMatch = buildNewMatch(request);
+            
+            if(newMatch.getMode().equals(Mode.LOCAL.toString()) || newMatch.getMode().equals(Mode.VS_BOT.toString())){
+                newMatch.startClock();
+            }
+
+            saved = repository.save(newMatch);
 
             return ResponseEntity.created(URI.create("/internal/logic/games/" + saved.getGameId())).body(assembler.toState(saved));
         }
@@ -167,13 +174,7 @@ public class MatchController{
         foundMatch.addParticipant(new Participant(requestBody.userId(), remainingColor));
         foundMatch.setStatus(Status.IN_PROGRESS.toString());
         
-        if(foundMatch.getTimeControl() != null){
-            Clocks clock = foundMatch.getClocks();
-            Instant turnStart = Instant.now();
-
-            clock.setTurnStartedAt(turnStart.toString());
-            clock.setDeadline(turnStart.plusMillis(clock.getWhite()).toString());
-        }
+        foundMatch.getClocks().startClock();
 
         foundMatch.updateVersion();
 
@@ -187,6 +188,7 @@ public class MatchController{
     @PostMapping({"/internal/logic/games/{id}/moves", "/internal/logic/games/{id}/moves/"})
     GameState addMovement(@PathVariable("id") String id, @RequestBody MovementCreationEssentials movement){
         Match match = findMatch(id);
+        Instant turnEndInstant = Instant.now();
 
         if(movement == null || movement.uci() == null || movement.uci().isBlank()){
             throw RequestNotValidException.notValid("Falta el campo uci");
@@ -196,6 +198,10 @@ public class MatchController{
         }
         if(match.getVersion() != movement.expectedVersion()){
             throw VersionConflictException.versionConflict();
+        }
+        if(match.getClocks().isTimedOut()){
+            match.finish(match.getTurn().equals(Color.WHITE.toString()) ? Color.BLACK.toString() : Color.WHITE.toString(), EndReason.TIMEOUT.toString());
+            throw ClockException.timedOut();
         }
 
         //La posición se reconstruye desde initialFen y las jugadas guardadas (así se detecta la repetición triple)
@@ -214,6 +220,10 @@ public class MatchController{
             match.getTurn()
         );
         match.addMovement(newMovement, result.turn());
+
+        if(match.getClocks() != null){
+            match.getClocks().endTurn(match.getTurn(), turnEndInstant);
+        }
 
         if(result.outcome() != null){
             match.finish(result.outcome().result(), result.outcome().endReason());
@@ -362,6 +372,26 @@ public class MatchController{
         match.updateVersion();
 
         return ResponseEntity.ok(assembler.toState(repository.save(match)));
+    }
+
+    @PostMapping({"/internal/logic/games/{id}/timeout", "/internal/logic/games/{id}/timeout/"})
+    ResponseEntity<TimeoutResponse> timeoutMatch(@PathVariable("id") String id, @RequestBody ExpectedVersionRequestBody requestBody){
+        Match match = findMatch(id);
+
+        if(requestBody == null || requestBody.expectedVersion() == null){
+            throw RequestNotValidException.notValid("Falta el campo expectedVersion");
+        }
+        if(!match.canBeOperatedOn()){
+            throw MatchNotInProgressException.matchNotInProgress();
+        }
+        if(match.getVersion() != requestBody.expectedVersion()){
+            throw VersionConflictException.versionConflict();
+        }
+        if(!match.getClocks().isTimedOut()){
+            throw ClockException.notTimedOut();
+        }
+
+        return ResponseEntity.ok(new TimeoutResponse(id, match.getStatus(), match.getResult(), match.getEndReason(), match.getFinishedAt().toString()));
     }
 
     @GetMapping({"/internal/logic/games/{id}/analysis-input", "/internal/logic/games/{id}/analysis-input/"})

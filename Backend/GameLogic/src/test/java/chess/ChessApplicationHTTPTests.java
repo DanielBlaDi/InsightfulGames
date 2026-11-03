@@ -324,6 +324,8 @@ public class ChessApplicationHTTPTests{
 
 		Match testMatch = givenStoredMatch(createTestMatch(Mode.LOCAL.toString(), null, testParticipants));
 
+		testMatch.startClock();
+
 		postMove(testMatch.getGameId(), "e2e4", 0)
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.fen").value(FEN_AFTER_E4))
@@ -451,6 +453,8 @@ public class ChessApplicationHTTPTests{
 		testParticipants.add(new Participant(TEST_USER_ID, Color.BLACK.toString()));
 		
 		Match testMatch = givenStoredMatch(createTestMatch(Mode.LOCAL.toString(), null, testParticipants));
+
+		testMatch.startClock();
 
 		postMove(testMatch.getGameId(), "f2f3", 0).andExpect(status().isOk());
 		postMove(testMatch.getGameId(), "e7e5", 1).andExpect(status().isOk());

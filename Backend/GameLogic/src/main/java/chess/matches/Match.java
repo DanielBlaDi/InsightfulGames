@@ -50,13 +50,13 @@ public class Match{
     /**
      * La id que utiliza Multiplayer para cada partida
      */
-    @Indexed(partialFilter = "{'matchId' : {'$ne' : null}}")
+    @Indexed(partialFilter = "{'matchId' : {'$type' : 'string'}}")
     private String matchId;
 
     /**
      * Únicamente presente en partidas multijugador, un sha256 hex creado por Multiplayer para evitar crear partidas duplicadas
      */
-    @Indexed(partialFilter = "{'creationKey' : {'$ne' : null}}")
+    @Indexed(partialFilter = "{'creationKey' : {'$type' : 'string'}}")
     private String creationKey;
 
     /**
@@ -236,6 +236,13 @@ public class Match{
             uciMoves.add(movement.getUci());
         }
         return uciMoves;
+    }
+
+    /** Checks whether there's a clock and starts it if there is */
+    public void startClock(){
+        if(this.clocks != null){
+            this.clocks.startClock();
+        }
     }
 
     public void updateVersion(){
