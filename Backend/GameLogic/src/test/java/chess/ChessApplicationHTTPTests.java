@@ -1,7 +1,6 @@
 package chess;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.restdocs.test.autoconfigure.AutoConfigureRestDocs;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -26,6 +25,7 @@ import chess.matches.MatchAssembler;
 import chess.matches.MatchController;
 import chess.matches.MatchRepository;
 import chess.matches.Participant;
+import chess.matches.RabbitPublisher;
 import chess.matches.TimeControl;
 import tools.jackson.databind.ObjectMapper;
 
@@ -63,7 +63,7 @@ public class ChessApplicationHTTPTests{
 	private MatchAssembler assembler;
 
 	@MockitoBean
-	private RabbitTemplate rabbitTemplate;
+	private RabbitPublisher rabbitPublisher;
 
 	@TestConfiguration
     static class TestConfig{
