@@ -1,7 +1,31 @@
-# Arranque independiente; no requiere .env ni los demás componentes.
+
+# Arranque independiente de Botcito-juego y Botcito-analisis.
+# No requiere bases de datos ni otros componentes.
+
 services:
   botcito:
     build: .
+    image: insightfulgames-botcito:dev
     ports:
-      - "${BOTCITO_PORT:-8086}:8086"
+      - "127.0.0.1:8086:8086"
+    environment:
+      PORT: "8086"
+      ENGINE_ROLE: game
+      ENGINE_POOL_SIZE: "2"
+      ENGINE_THREADS: "1"
+      ENGINE_TIMEOUT_MS: "2000"
+    restart: unless-stopped
+
+  botcito-analysis:
+    build: .
+    image: insightfulgames-botcito:dev
+    ports:
+      - "127.0.0.1:8091:8091"
+    environment:
+      PORT: "8091"
+      ENGINE_ROLE: analysis
+      ENGINE_POOL_SIZE: "2"
+      ENGINE_THREADS: "1"
+      ENGINE_TIMEOUT_MS: "10000"
+      ANALYSIS_DEPTH_MAX: "18"
     restart: unless-stopped
