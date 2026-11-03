@@ -10,6 +10,9 @@ import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry
 @EnableWebSocket
 public class WebSocketConfig implements WebSocketConfigurer {
 
+    /** Ruta interna del contrato (12.4.1). La pública, /ws/games/{id}, la atiende el gateway web. */
+    public static final String GAME_SOCKET_PATH = "/internal/single-player/ws/games/*";
+
     private final GameWebSocketHandler handler;
 
     public WebSocketConfig(GameWebSocketHandler handler) {
@@ -18,7 +21,7 @@ public class WebSocketConfig implements WebSocketConfigurer {
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
-        // El tráfico llega a través del API Gateway, que ya aplica CORS y valida el JWT.
-        registry.addHandler(handler, "/ws/games/*").setAllowedOrigins("*");
+        // Solo es alcanzable por el gateway, que ya valida Origin y sesión (contrato, 12.7).
+        registry.addHandler(handler, GAME_SOCKET_PATH).setAllowedOrigins("*");
     }
 }

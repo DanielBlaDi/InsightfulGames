@@ -163,9 +163,6 @@ services:
       GATEWAY_INTERNAL_URL: http://api-gateway-component:8080
       RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:?}:${RABBITMQ_DEFAULT_PASS:?}@rabbitmq:5672
 
-    extra_hosts:
-      - "host.docker.internal:host-gateway" 
-
 
   multiplayer-component:
     <<: *service

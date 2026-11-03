@@ -31,10 +31,19 @@ public class ApiException extends RuntimeException {
     }
 
     public static ApiException gameNotFound() {
-        return new ApiException(HttpStatus.NOT_FOUND, "GAME_NOT_FOUND", "La partida no existe o no te pertenece");
+        return new ApiException(HttpStatus.NOT_FOUND, "GAME_NOT_FOUND", "La partida no existe o no es visible");
     }
 
+    public static ApiException gameFinished() {
+        return new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "GAME_FINISHED", "La partida ya terminó");
+    }
+
+    public static ApiException notYourTurn() {
+        return new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "NOT_YOUR_TURN", "No es tu turno");
+    }
+
+    /** Dependencia caída o que respondió algo inesperado (catálogo: 503 SERVICES_UNAVAILABLE). */
     public static ApiException unavailable(String message) {
-        return new ApiException(HttpStatus.BAD_GATEWAY, "SERVICE_UNAVAILABLE", message);
+        return new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "SERVICES_UNAVAILABLE", message);
     }
 }
