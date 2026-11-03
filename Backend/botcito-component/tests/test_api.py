@@ -104,13 +104,24 @@ def test_promotion(client):
     assert move.promotion is not None
     assert response.json()["san"] == board.san(move)
 
-
 def test_busy_engine_returns_recoverable_error(client):
-    with app.state.engine.lock:
-        assert_error(client.post("/engine/best-move", json={"fen": chess.STARTING_FEN, "level": 1}),
-                     503, "ENGINE_BUSY")
-    assert client.get("/health").status_code == 200
+    pool = app.state.engine
 
+    # Simulamos que ambos motores estan ocupados.
+    with pool.slots[0].lock, pool.slots[1].lock:
+
+        response = client.post(
+            "/engine/best-move",
+            json={
+                "fen": chess.STARTING_FEN,
+                "level": 1
+            }
+        )
+
+        assert_error(response, 503, "ENGINE_BUSY")
+
+    # Verificamos que Botcito sigue funcionando.
+    assert client.get("/health").status_code == 200
 
 def test_restart_after_engine_exit(client):
     app.state.engine.engine.quit()

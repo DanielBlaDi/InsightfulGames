@@ -48,3 +48,43 @@ def test_internal_best_move_invalid_level(invalid_level):
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "VALIDATION_ERROR"
 
+
+def test_internal_uses_second_engine_if_first_busy():
+    fen = chess.STARTING_FEN
+
+    with TestClient(app) as client:
+        pool = app.state.engine
+
+        with pool.slots[0].lock:
+            response = client.post(
+                "/internal/engine/best-move",
+                json={
+                    "fen": fen,
+                    "botLevel": 10
+                }
+            )
+
+    assert response.status_code == 200
+    data = response.json()
+
+    board = chess.Board(fen)
+    assert chess.Move.from_uci(data["uci"]) in board.legal_moves
+
+
+def test_internal_returns_busy_if_all_engines_busy():
+    fen = chess.STARTING_FEN
+
+    with TestClient(app) as client:
+        pool = app.state.engine
+
+        with pool.slots[0].lock, pool.slots[1].lock:
+            response = client.post(
+                "/internal/engine/best-move",
+                json={
+                    "fen": fen,
+                    "botLevel": 10
+                }
+            )
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "ENGINE_BUSY"

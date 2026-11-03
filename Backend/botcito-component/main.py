@@ -64,6 +64,12 @@ def parse_position(fen: str) -> chess.Board:
         raise BotError(422, "NO_LEGAL_MOVES", "La posición no tiene jugadas legales.")
     return board
 
+class EngineSlot:
+    """Representa un motor Stockfish independiente."""
+
+    def __init__(self):
+        self.engine: chess.engine.SimpleEngine | None = None
+        self.lock = threading.Lock()
 
 class StockfishEngine:
     """Un proceso por worker; exclusión mutua para no mezclar consultas UCI."""
@@ -73,67 +79,193 @@ class StockfishEngine:
 
         self.engine_threads = int(os.getenv("ENGINE_THREADS", "1"))
         self.engine_timeout_ms = int(os.getenv("ENGINE_TIMEOUT_MS", "2000"))
+        self.pool_size = int(os.getenv("ENGINE_POOL_SIZE", "2"))
 
-        if self.engine_threads < 1 or self.engine_timeout_ms < 1:
+        if (
+            self.engine_threads < 1
+            or self.engine_timeout_ms < 1
+            or self.pool_size < 1
+        ):
             raise ValueError("La configuración del motor debe ser positiva.")
 
         self.lock = threading.Lock()
         self.engine: chess.engine.SimpleEngine | None = None
+        self.slots = [EngineSlot() for _ in range(self.pool_size)]
+
+
+    def _create_engine(self, startup_timeout: float):
+        """Inicia y configura un proceso independiente de Stockfish."""
+
+        engine = chess.engine.SimpleEngine.popen_uci(
+            self.path,
+            timeout=startup_timeout
+        )
+
+        try:
+            engine.configure({
+                "Threads": self.engine_threads,
+                "Hash": 32,
+                "UCI_LimitStrength": False
+            })
+
+            engine.timeout = self.engine_timeout_ms / 1000
+
+            return engine
+
+        except Exception:
+            engine.close()
+            raise
 
     def start(self, startup_timeout: float = 5.0):
-        self.engine = chess.engine.SimpleEngine.popen_uci(self.path, timeout=startup_timeout)
+        """Inicia todos los motores del pool."""
+
+        self.close()
+
         try:
-            self.engine.configure({"Threads": self.engine_threads, "Hash": 32, "UCI_LimitStrength": False})
-            # Arrancar en Docker puede tardar más que una consulta normal.
-            self.engine.timeout = self.engine_timeout_ms / 1000
+            for slot in self.slots:
+                slot.engine = self._create_engine(startup_timeout)
+
+            # Compatibilidad temporal con el codigo anterior.
+            self.engine = self.slots[0].engine
+
         except Exception:
             self.close()
             raise
 
     def close(self):
-        if self.engine is not None:
-            self.engine.close()
-            self.engine = None
+        """Cierra todos los procesos Stockfish del pool."""
+
+        for slot in self.slots:
+            if slot.engine is not None:
+                try:
+                    slot.engine.close()
+                except Exception:
+                    logger.exception("Error al cerrar Stockfish")
+                finally:
+                    slot.engine = None
+
+        self.engine = None
 
     def healthy(self) -> bool:
         engine = self.engine
         return engine is not None and not engine.returncode.done()
 
-    def best_move(self, board: chess.Board, level: int) -> MoveResponse:
-        # No cola ilimitada: una petición concurrente recibe un error recuperable.
-        if not self.lock.acquire(blocking=False):
-            raise BotError(503, "ENGINE_BUSY", "El motor está ocupado; intenta nuevamente.")
-        try:
-            if not self.healthy():
-                self.close()
-                self.start()
-            assert self.engine is not None
-            self.engine.configure({"Skill Level": level})
-            result = self.engine.play(board, chess.engine.Limit(time=0.3), game=object())
-            move = result.move
-            if move is None or move not in board.legal_moves:
-                raise RuntimeError("Stockfish no devolvió una jugada legal")
-            # Evalúa la jugada elegida, con fuerza completa, desde el turno de entrada.
-            # No reutiliza el score de play: a niveles bajos puede ser de otra variante.
-            info = self.engine.analyse(
-                board, chess.engine.Limit(time=0.2), root_moves=[move],
-                options={"Skill Level": 20}, game=object(),
-            )
-            score = info["score"].pov(board.turn)
-            value = score.mate() if score.is_mate() else score.score()
-            if value is None:
-                raise RuntimeError("Stockfish no devolvió una evaluación")
-            return MoveResponse(
-                uci=move.uci(), san=board.san(move),
-                evaluation=Evaluation(type="mate" if score.is_mate() else "cp", value=value),
-            )
-        except Exception as exc:
-            logger.exception("Falló la consulta a Stockfish")
-            self.close()  # La siguiente petición intentará iniciar un proceso nuevo.
-            raise BotError(503, "ENGINE_UNAVAILABLE", "El motor no está disponible.") from exc
-        finally:
-            self.lock.release()
+    def _acquire_slot(self) -> EngineSlot:
+        """Reserva un motor disponible sin esperar."""
 
+        for slot in self.slots:
+            if slot.lock.acquire(blocking=False):
+                return slot
+
+        raise BotError(
+            503,
+            "ENGINE_BUSY",
+            "Todos los motores estan ocupados; intenta nuevamente."
+        )
+
+    def _discard_slot(self, slot: EngineSlot):
+        """Cierra únicamente el motor del espacio indicado."""
+
+        engine = slot.engine
+        slot.engine = None
+
+        if slot is self.slots[0]:
+            self.engine = None
+
+        if engine is not None:
+            try:
+                engine.close()
+            except Exception:
+                logger.exception("Error al cerrar un motor Stockfish")
+
+
+    def best_move(self, board: chess.Board, level: int) -> MoveResponse:
+        """Calcula una jugada utilizando un motor disponible del pool."""
+
+        slot = self._acquire_slot()
+
+        try:
+            engine = slot.engine
+
+            # Recuperar solamente el motor que haya fallado.
+            if engine is None or engine.returncode.done():
+                self._discard_slot(slot)
+                engine = self._create_engine(5.0)
+                slot.engine = engine
+
+                if slot is self.slots[0]:
+                    self.engine = engine
+
+            # Configurar la dificultad.
+            engine.configure({"Skill Level": level})
+
+            # Calcular la mejor jugada.
+            result = engine.play(
+                board,
+                chess.engine.Limit(time=0.3),
+                game=object()
+            )
+
+            move = result.move
+
+            if move is None or move not in board.legal_moves:
+                raise RuntimeError(
+                    "Stockfish no devolvio una jugada legal"
+                )
+
+            # Evaluar la jugada seleccionada.
+            info = engine.analyse(
+                board,
+                chess.engine.Limit(time=0.2),
+                root_moves=[move],
+                options={"Skill Level": 20},
+                game=object()
+            )
+
+            score = info["score"].pov(board.turn)
+
+            value = (
+                score.mate()
+                if score.is_mate()
+                else score.score()
+            )
+
+            if value is None:
+                raise RuntimeError(
+                    "Stockfish no devolvio una evaluacion"
+                )
+
+            return MoveResponse(
+                uci=move.uci(),
+                san=board.san(move),
+                evaluation=Evaluation(
+                    type="mate" if score.is_mate() else "cp",
+                    value=value
+                )
+            )
+
+        except TimeoutError as exc:
+            logger.exception("Timeout de Stockfish")
+            self._discard_slot(slot)
+
+            raise BotError(
+                504,
+                "ENGINE_TIMEOUT",
+                "El motor supero el tiempo permitido."
+            ) from exc
+
+        except Exception as exc:
+            logger.exception("Fallo la consulta a Stockfish")
+            self._discard_slot(slot)
+
+            raise BotError(
+                503,
+                "SERVICES_UNAVAILABLE",
+                "El motor no esta disponible."
+            ) from exc
+
+        finally:
+            slot.lock.release()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
