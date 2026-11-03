@@ -89,11 +89,11 @@ services:
       - auth-component
       - profile-stats-component
       - single-player-component
-      # - multiplayer-component
+      - multiplayer-component
       - tutor-component
       - game-logic-component
       - botcito-component
-      # - botcito-analysis-component
+      - botcito-analysis-component
 
 
 # logica ------------------------------------------
