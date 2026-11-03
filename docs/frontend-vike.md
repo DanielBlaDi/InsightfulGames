@@ -3,7 +3,7 @@
 Rama de integración: `frontend-B-vike`, basada en `containers` (3 de noviembre de 2026).
 Referencia normativa: *Contrato técnico definitivo*,
 secciones 4.4, 5 y 7.4.3. Este documento explica qué quedó hecho, cómo agregar páginas (Frontend A)
-y qué tiene que cambiar en el despliegue (Infra).
+y qué tiene que cambiar en el despliegue.
 
 ## 1. Qué hay
 
@@ -156,7 +156,7 @@ ignora mientras `App.tsx` la siga pasando.
 | `package.json`, `package-lock.json` | Compartidos: una sola persona instala a la vez |
 | `src/App.tsx`, `src/components/*`, `src/authSession.ts`, `pages/index`, `pages/login` y las páginas nuevas | Frontend A |
 
-## 4. Para Infra
+## 4. Front A
 
 Ya en la rama `frontend-B-vike`: `Frontend/Dockerfile` (con D mayúscula, como espera
 `compose.yaml` en `containers`) y `Frontend/.dockerignore`. **No modifiqué `compose.yaml`.**
