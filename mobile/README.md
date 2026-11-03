@@ -10,11 +10,13 @@ Alcance: perfil, estadísticas, historial y detalle. No juega partidas en vivo, 
    - Emulador: `http://10.0.2.2:8090/` (ya configurado).
    - Dispositivo físico: `http://<IP-del-PC>:8090/` (mismo Wi-Fi, firewall abierto).
    - Siempre con `/` al final y **sin** `/api`. La app habla con el gateway móvil, no con el web.
-3. Backend real: `docker compose up -d --build` desde la raíz del repo (el gateway móvil ya está en el compose).
-   Hoy funcionan registro/login, historial y detalle de partidas local y vs_bot. Perfil y estadísticas dependen de
-   Profile/Stats y las partidas online de Multiplayer, que aún no existen: la app los muestra como "No disponible".
-4. Sin backend: `Backend/api-gateway-mobile/tools/fake_internal_gateway.py` (ver su README) simula todo,
-   incluidos perfil, estadísticas y partidas multijugador. Registrarse desde la app crea el usuario en el simulado.
+3. **Backend real: todavía NO validado.** Esta app se probó solo contra simuladores. Para llegar a los servicios reales
+   falta el passthrough `/internal/*` del gateway web (GW-04); además Game Logic aún no entrega la lista en el formato del
+   contrato (GL-04), Single Player no tiene rutas internas (SP-05) y Multiplayer no existe. Este README se actualizará con lo
+   que se compruebe en emulador (MOB-01).
+4. Sin backend, o con parte real: `Backend/api-gateway-mobile/README.md` explica cómo correr el gateway móvil contra
+   un gateway interno **simulado** o **mixto** (servicios reales donde existen, simulados donde no). Con el simulado,
+   registrarse desde la app crea el usuario en la simulación.
 
 ## Pantallas (navegación inferior)
 Login/Registro · Inicio (`GET /home`) · Perfil · Estadísticas · Historial (20 por página + "Cargar más") · Detalle.
@@ -41,9 +43,16 @@ app/src/main/java/com/insightfulgames/app/
 ```
 
 ## Pruebas
-`./gradlew test` → `GameLabelsTest` (incluye la etiqueta de `account_deleted`), `FenParserTest`, `ReplayTest`.
+Desde `mobile/` (necesita JDK 17 y el Android SDK; define `ANDROID_HOME` o `sdk.dir` en `local.properties`):
+```bash
+./gradlew test          # Windows: gradlew.bat test
+```
+Cubre `GameLabelsTest` (incluye la etiqueta de `account_deleted`), `UserMessageTest` (`PROFILE_NOT_FOUND` es "no disponible"),
+`FenParserTest` y `ReplayTest`.
 
-> **Ojo:** el repositorio todavía no trae `gradlew`, `gradlew.bat` ni `gradle/wrapper/gradle-wrapper.jar` (tarea MOB-03). Mientras tanto, abre el proyecto en Android Studio y ejecuta las pruebas desde ahí (clic derecho en `app/src/test` → *Run Tests*).
+El wrapper (`gradlew`, `gradlew.bat`, `gradle/wrapper/gradle-wrapper.jar`) se copió de `Backend/GameLogic/`; el `.jar` se
+versiona gracias a la excepción de `mobile/.gitignore`. `gradle-wrapper.properties` fija Gradle 8.9. Si `./gradlew --version`
+falla, regenera con `gradle wrapper --gradle-version 8.9` (o desde Android Studio).
 
 ## Pendiente
 - Logo, tipografías (Playfair Display / Plus Jakarta Sans) y modo oscuro.
