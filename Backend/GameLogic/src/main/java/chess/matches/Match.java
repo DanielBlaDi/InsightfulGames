@@ -9,6 +9,8 @@ import java.util.Objects;
 import java.util.UUID;
 
 import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
+import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.Field;
 
@@ -23,6 +25,9 @@ import chess.movements.Movement;
  * (ver MatchAssembler).
  */
 @Document(collection = "games")
+@CompoundIndex(def = "{'participants.userId': 1, 'createdAt': -1}")
+@CompoundIndex(def = "{'status': 1, 'clocks.deadline': 1}")
+@CompoundIndex(def = "{'status': 1, 'createdAt': 1}")
 public class Match{
     public static final String ANONYMOUS_USER_ID = "00000000-0000-0000-0000-000000000000";
 
@@ -45,11 +50,13 @@ public class Match{
     /**
      * La id que utiliza Multiplayer para cada partida
      */
+    @Indexed(partialFilter = "{'matchId' : {'$ne' : null}}")
     private String matchId;
 
     /**
      * Únicamente presente en partidas multijugador, un sha256 hex creado por Multiplayer para evitar crear partidas duplicadas
      */
+    @Indexed(partialFilter = "{'creationKey' : {'$ne' : null}}")
     private String creationKey;
 
     /**
