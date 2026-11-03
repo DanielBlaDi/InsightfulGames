@@ -200,7 +200,7 @@ public class MatchController{
             throw VersionConflictException.versionConflict();
         }
         if(match.getClocks().isTimedOut()){
-            match.finish(match.getTurn().equals(Color.WHITE.toString()) ? Color.BLACK.toString() : Color.WHITE.toString(), EndReason.TIMEOUT.toString());
+            match.finishAndUpdateVersion(match.getTurn().equals(Color.WHITE.toString()) ? Color.BLACK.toString() : Color.WHITE.toString(), EndReason.TIMEOUT.toString());
             throw ClockException.timedOut();
         }
 
@@ -390,6 +390,10 @@ public class MatchController{
         if(!match.getClocks().isTimedOut()){
             throw ClockException.notTimedOut();
         }
+
+        match.finishAndUpdateVersion(match.getTurn().equals(Color.WHITE.toString()) ? Color.BLACK.toString() : Color.WHITE.toString(), EndReason.TIMEOUT.toString());
+
+        repository.save(match);
 
         return ResponseEntity.ok(new TimeoutResponse(id, match.getStatus(), match.getResult(), match.getEndReason(), match.getFinishedAt().toString()));
     }
