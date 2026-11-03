@@ -1,11 +1,43 @@
-*.iml
+# === Secrets / Environment ===
+.env
+.env.*
+!.env.example
+
+# === Python ===
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# === TypeScript / Node ===
+node_modules/
+dist/
+*.tsbuildinfo
+.npm/
+
+# === Java ===
+*.class
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+*.war
+target/
 .gradle/
-local.properties
-.idea/
+**/out/
+
+# === Build (genérico) ===
 build/
-captures/
-.externalNativeBuild/
-.cxx/
+out/
+
+# === IDE / Editor ===
+.idea/
+.vscode/
+*.iml
+.classpath
+.project
+.settings/
 
 # Sistema operativo
 
@@ -16,4 +48,5 @@ desktop.ini
 # Archivos temporales
 
 *.tmp
-*.bakcookies.txt
+*.bak
+cookies.txt

@@ -6,3 +6,6 @@ build/
 captures/
 .externalNativeBuild/
 .cxx/
+
+# El wrapper debe versionarse aunque el .gitignore de la raíz ignore *.jar (MOB-03)
+!gradle/wrapper/gradle-wrapper.jar
