@@ -1,5 +1,10 @@
 package chess.matches;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+
+import chess.constants.Color;
+
 public class Clocks{
     private Integer white;
     private Integer black;
@@ -12,8 +17,8 @@ public class Clocks{
 
     public Clocks(Integer white, Integer black){
         this();
-        setWhite(white);
-        setBlack(black);
+        this.white = white;
+        this.black = black;
     }
 
     public Clocks(Integer white, Integer black, String turnStartedAt, String deadline){
@@ -38,19 +43,51 @@ public class Clocks{
         return deadline;
     }
 
-    public void setWhite(Integer white){
-        this.white = white;
+    public boolean isTimedOut(){
+        if(this.deadline != null){
+            return Instant.parse(deadline).isBefore(Instant.now());
+        }else{
+            return false;
+        }
     }
 
-    public void setBlack(Integer black){
-        this.black = black;
+    /** Sets the start of the turn to now and calculates the deadline */
+    public void startClock(){
+        if(this.white != null){ //white can be the bot
+            Instant turnStart = Instant.now();
+
+            this.turnStartedAt = turnStart.toString();
+            this.deadline = turnStart.plusMillis(this.white).toString(); //Match always starts on white
+        }
     }
 
-    public void setTurnStartedAt(String turnStartedAt){
-        this.turnStartedAt = turnStartedAt;
-    }
+    public void endTurn(String nextTurnColor, Instant turnEndedAt){
+        if(nextTurnColor.equals(Color.BLACK.toString())){
+            if(this.white != null){
+                this.white -= (int)(ChronoUnit.MILLIS.between(Instant.parse(turnStartedAt), turnEndedAt));
+            }
 
-    public void setDeadline(String deadline){
-        this.deadline = deadline;
+            if(this.black != null){
+                Instant turnStartInstant = Instant.now();
+                this.turnStartedAt = turnStartInstant.toString();
+                this.deadline = turnStartInstant.plusMillis(this.black).toString();
+            }else{
+                this.turnStartedAt = null;
+                this.deadline = null;
+            }
+        }else{
+            if(this.black != null){
+                this.black -= (int)(ChronoUnit.MILLIS.between(Instant.parse(turnStartedAt), turnEndedAt));
+            }
+
+            if(this.white != null){
+                Instant turnStartInstant = Instant.now();
+                this.turnStartedAt = turnStartInstant.toString();
+                this.deadline = turnStartInstant.plusMillis(this.white).toString();
+            }else{
+                this.turnStartedAt = null;
+                this.deadline = null;
+            }
+        }
     }
 }

@@ -14,4 +14,5 @@ public interface MatchRepository extends MongoRepository<Match, String>{
     List<Match> findByParticipantsUserId(String userId);
     /** Las partidas de un usuario, la más reciente primero. */
     List<Match> findByParticipantsUserIdOrderByCreatedAtDesc(String userId);
+    List<Match> findByStatus(String userId);
 }

@@ -4,14 +4,13 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.regex.Pattern;
 
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,17 +27,7 @@ import chess.constants.Mode;
 import chess.constants.Result;
 import chess.constants.Status;
 import chess.constants.Visibility;
-import chess.exceptions.CannotJoinMatchException;
-import chess.exceptions.CannotOfferDrawException;
-import chess.exceptions.CannotReplyToDrawException;
-import chess.exceptions.CreationKeyException;
-import chess.exceptions.MatchNotFinishedException;
-import chess.exceptions.MatchNotFoundException;
-import chess.exceptions.MatchNotInProgressException;
-import chess.exceptions.MovementNotValidException;
-import chess.exceptions.ParticipantsInvalidException;
-import chess.exceptions.RequestNotValidException;
-import chess.exceptions.VersionConflictException;
+import chess.exceptions.*;
 import chess.matches.ChessRules.Applied;
 import chess.movements.Movement;
 import chess.movements.MovementCreationEssentials;
@@ -49,12 +38,12 @@ public class MatchController{
 
     private final MatchRepository repository;
     private final MatchAssembler assembler;
-    private final RabbitTemplate rabbitTemplate;
+    private final RabbitPublisher publisher;
 
-    MatchController(MatchRepository repository, MatchAssembler assembler, RabbitTemplate rabbitTemplate){
+    MatchController(MatchRepository repository, MatchAssembler assembler, RabbitPublisher publisher){
         this.repository = repository;
         this.assembler = assembler;
-        this.rabbitTemplate = rabbitTemplate;
+        this.publisher = publisher;
     }
 
     /** Crea la partida en la posición inicial. GameLogic genera gameId y createdAt. */
@@ -79,7 +68,13 @@ public class MatchController{
         if(matchAlreadyExists){
             return ResponseEntity.ok(assembler.toState(saved));
         }else{
-            saved = repository.save(buildNewMatch(request));
+            Match newMatch = buildNewMatch(request);
+            
+            if(newMatch.getMode().equals(Mode.LOCAL.toString()) || newMatch.getMode().equals(Mode.VS_BOT.toString())){
+                newMatch.startClock();
+            }
+
+            saved = repository.save(newMatch);
 
             return ResponseEntity.created(URI.create("/internal/logic/games/" + saved.getGameId())).body(assembler.toState(saved));
         }
@@ -168,13 +163,7 @@ public class MatchController{
         foundMatch.addParticipant(new Participant(requestBody.userId(), remainingColor));
         foundMatch.setStatus(Status.IN_PROGRESS.toString());
         
-        if(foundMatch.getTimeControl() != null){
-            Clocks clock = foundMatch.getClocks();
-            Instant turnStart = Instant.now();
-
-            clock.setTurnStartedAt(turnStart.toString());
-            clock.setDeadline(turnStart.plusMillis(clock.getWhite()).toString());
-        }
+        foundMatch.getClocks().startClock();
 
         foundMatch.updateVersion();
 
@@ -188,6 +177,7 @@ public class MatchController{
     @PostMapping({"/internal/logic/games/{id}/moves", "/internal/logic/games/{id}/moves/"})
     GameState addMovement(@PathVariable("id") String id, @RequestBody MovementCreationEssentials movement){
         Match match = findMatch(id);
+        Instant turnEndInstant = Instant.now();
 
         if(movement == null || movement.uci() == null || movement.uci().isBlank()){
             throw RequestNotValidException.notValid("Falta el campo uci");
@@ -197,6 +187,15 @@ public class MatchController{
         }
         if(match.getVersion() != movement.expectedVersion()){
             throw VersionConflictException.versionConflict();
+        }
+        if(match.getClocks().isTimedOut()){
+            match.finishAndUpdateVersion(match.getTurn().equals(Color.WHITE.toString()) ? Color.BLACK.toString() : Color.WHITE.toString(), EndReason.TIMEOUT.toString());
+
+            repository.save(match);
+
+            publisher.publishMatchFinishedMessage(buildMatchFinishedMessage(match));
+
+            throw ClockException.timedOut();
         }
 
         //La posición se reconstruye desde initialFen y las jugadas guardadas (así se detecta la repetición triple)
@@ -216,8 +215,14 @@ public class MatchController{
         );
         match.addMovement(newMovement, result.turn());
 
+        if(match.getClocks() != null){
+            match.getClocks().endTurn(match.getTurn(), turnEndInstant);
+        }
+
         if(result.outcome() != null){
             match.finish(result.outcome().result(), result.outcome().endReason());
+
+            publisher.publishMatchFinishedMessage(buildMatchFinishedMessage(match));
         }
 
         if(match.getDrawOffer() != null){
@@ -243,7 +248,11 @@ public class MatchController{
 
         match.finishAndUpdateVersion(Color.WHITE.toString().equals(body.side()) ? Color.BLACK.toString() : Color.WHITE.toString(), EndReason.SURRENDER.toString());
 
-        return assembler.toState(repository.save(match));
+        repository.save(match);
+
+        publisher.publishMatchFinishedMessage(buildMatchFinishedMessage(match));
+
+        return assembler.toState(match);
     }
 
     @PostMapping({"/internal/logic/games/{id}/abandon", "/internal/logic/games/{id}/abandon/"})
@@ -260,7 +269,11 @@ public class MatchController{
 
         match.finishAndUpdateVersion(Color.WHITE.toString().equals(requestBody.side()) ? Color.BLACK.toString() : Color.WHITE.toString(), EndReason.ABANDONMENT.toString());
 
-        return ResponseEntity.ok(assembler.toState(repository.save(match)));
+        repository.save(match);
+
+        publisher.publishMatchFinishedMessage(buildMatchFinishedMessage(match));
+
+        return ResponseEntity.ok(assembler.toState(match));
     }
 
     @PostMapping({"/internal/logic/games/{id}/draw/offer", "/internal/logic/games/{id}/draw/offer/"})
@@ -308,7 +321,11 @@ public class MatchController{
 
         match.finishAndUpdateVersion(Result.DRAW.toString(), EndReason.DRAW.toString());
 
-        return ResponseEntity.ok(assembler.toState(repository.save(match)));
+        repository.save(match);
+
+        publisher.publishMatchFinishedMessage(buildMatchFinishedMessage(match));
+
+        return ResponseEntity.ok(assembler.toState(match));
     }
 
     @PostMapping({"/internal/logic/games/{id}/draw/decline", "/internal/logic/games/{id}/draw/decline/"})
@@ -365,6 +382,100 @@ public class MatchController{
         return ResponseEntity.ok(assembler.toState(repository.save(match)));
     }
 
+    @PostMapping({"/internal/logic/games/{id}/timeout", "/internal/logic/games/{id}/timeout/"})
+    ResponseEntity<TimeoutResponse> timeoutMatch(@PathVariable("id") String id, @RequestBody ExpectedVersionRequestBody requestBody){
+        Match match = findMatch(id);
+
+        if(requestBody == null || requestBody.expectedVersion() == null){
+            throw RequestNotValidException.notValid("Falta el campo expectedVersion");
+        }
+        if(!match.canBeOperatedOn()){
+            throw MatchNotInProgressException.matchNotInProgress();
+        }
+        if(match.getVersion() != requestBody.expectedVersion()){
+            throw VersionConflictException.versionConflict();
+        }
+        if(!match.getClocks().isTimedOut()){
+            throw ClockException.notTimedOut();
+        }
+
+        match.finishAndUpdateVersion(match.getTurn().equals(Color.WHITE.toString()) ? Color.BLACK.toString() : Color.WHITE.toString(), EndReason.TIMEOUT.toString());
+
+        repository.save(match);
+
+        publisher.publishMatchFinishedMessage(buildMatchFinishedMessage(match));
+
+        return ResponseEntity.ok(new TimeoutResponse(id, match.getStatus(), match.getResult(), match.getEndReason(), match.getFinishedAt().toString()));
+    }
+
+    @PostMapping({"/internal/logic/games/{id}/expire", "/internal/logic/games/{id}/expire/"})
+    ResponseEntity<GameState> expireWaitingMatch(@PathVariable("id") String id, @RequestBody ExpectedVersionRequestBody requestBody){
+        Match match = findMatch(id);
+
+        if(requestBody == null || requestBody.expectedVersion() == null){
+            throw RequestNotValidException.notValid("Falta el campo expectedVersion");
+        }
+        if(!match.isWaiting()){
+            throw MatchNotInProgressException.matchNotInProgress();
+        }
+        if(match.getVersion() != requestBody.expectedVersion()){
+            throw VersionConflictException.versionConflict();
+        }
+        if(!match.isExpiredFromWaiting()){
+            throw ClockException.waitingNotExpired();
+        }
+
+        match.finishAndUpdateVersion(null, EndReason.EXPIRED.toString());
+
+        repository.save(match);
+
+        publisher.publishMatchFinishedMessage(buildMatchFinishedMessage(match));
+
+        return ResponseEntity.ok(assembler.toState(match));
+    }
+
+    @GetMapping({"/internal/logic/games/expired", "/internal/logic/games/expired/"})
+    ResponseEntity<List<ExpiredQueryResponse>> getExpiredMatches(@RequestParam(name = "limit", required = false) Integer limit){
+        if(limit == null){
+            throw RequestNotValidException.notValid("Falta el campo limit");
+        }
+
+        List<Match> expiredMatches = new ArrayList<>();
+
+        List<Match> inProgressMatches = repository.findByStatus(Status.IN_PROGRESS.toString());
+
+        for(Match match : inProgressMatches){
+            if(expiredMatches.size() < limit){
+                if(match.isTimedOut()){
+                    expiredMatches.add(match);
+                }
+            }else{
+                break;
+            }
+        }
+
+        if(expiredMatches.size() < limit){
+            List<Match> waitingMatches = repository.findByStatus(Status.WAITING.toString());
+            for(Match match : waitingMatches){
+                if(expiredMatches.size() < limit){
+                    if(match.isExpiredFromWaiting()){
+                        expiredMatches.add(match);
+                    }
+                }else{
+                    break;
+                }
+            }
+        }
+
+        List<ExpiredQueryResponse> result = new ArrayList<>();
+
+        for(Match expiredMatch : expiredMatches){
+            result.add(new ExpiredQueryResponse(expiredMatch.getGameId(), expiredMatch.getVersion(), expiredMatch.isExpiredFromWaiting() ? EndReason.EXPIRED.toString() : EndReason.TIMEOUT.toString()));
+        }
+
+        return ResponseEntity.ok(result);
+    }
+
     @GetMapping({"/internal/logic/games/{id}/analysis-input", "/internal/logic/games/{id}/analysis-input/"})
     ResponseEntity<MatchAnalysis> obtainAnalysisInput(@PathVariable("id") String id){
         Match match = findMatch(id);
@@ -407,23 +518,8 @@ public class MatchController{
                         match.anonymize(userId);
 
                         repository.save(match);
-
-                        rabbitTemplate.convertAndSend(
-                            "game.events", 
-                            "game.finished", 
-                            new MatchFinishedMessage(
-                                UUID.randomUUID().toString(),
-                                "game.finished", 
-                                Instant.now().toString(), 
-                                match.getGameId(), 
-                                match.getMatchId(), 
-                                match.getMode(), 
-                                participants, 
-                                match.getResult(), 
-                                match.getEndReason(), 
-                                match.getFinishedAt().toString()
-                            )
-                        );
+                        
+                        publisher.publishMatchFinishedMessage(buildMatchFinishedMessage(match));
                     }else{
                         if(match.getStatus().equals(Status.WAITING.toString()) || match.getMode().equals(Mode.LOCAL.toString()) || match.getMode().equals(Mode.VS_BOT.toString())){
                             match.finish(null, EndReason.ACCOUNT_DELETED.toString());
@@ -434,6 +530,8 @@ public class MatchController{
                         match.updateVersion();
 
                         repository.save(match);
+
+                        publisher.publishMatchFinishedMessage(buildMatchFinishedMessage(match));
                     }
                 }
             }
@@ -449,6 +547,10 @@ public class MatchController{
 
     private Match findMatch(String gameId){
         return repository.findByGameId(gameId).orElseThrow(() -> MatchNotFoundException.notFound(gameId));
+    }
+
+    private MatchFinishedMessage buildMatchFinishedMessage(Match match){
+        return new MatchFinishedMessage("game.finished", Instant.now().toString(), match.getGameId(), match.getMatchId(), match.getMode(), match.getParticipants(), match.getResult(), match.getEndReason(), match.getFinishedAt().toString());
     }
 
     /** Valida el cuerpo de POST /internal/logic/games y arma la partida nueva o retorna la partida existente si una con el mismo matchId ya existe. */

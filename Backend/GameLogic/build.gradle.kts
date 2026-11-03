@@ -25,6 +25,7 @@ dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-data-mongodb")
 	implementation("org.springframework.boot:spring-boot-starter-webmvc")
 	implementation("org.springframework.boot:spring-boot-starter-amqp")
+	implementation("com.fasterxml.jackson.core:jackson-databind")
 	testImplementation("org.springframework.boot:spring-boot-starter-amqp-test")
 	testImplementation("org.springframework.boot:spring-boot-starter-data-mongodb-test")
 	testImplementation("org.springframework.boot:spring-boot-starter-restdocs")

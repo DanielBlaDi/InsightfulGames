@@ -30,6 +30,7 @@ import chess.movements.Movement;
 @CompoundIndex(def = "{'status': 1, 'createdAt': 1}")
 public class Match{
     public static final String ANONYMOUS_USER_ID = "00000000-0000-0000-0000-000000000000";
+    private static final int WAITING_TIMEOUT_MINUTES = 2;
 
     /**
      * gameId: UUID v4 en texto
@@ -50,13 +51,13 @@ public class Match{
     /**
      * La id que utiliza Multiplayer para cada partida
      */
-    @Indexed(partialFilter = "{'matchId' : {'$ne' : null}}")
+    @Indexed(partialFilter = "{'matchId' : {'$type' : 'string'}}")
     private String matchId;
 
     /**
      * Únicamente presente en partidas multijugador, un sha256 hex creado por Multiplayer para evitar crear partidas duplicadas
      */
-    @Indexed(partialFilter = "{'creationKey' : {'$ne' : null}}")
+    @Indexed(partialFilter = "{'creationKey' : {'$type' : 'string'}}")
     private String creationKey;
 
     /**
@@ -229,6 +230,23 @@ public class Match{
         return Status.FINISHED.toString().equals(status);
     }
 
+    public boolean isWaiting(){
+        return Status.WAITING.toString().equals(status);
+    }
+
+    public boolean isExpiredFromWaiting(){
+        return ChronoUnit.MINUTES.between(createdAt, Instant.now()) > WAITING_TIMEOUT_MINUTES;
+    }
+
+    /** Checks whether the Match is timed out or not, takes into account when the Match doesn't have a clock */
+    public boolean isTimedOut(){
+        if(this.clocks != null){
+            return this.clocks.isTimedOut();
+        }else{
+            return false;
+        }
+    }
+
     /** Las jugadas ya hechas en UCI, en orden. Con ellas e initialFen se reconstruye la posición. */
     public List<String> playedUciMoves(){
         List<String> uciMoves = new ArrayList<>();
@@ -236,6 +254,13 @@ public class Match{
             uciMoves.add(movement.getUci());
         }
         return uciMoves;
+    }
+
+    /** Checks whether there's a clock and starts it if there is */
+    public void startClock(){
+        if(this.clocks != null){
+            this.clocks.startClock();
+        }
     }
 
     public void updateVersion(){

@@ -84,6 +84,12 @@ public class ExceptionWithNamedCodeAdvice{
 		return error(exception.getCode(), exception.getMessage());
 	}
 
+	@ExceptionHandler(ClockException.class)
+	@ResponseStatus(HttpStatus.UNPROCESSABLE_CONTENT)
+	Map<String, Object> clockExceptionHandler(ClockException exception){
+		return error(exception.getCode(), exception.getMessage());
+	}
+
 	private static Map<String, Object> error(String code, String message){
 		return Map.of("error", Map.of("code", code, "message", message));
 	}

@@ -1,7 +1,6 @@
 package chess;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.restdocs.test.autoconfigure.AutoConfigureRestDocs;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -26,6 +25,7 @@ import chess.matches.MatchAssembler;
 import chess.matches.MatchController;
 import chess.matches.MatchRepository;
 import chess.matches.Participant;
+import chess.matches.RabbitPublisher;
 import chess.matches.TimeControl;
 import tools.jackson.databind.ObjectMapper;
 
@@ -63,7 +63,7 @@ public class ChessApplicationHTTPTests{
 	private MatchAssembler assembler;
 
 	@MockitoBean
-	private RabbitTemplate rabbitTemplate;
+	private RabbitPublisher rabbitPublisher;
 
 	@TestConfiguration
     static class TestConfig{
@@ -343,6 +343,8 @@ public class ChessApplicationHTTPTests{
 
 		Match testMatch = givenStoredMatch(createTestMatch(Mode.LOCAL.toString(), null, testParticipants));
 
+		testMatch.startClock();
+
 		postMove(testMatch.getGameId(), "e2e4", 0)
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.fen").value(FEN_AFTER_E4))
@@ -470,6 +472,8 @@ public class ChessApplicationHTTPTests{
 		testParticipants.add(new Participant(TEST_USER_ID, Color.BLACK.toString()));
 		
 		Match testMatch = givenStoredMatch(createTestMatch(Mode.LOCAL.toString(), null, testParticipants));
+
+		testMatch.startClock();
 
 		postMove(testMatch.getGameId(), "f2f3", 0).andExpect(status().isOk());
 		postMove(testMatch.getGameId(), "e7e5", 1).andExpect(status().isOk());
