@@ -56,7 +56,7 @@ services:
     container_name: api-gateway-component
     build:
       context: ./Backend/api-gateway
-      dockerfile: dockerfile
+      dockerfile: Dockerfile
     image: api-gateway-component:dev
     expose:
       - "8080"
@@ -175,8 +175,6 @@ services:
       - "8084"
     environment:
       SERVER_PORT: "8084"
-      GATEWAY_URL: http://api-gateway-component:${API_GATEWAY_PORT}
-      GAME_LOGIC_COMPONENT_URL: http://game-logic-component:${GAME_LOGIC_PORT}
       GATEWAY_INTERNAL_URL: http://api-gateway-component:8080
       RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:?}:${RABBITMQ_DEFAULT_PASS:?}@rabbitmq:5672
       RECONNECT_WINDOW_SECONDS: ${RECONNECT_WINDOW_SECONDS:?}

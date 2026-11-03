@@ -194,6 +194,10 @@ public class Match{
         this.finishedAt = now();
     }
 
+    public boolean canBeOperatedOn(){
+        return !Status.FINISHED.toString().equals(status) && !Status.WAITING.toString().equals(status);
+    }
+
     public boolean isFinished(){
         return Status.FINISHED.toString().equals(status);
     }
@@ -289,6 +293,10 @@ public class Match{
 
     public void setVisibility(String visibility){
         this.visibility = visibility;
+    }
+
+    public void setDrawOffer(String drawOffer){
+        this.drawOffer = drawOffer;
     }
 
     @Override public boolean equals(Object other){

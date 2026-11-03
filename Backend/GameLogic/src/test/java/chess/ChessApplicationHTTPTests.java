@@ -19,6 +19,7 @@ import chess.constants.Mode;
 import chess.constants.Result;
 import chess.constants.Status;
 import chess.constants.Visibility;
+import chess.exceptions.MatchNotInProgressException;
 import chess.matches.CreateMatchRequest;
 import chess.matches.Match;
 import chess.matches.MatchAssembler;
@@ -39,7 +40,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
 
@@ -215,7 +218,7 @@ public class ChessApplicationHTTPTests{
 	}
 
 	/**Test for the function getMatchesByUserIdPaged(@RequestParam(name = "userId", required = false) String userId, @RequestParam(name = "limit", required = false) Integer limit, @RequestParam(name = "cursor", required = false) Integer cursor)*/
-	@Test public void shouldReturnExistingMatchesForGivenUser() throws Exception{
+	@Test public void shouldReturnExistingMatchesForGivenUserNoNextCursor() throws Exception{
 		List<Participant> testParticipants = new ArrayList<>(2);
 		testParticipants.add(new Participant(TEST_USER_ID, Color.WHITE.toString()));
 		testParticipants.add(new Participant(TEST_USER_ID, Color.BLACK.toString()));
@@ -229,23 +232,76 @@ public class ChessApplicationHTTPTests{
 
 		when(repository.findByParticipantsUserIdOrderByCreatedAtDesc(TEST_USER_ID)).thenReturn(mockMatches);
 
-		this.mockMvc.perform(get("/internal/logic/games").param("userId", TEST_USER_ID).param("cursor", "1")).andExpect(status().isOk())
-			.andExpect(jsonPath("$.matches.length()").value(2))
-			.andExpect(jsonPath("$.matches[0].gameId").value(mockMatches.get(0).getGameId()))
-			.andExpect(jsonPath("$.cursor").value(nullValue()))
+		this.mockMvc.perform(get("/internal/logic/games").param("userId", TEST_USER_ID)).andExpect(status().isOk())
+			.andExpect(jsonPath("$.items.length()").value(2))
+			.andExpect(jsonPath("$.items[0].gameId").value(mockMatches.get(0).getGameId()))
+			.andExpect(jsonPath("$.nextCursor").value(nullValue()))
 			.andDo(
 				document(
-					"obtainMatchesByUserId",
+					"obtainMatchesByUserIdNoNextCursor"
+				)
+			);
+	}
+
+	/**Test for the function getMatchesByUserIdPaged(@RequestParam(name = "userId", required = false) String userId, @RequestParam(name = "limit", required = false) Integer limit, @RequestParam(name = "cursor", required = false) Integer cursor)*/
+	@Test public void shouldReturnExistingMatchesForGivenUserWithNextCursor() throws Exception{
+		List<Participant> testParticipants = new ArrayList<>(2);
+		testParticipants.add(new Participant(TEST_USER_ID, Color.WHITE.toString()));
+		testParticipants.add(new Participant(TEST_USER_ID, Color.BLACK.toString()));
+		List<Participant> botTestParticipants = new ArrayList<>(1);
+		botTestParticipants.add(new Participant(TEST_USER_ID, Color.BLACK.toString()));
+
+		List<Match> mockMatches = List.of(
+			new Match(Mode.LOCAL.toString(), new TimeControl(10), Visibility.SHARED.toString(), null, null, testParticipants),
+			new Match(Mode.LOCAL.toString(), new TimeControl(10), Visibility.SHARED.toString(), null, null, testParticipants),
+			new Match(Mode.VS_BOT.toString(), new TimeControl(10), Visibility.SHARED.toString(), 8, null, botTestParticipants)
+		);
+
+		String encodedNextCursor = Base64.getUrlEncoder().withoutPadding().encodeToString(String.valueOf(2).getBytes(StandardCharsets.UTF_8));
+
+		when(repository.findByParticipantsUserIdOrderByCreatedAtDesc(TEST_USER_ID)).thenReturn(mockMatches);
+
+		this.mockMvc.perform(get("/internal/logic/games").param("userId", TEST_USER_ID).param("limit", "2")).andExpect(status().isOk())
+			.andExpect(jsonPath("$.items.length()").value(2))
+			.andExpect(jsonPath("$.items[0].gameId").value(mockMatches.get(0).getGameId()))
+			.andExpect(jsonPath("$.nextCursor").value(encodedNextCursor))
+			.andDo(
+				document(
+					"obtainMatchesByUserIdWithNextCursor",
 					responseFields(
-						fieldWithPath("matches.[].gameId").description("The identifier for each of the returned matches."),
-						fieldWithPath("matches.[].mode").description("\"" + Mode.LOCAL.toString() + "\" | \"" + Mode.VS_BOT.toString() + "\""),
-						fieldWithPath("matches.[].status").description(Status.allPossibleStatuses()),
-						fieldWithPath("matches.[].result").description("String that describes the end result of this match. Takes one of " + (Result.size() + 1) + " values: " + Result.allPossibleResults() + " | Null (in the case that the match hasn't ended)"),
-						fieldWithPath("matches.[].createdAt").description("The date and time in which each of the returned matches started."),
-						fieldWithPath("cursor").description("The current page number for the query, starts on 1, null if there are no more Matches to show")
+						fieldWithPath("items.[].gameId").description("The identifier for each of the returned matches."),
+						fieldWithPath("items.[].mode").description("\"" + Mode.LOCAL.toString() + "\" | \"" + Mode.VS_BOT.toString() + "\""),
+						fieldWithPath("items.[].status").description(Status.allPossibleStatuses()),
+						fieldWithPath("items.[].result").description("String that describes the end result of this match. Takes one of " + (Result.size() + 1) + " values: " + Result.allPossibleResults() + " | Null (in the case that the match hasn't ended)"),
+						fieldWithPath("items.[].createdAt").description("The date and time in which each of the returned matches started."),
+						fieldWithPath("nextCursor").description("The current page number for the query, encoded in base64url, starts on 1, null if there are no more Matches to show")
 					)
 				)
 			);
+	}
+
+	/**Test for the function getMatchesByUserIdPaged(@RequestParam(name = "userId", required = false) String userId, @RequestParam(name = "limit", required = false) Integer limit, @RequestParam(name = "cursor", required = false) Integer cursor)*/
+	@Test public void shouldReturnExistingMatchesForGivenUserFromPreviousCursor() throws Exception{
+		List<Participant> testParticipants = new ArrayList<>(2);
+		testParticipants.add(new Participant(TEST_USER_ID, Color.WHITE.toString()));
+		testParticipants.add(new Participant(TEST_USER_ID, Color.BLACK.toString()));
+		List<Participant> botTestParticipants = new ArrayList<>(1);
+		botTestParticipants.add(new Participant(TEST_USER_ID, Color.BLACK.toString()));
+
+		List<Match> mockMatches = List.of(
+			new Match(Mode.LOCAL.toString(), new TimeControl(10), Visibility.SHARED.toString(), null, null, testParticipants),
+			new Match(Mode.LOCAL.toString(), new TimeControl(10), Visibility.SHARED.toString(), null, null, testParticipants),
+			new Match(Mode.VS_BOT.toString(), new TimeControl(10), Visibility.SHARED.toString(), 8, null, botTestParticipants)
+		);
+
+		String encodedPreviousCursor = Base64.getUrlEncoder().withoutPadding().encodeToString(String.valueOf(2).getBytes(StandardCharsets.UTF_8));
+
+		when(repository.findByParticipantsUserIdOrderByCreatedAtDesc(TEST_USER_ID)).thenReturn(mockMatches);
+
+		this.mockMvc.perform(get("/internal/logic/games").param("userId", TEST_USER_ID).param("limit", "2").param("cursor", encodedPreviousCursor)).andExpect(status().isOk())
+			.andExpect(jsonPath("$.items.length()").value(1))
+			.andExpect(jsonPath("$.items[0].gameId").value(mockMatches.get(2).getGameId()))
+			.andExpect(jsonPath("$.nextCursor").value(nullValue()));
 	}
 
 	/**Test for the function getMatchesByUserId(@RequestParam String userId) without the userId*/
@@ -371,12 +427,12 @@ public class ChessApplicationHTTPTests{
 
 		postMove(finishedMatch.getGameId(), "e2e4")
 			.andExpect(status().isUnprocessableContent())
-			.andExpect(jsonPath("$.error.code").value("GAME_FINISHED"))
+			.andExpect(jsonPath("$.error.code").value(MatchNotInProgressException.GAME_NOT_IN_PROGRESS))
 			.andDo(
 				document(
 					"attemptMoveOnFinishedMatch",
 					responseFields(
-						fieldWithPath("error.code").description("Machine-readable code of the error, for this case \"GAME_FINISHED\"."),
+						fieldWithPath("error.code").description("Machine-readable code of the error, for this case \"" + MatchNotInProgressException.GAME_NOT_IN_PROGRESS + "\"."),
 						fieldWithPath("error.message").description("Human-readable description of the error.")
 					)
 				)
@@ -462,7 +518,7 @@ public class ChessApplicationHTTPTests{
 
 		this.mockMvc.perform(post("/internal/logic/games/" + finishedMatch.getGameId() + "/resign").contentType(MediaType.APPLICATION_JSON).content("{\"side\": \"" + Color.BLACK.toString() + "\"}"))
 			.andExpect(status().isUnprocessableContent())
-			.andExpect(jsonPath("$.error.code").value("GAME_FINISHED"));
+			.andExpect(jsonPath("$.error.code").value(MatchNotInProgressException.GAME_NOT_IN_PROGRESS));
 	}
 
 	/**Test for the function finishMatch(@PathVariable String id, @RequestBody MatchResultRequest body) with an invalid side*/

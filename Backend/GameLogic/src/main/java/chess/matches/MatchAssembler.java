@@ -17,11 +17,11 @@ public class MatchAssembler{
 
     public GameState toState(Match match){
         //legalMoves no se guarda: se calcula desde el FEN. Vacío {} si la partida terminó
-        Map<String, List<String>> legalMoves = match.isFinished() ? Map.of() : ChessRules.legalMoves(match.getFen());
+        Map<String, List<String>> legalMoves = !match.canBeOperatedOn() ? Map.of() : ChessRules.legalMoves(match.getFen());
 
         List<MoveEntry> moves = new ArrayList<>();
         for(Movement movement : match.getMovements()){
-            moves.add(new MoveEntry(movement.getPly(), movement.getSan(), movement.getUci(), movement.getFenAfter(), movement.getTimestamp().toString()));
+            moves.add(new MoveEntry(movement.getPly(), movement.getSan(), movement.getUci(), movement.getFenAfter(), movement.getTimestamp().toString(), movement.getColor()));
         }
 
         return new GameState(
