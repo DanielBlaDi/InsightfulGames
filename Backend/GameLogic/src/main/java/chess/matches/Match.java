@@ -48,6 +48,16 @@ public class Match{
     private String matchId;
 
     /**
+     * Únicamente presente en partidas multijugador, un sha256 hex creado por Multiplayer para evitar crear partidas duplicadas
+     */
+    private String creationKey;
+
+    /**
+     * Únicamente presente en partidas multijugador, un sha256 hex creado por Multiplayer para evitar crear partidas duplicadas
+     */
+    private String requestFingerprint;
+
+    /**
      * Los jugadores que hacen parte de esta partida
      */
     private List<Participant> participants;
@@ -129,13 +139,15 @@ public class Match{
     }
 
     /** Crea una partida nueva en la posición inicial. Game Logic genera gameId y createdAt. */
-    public Match(String mode, TimeControl timeControl, String visibility, Integer botLevel, String matchId, List<Participant> participants){
+    public Match(String mode, TimeControl timeControl, String visibility, Integer botLevel, String matchId, String creationKey, String requestFingerprint, List<Participant> participants){
         this();
         this.gameId = UUID.randomUUID().toString();
 
         this.mode = mode;
         this.visibility = visibility;
         this.matchId = matchId;
+        this.creationKey = creationKey;
+        this.requestFingerprint = requestFingerprint;
         this.participants = participants;
         this.botLevel = botLevel;
         this.timeControl = timeControl;
@@ -177,13 +189,16 @@ public class Match{
         this.participants.add(participant);
     }
 
-    /** Changes the user's id to ANONYMOUS_USER_ID in this Match, works even if both participants are the same user*/
-    public void anonymizeUser(String userId){
+    /** Changes the user's id to ANONYMOUS_USER_ID in this Match, works even if both participants are the same user. Additionally removes creationKey and requestFingerprint, as they are linked to the user who created the match if it is a multiplayer one*/
+    public void anonymize(String userId){
         for(int i=0; i<participants.size(); i++){
             if(participants.get(i).userId().equals(userId)){
                 participants.set(i, new Participant(ANONYMOUS_USER_ID, participants.get(i).color()));
             }
         }
+
+        this.creationKey = null;
+        this.requestFingerprint = null;
     }
 
     public boolean canBeOperatedOn(){
@@ -234,6 +249,14 @@ public class Match{
 
     public String getMatchId(){
         return matchId;
+    }
+
+    public String getCreationKey(){
+        return creationKey;
+    }
+
+    public String getRequestFingerPrint(){
+        return requestFingerprint;
     }
 
     public List<Participant> getParticipants(){

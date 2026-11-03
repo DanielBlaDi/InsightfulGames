@@ -31,6 +31,7 @@ import chess.constants.Visibility;
 import chess.exceptions.CannotJoinMatchException;
 import chess.exceptions.CannotOfferDrawException;
 import chess.exceptions.CannotReplyToDrawException;
+import chess.exceptions.CreationKeyException;
 import chess.exceptions.MatchNotFinishedException;
 import chess.exceptions.MatchNotFoundException;
 import chess.exceptions.MatchNotInProgressException;
@@ -62,12 +63,16 @@ public class MatchController{
         Match saved = null;
         boolean matchAlreadyExists = false;
 
-        if(request.matchId() != null){
-            Optional<Match> alreadyExistingMatch = repository.findByMatchId(request.matchId());
-                
+        if(request.creationKey() != null){
+            Optional<Match> alreadyExistingMatch = repository.findByCreationKey(request.creationKey());
+
             if(alreadyExistingMatch.isPresent()){
-                saved = alreadyExistingMatch.get();
-                matchAlreadyExists = true;
+                if(alreadyExistingMatch.get().getRequestFingerPrint().equals(request.requestFingerPrint())){
+                    saved = alreadyExistingMatch.get();
+                    matchAlreadyExists = true;
+                }else{
+                    throw CreationKeyException.keyReused();
+                }
             }
         }
         
@@ -398,7 +403,7 @@ public class MatchController{
                     if(match.getStatus().equals(Status.IN_PROGRESS.toString()) && match.getMode().equals(Mode.MULTIPLAYER.toString())){
                         match.finishAndUpdateVersion(Color.WHITE.toString().equals(participant.color()) ? Color.BLACK.toString() : Color.WHITE.toString(), EndReason.ABANDONMENT.toString());
 
-                        match.anonymizeUser(userId);
+                        match.anonymize(userId);
 
                         repository.save(match);
 
@@ -406,7 +411,7 @@ public class MatchController{
                             "game.events", 
                             "game.finished", 
                             new MatchFinishedMessage(
-                                UUID.randomUUID().toString(), 
+                                UUID.randomUUID().toString(),
                                 "game.finished", 
                                 Instant.now().toString(), 
                                 match.getGameId(), 
@@ -423,7 +428,7 @@ public class MatchController{
                             match.finish(null, EndReason.ACCOUNT_DELETED.toString());
                         }
                         
-                        match.anonymizeUser(userId);
+                        match.anonymize(userId);
 
                         match.updateVersion();
 
@@ -431,8 +436,6 @@ public class MatchController{
                     }
                 }
             }
-
-            
         }
 
         return ResponseEntity.noContent().build();
@@ -517,7 +520,7 @@ public class MatchController{
             throw RequestNotValidException.notValid("userId debe ser un UUID");
         }
         
-        return new Match(mode, request.timeControl(), request.visibility(), botLevel, request.matchId(), participants);
+        return new Match(mode, request.timeControl(), request.visibility(), botLevel, request.matchId(), request.creationKey(), request.requestFingerPrint(), participants);
     }
 
     private static boolean isColor(String value){

@@ -78,6 +78,12 @@ public class ExceptionWithNamedCodeAdvice{
 		return error(exception.getCode(), exception.getMessage());
 	}
 
+	@ExceptionHandler(CreationKeyException.class)
+	@ResponseStatus(HttpStatus.CONFLICT)
+	Map<String, Object> creationKeyHandler(CreationKeyException exception){
+		return error(exception.getCode(), exception.getMessage());
+	}
+
 	private static Map<String, Object> error(String code, String message){
 		return Map.of("error", Map.of("code", code, "message", message));
 	}
