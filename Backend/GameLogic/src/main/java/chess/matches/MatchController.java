@@ -127,14 +127,15 @@ public class MatchController{
             
         }
 
-        if(matchList.size() > limit*decodedCursor){
-            String encodedResponseCursor = Base64.getUrlEncoder().withoutPadding().encodeToString(String.valueOf(decodedCursor + 1).getBytes(StandardCharsets.UTF_8));
-            result = new GamesPage(matchList.subList(limit * (decodedCursor - 1), (limit * decodedCursor)), encodedResponseCursor);
-        }else if(matchList.size() == limit*decodedCursor){
-            result = new GamesPage(matchList.subList(limit * (decodedCursor - 1), (limit * decodedCursor)), null);
-        }else{
-            result = new GamesPage(matchList.subList(limit * (decodedCursor - 1), matchList.size()), null);
-        }
+        // long: evita desbordar int con cursores grandes. Una página más allá del final es una página vacía, no un error.
+        long fromLong = (long) limit * (decodedCursor - 1);
+        int total = matchList.size();
+        int from = (int) Math.min(fromLong, total);
+        int to = (int) Math.min(fromLong + limit, total);
+        String nextCursor = (fromLong + limit < total)
+            ? Base64.getUrlEncoder().withoutPadding().encodeToString(String.valueOf(decodedCursor + 1).getBytes(StandardCharsets.UTF_8))
+            : null;
+        result = new GamesPage(matchList.subList(from, to), nextCursor);
 
         return ResponseEntity.ok(result);
     }

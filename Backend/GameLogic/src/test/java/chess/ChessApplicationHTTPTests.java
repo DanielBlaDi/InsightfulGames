@@ -304,6 +304,25 @@ public class ChessApplicationHTTPTests{
 			.andExpect(jsonPath("$.nextCursor").value(nullValue()));
 	}
 
+	/**Un cursor más allá de la última página devuelve una página vacía (200), no un error 500*/
+	@Test public void shouldReturnEmptyPageWhenCursorIsBeyondTheLastPage() throws Exception{
+		List<Participant> testParticipants = new ArrayList<>(2);
+		testParticipants.add(new Participant(TEST_USER_ID, Color.WHITE.toString()));
+		testParticipants.add(new Participant(TEST_USER_ID, Color.BLACK.toString()));
+
+		List<Match> mockMatches = List.of(
+			new Match(Mode.LOCAL.toString(), new TimeControl(10), Visibility.SHARED.toString(), null, null, testParticipants)
+		);
+
+		String farCursor = Base64.getUrlEncoder().withoutPadding().encodeToString(String.valueOf(5).getBytes(StandardCharsets.UTF_8));
+
+		when(repository.findByParticipantsUserIdOrderByCreatedAtDesc(TEST_USER_ID)).thenReturn(mockMatches);
+
+		this.mockMvc.perform(get("/internal/logic/games").param("userId", TEST_USER_ID).param("limit", "2").param("cursor", farCursor)).andExpect(status().isOk())
+			.andExpect(jsonPath("$.items.length()").value(0))
+			.andExpect(jsonPath("$.nextCursor").value(nullValue()));
+	}
+
 	/**Test for the function getMatchesByUserId(@RequestParam String userId) without the userId*/
 	@Test public void shouldReturnValidationErrorWhenUserIdIsMissing() throws Exception{
 		this.mockMvc.perform(get("/internal/logic/games"))
