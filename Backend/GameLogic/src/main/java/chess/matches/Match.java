@@ -30,6 +30,7 @@ import chess.movements.Movement;
 @CompoundIndex(def = "{'status': 1, 'createdAt': 1}")
 public class Match{
     public static final String ANONYMOUS_USER_ID = "00000000-0000-0000-0000-000000000000";
+    private static final int WAITING_TIMEOUT_MINUTES = 2;
 
     /**
      * gameId: UUID v4 en texto
@@ -227,6 +228,23 @@ public class Match{
 
     public boolean isFinished(){
         return Status.FINISHED.toString().equals(status);
+    }
+
+    public boolean isWaiting(){
+        return Status.WAITING.toString().equals(status);
+    }
+
+    public boolean isExpiredFromWaiting(){
+        return ChronoUnit.MINUTES.between(createdAt, Instant.now()) > WAITING_TIMEOUT_MINUTES;
+    }
+
+    /** Checks whether the Match is timed out or not, takes into account when the Match doesn't have a clock */
+    public boolean isTimedOut(){
+        if(this.clocks != null){
+            return this.clocks.isTimedOut();
+        }else{
+            return false;
+        }
     }
 
     /** Las jugadas ya hechas en UCI, en orden. Con ellas e initialFen se reconstruye la posición. */

@@ -4,6 +4,7 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
@@ -396,6 +397,72 @@ public class MatchController{
         repository.save(match);
 
         return ResponseEntity.ok(new TimeoutResponse(id, match.getStatus(), match.getResult(), match.getEndReason(), match.getFinishedAt().toString()));
+    }
+
+    @PostMapping({"/internal/logic/games/{id}/expire", "/internal/logic/games/{id}/expire/"})
+    ResponseEntity<GameState> expireWaitingMatch(@PathVariable("id") String id, @RequestBody ExpectedVersionRequestBody requestBody){
+        Match match = findMatch(id);
+
+        if(requestBody == null || requestBody.expectedVersion() == null){
+            throw RequestNotValidException.notValid("Falta el campo expectedVersion");
+        }
+        if(!match.isWaiting()){
+            throw MatchNotInProgressException.matchNotInProgress();
+        }
+        if(match.getVersion() != requestBody.expectedVersion()){
+            throw VersionConflictException.versionConflict();
+        }
+        if(!match.isExpiredFromWaiting()){
+            throw ClockException.waitingNotExpired();
+        }
+
+        match.finishAndUpdateVersion(null, EndReason.EXPIRED.toString());
+
+        repository.save(match);
+
+        return ResponseEntity.ok(assembler.toState(match));
+    }
+
+    @GetMapping({"/internal/logic/games/expired", "/internal/logic/games/expired/"})
+    ResponseEntity<List<ExpiredQueryResponse>> getExpiredMatches(@RequestParam(name = "limit", required = false) Integer limit){
+        if(limit == null){
+            throw RequestNotValidException.notValid("Falta el campo limit");
+        }
+
+        List<Match> expiredMatches = new ArrayList<>();
+
+        List<Match> inProgressMatches = repository.findByStatus(Status.IN_PROGRESS.toString());
+
+        for(Match match : inProgressMatches){
+            if(expiredMatches.size() < limit){
+                if(match.isTimedOut()){
+                    expiredMatches.add(match);
+                }
+            }else{
+                break;
+            }
+        }
+
+        if(expiredMatches.size() < limit){
+            List<Match> waitingMatches = repository.findByStatus(Status.WAITING.toString());
+            for(Match match : waitingMatches){
+                if(expiredMatches.size() < limit){
+                    if(match.isExpiredFromWaiting()){
+                        expiredMatches.add(match);
+                    }
+                }else{
+                    break;
+                }
+            }
+        }
+
+        List<ExpiredQueryResponse> result = new ArrayList<>();
+
+        for(Match expiredMatch : expiredMatches){
+            result.add(new ExpiredQueryResponse(expiredMatch.getGameId(), expiredMatch.getVersion(), expiredMatch.isExpiredFromWaiting() ? EndReason.EXPIRED.toString() : EndReason.TIMEOUT.toString()));
+        }
+
+        return ResponseEntity.ok(result);
     }
 
     @GetMapping({"/internal/logic/games/{id}/analysis-input", "/internal/logic/games/{id}/analysis-input/"})
