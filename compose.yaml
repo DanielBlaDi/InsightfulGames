@@ -135,7 +135,7 @@ services:
 
       # El modo vs_bot llama a {GATEWAY_INTERNAL_URL}/engine/best-move.
       # Aquí apunta al Botcito falso que corre en tu máquina (GameService/tools/fake_botcito.py, puerto 8000).
-      GATEWAY_INTERNAL_URL: http://api-gateway-component:${API_GATEWAY_PORT}
+      GATEWAY_INTERNAL_URL: http://api-gateway-component:8080
       # GATEWAY_INTERNAL_URL: http://host.docker.internal:8000 # el modo BOT necesita que Botcito exista  <--- for testing with curl
 
     extra_hosts:
@@ -147,23 +147,21 @@ services:
 
 
 
-  # multiplayer-component:
-    # container_name: multiplayer-component
-    # restart: unless-stopped
-  #   build:
-  #     context: ./Backend/multiplayer-component
-  #     dockerfile: Dockerfile
-  #   image: multiplayer-component:dev
-  #   expose:
-  #     - "${MULTIPLAYER_PORT}"
-  #   environment:
-  #     SERVER_PORT: "${MULTIPLAYER_PORT}"
-  #     GATEWAY_URL: http://api-gateway-component:${API_GATEWAY_PORT}
-  #     GAME_LOGIC_COMPONENT_URL: http://game-logic-component:${GAME_LOGIC_PORT}
-  #   depends_on:
-  #     - game-logic-component
-  #   networks:
-  #     - app
+  multiplayer-component:
+    container_name: multiplayer-component
+    restart: unless-stopped
+    build:
+      context: ./Backend/multiplayer-component
+      dockerfile: Dockerfile
+    image: multiplayer-component:dev
+    environment:
+      PORT: "${MULTIPLAYER_PORT:-8084}"
+      LOG_LEVEL: INFO
+      GATEWAY_INTERNAL_URL: http://api-gateway-component:${API_GATEWAY_PORT}
+      RABBITMQ_URL: "${RABBITMQ_URL:?RABBITMQ_URL must point to the RabbitMQ broker}"
+      RECONNECT_WINDOW_SECONDS: "30"
+    networks:
+      - app
 
 
 
