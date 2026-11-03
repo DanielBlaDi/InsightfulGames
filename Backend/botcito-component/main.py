@@ -8,7 +8,7 @@ from typing import Literal
 
 import chess
 import chess.engine
-from fastapi import FastAPI, Request
+from fastapi import APIRouter, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -47,6 +47,37 @@ class InternalMoveResponse(BaseModel):
     san: str
     evaluation: InternalEvaluation
 
+ANALYSIS_DEPTH_MAX = int(os.getenv("ANALYSIS_DEPTH_MAX", "18"))
+
+if ANALYSIS_DEPTH_MAX < 1:
+    raise ValueError("ANALYSIS_DEPTH_MAX debe ser positivo.")
+
+class AnalysisRequest(BaseModel):
+    fen: str = Field(min_length=1, max_length=200, strict=True)
+    depth: int = Field(
+        ge=1,
+        le=ANALYSIS_DEPTH_MAX,
+        strict=True
+    )
+
+class AnalysisEvaluation(BaseModel):
+    type: Literal["cp", "mate"]
+    value: int
+    perspective: Literal["white"] = "white"
+
+
+class AnalysisBestMove(BaseModel):
+    uci: str
+    san: str
+
+
+class AnalysisResponse(BaseModel):
+    fen: str
+    evaluation: AnalysisEvaluation
+    bestMove: AnalysisBestMove | None
+    depth: int
+
+
 class LegacyMoveResponse(MoveResponse):
     move: str
 
@@ -63,6 +94,59 @@ def parse_position(fen: str) -> chess.Board:
     if not any(board.legal_moves):
         raise BotError(422, "NO_LEGAL_MOVES", "La posición no tiene jugadas legales.")
     return board
+
+def parse_analysis_position(fen: str) -> chess.Board:
+    """Valida una posicion FEN, permitiendo partidas terminadas."""
+
+    try:
+        if len(fen.split()) != 6:
+            raise ValueError("Se requieren los seis campos FEN")
+
+        board = chess.Board(fen)
+
+        if not board.is_valid():
+            raise ValueError("Posicion invalida")
+
+    except ValueError as exc:
+        raise BotError(
+            400,
+            "INVALID_FEN",
+            "La posicion FEN no es valida."
+        ) from exc
+
+    return board
+
+
+def terminal_analysis_response(
+    board: chess.Board,
+    depth: int
+) -> AnalysisResponse | None:
+    """Evalua posiciones terminadas sin consultar Stockfish."""
+
+    outcome = board.outcome(claim_draw=False)
+
+    # La partida continua: requiere analisis de Stockfish.
+    if outcome is None:
+        return None
+
+    # Evaluacion desde la perspectiva de blancas.
+    if outcome.winner is None:
+        value = 0
+    elif outcome.winner == chess.WHITE:
+        value = 100000
+    else:
+        value = -100000
+
+    return AnalysisResponse(
+        fen=board.fen(),
+        evaluation=AnalysisEvaluation(
+            type="cp",
+            value=value,
+            perspective="white"
+        ),
+        bestMove=None,
+        depth=depth
+    )
 
 class EngineSlot:
     """Representa un motor Stockfish independiente."""
@@ -272,6 +356,107 @@ class StockfishEngine:
         finally:
             slot.lock.release()
 
+
+    def evaluate_position(
+        self,
+        board: chess.Board,
+        depth: int
+    ) -> AnalysisResponse:
+        """Evalua una posicion desde la perspectiva de blancas."""
+
+        # Resolver posiciones terminales sin consultar Stockfish.
+        terminal = terminal_analysis_response(board, depth)
+
+        if terminal is not None:
+            return terminal
+
+        # Reservar un motor disponible del pool.
+        slot = self._acquire_slot()
+
+        try:
+            engine = slot.engine
+
+            # Recuperar el motor si se encuentra detenido.
+            if engine is None or engine.returncode.done():
+                self._discard_slot(slot)
+                engine = self._create_engine(5.0)
+                slot.engine = engine
+
+                if slot is self.slots[0]:
+                    self.engine = engine
+
+            # El analisis utiliza toda la fuerza de Stockfish.
+            engine.configure({"Skill Level": 20})
+
+            # Analizar hasta la profundidad solicitada.
+            info = engine.analyse(
+                board,
+                chess.engine.Limit(depth=depth),
+                game=object()
+            )
+
+            # La evaluacion siempre es desde las blancas.
+            score = info["score"].pov(chess.WHITE)
+
+            value = (
+                score.mate()
+                if score.is_mate()
+                else score.score()
+            )
+
+            if value is None:
+                raise RuntimeError(
+                    "Stockfish no devolvio una evaluacion"
+                )
+
+            # Obtener la mejor jugada de la variante principal.
+            pv = info.get("pv", [])
+
+            if not pv or pv[0] not in board.legal_moves:
+                raise RuntimeError(
+                    "Stockfish no devolvio una jugada valida"
+                )
+
+            move = pv[0]
+
+            return AnalysisResponse(
+                fen=board.fen(),
+                evaluation=AnalysisEvaluation(
+                    type="mate" if score.is_mate() else "cp",
+                    value=value,
+                    perspective="white"
+                ),
+                bestMove=AnalysisBestMove(
+                    uci=move.uci(),
+                    san=board.san(move)
+                ),
+                depth=depth
+            )
+
+        except TimeoutError as exc:
+            logger.exception("Timeout en Botcito-analisis")
+            self._discard_slot(slot)
+
+            raise BotError(
+                504,
+                "ENGINE_TIMEOUT",
+                "El motor supero el tiempo permitido."
+            ) from exc
+
+        except Exception as exc:
+            logger.exception("Fallo en Botcito-analisis")
+            self._discard_slot(slot)
+
+            raise BotError(
+                503,
+                "SERVICES_UNAVAILABLE",
+                "El motor no esta disponible."
+            ) from exc
+
+        finally:
+            slot.lock.release()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     engine = StockfishEngine()
@@ -282,9 +467,17 @@ async def lifespan(app: FastAPI):
     finally:
         engine.close()
 
+ENGINE_ROLE = os.getenv("ENGINE_ROLE", "game").strip().lower()
+
+if ENGINE_ROLE not in ("game", "analysis"):
+    raise ValueError(
+        "ENGINE_ROLE debe ser 'game' o 'analysis'."
+    )
 
 app = FastAPI(title="Botcito — Stockfish", version="1.0.0", lifespan=lifespan)
 
+game_router = APIRouter()
+analysis_router = APIRouter()
 
 @app.exception_handler(BotError)
 async def bot_error_handler(_request: Request, exc: BotError):
@@ -311,7 +504,7 @@ def health(request: Request):
 
     return {"status": "ok"}
 
-@app.post("/internal/engine/best-move", response_model=InternalMoveResponse)
+@game_router.post("/internal/engine/best-move", response_model=InternalMoveResponse)
 def internal_best_move(data: InternalMoveRequest, request: Request):
     result = request.app.state.engine.best_move(
         parse_position(data.fen),
@@ -326,13 +519,36 @@ def internal_best_move(data: InternalMoveRequest, request: Request):
         )
     )
 
-@app.post("/engine/best-move", response_model=MoveResponse)
+@game_router.post("/engine/best-move", response_model=MoveResponse)
 def best_move(data: MoveRequest, request: Request):
     return request.app.state.engine.best_move(parse_position(data.fen), data.level)
 
 
-@app.post("/best-move", response_model=LegacyMoveResponse)
+@game_router.post("/best-move", response_model=LegacyMoveResponse)
 def legacy_best_move(data: MoveRequest, request: Request):
     """Compatibilidad con BotcitoClient.java: conserva move sin perder la evaluación."""
     result = best_move(data, request)
     return LegacyMoveResponse(**result.model_dump(), move=result.uci)
+
+@analysis_router.post(
+    "/internal/engine-analysis/evaluate",
+    response_model=AnalysisResponse
+)
+def evaluate_position_endpoint(
+    data: AnalysisRequest,
+    request: Request
+):
+    """Evalua una posicion utilizando Stockfish."""
+
+    board = parse_analysis_position(data.fen)
+
+    return request.app.state.engine.evaluate_position(
+        board,
+        data.depth
+    )
+
+if ENGINE_ROLE == "game":
+    app.include_router(game_router)
+
+elif ENGINE_ROLE == "analysis":
+    app.include_router(analysis_router)
