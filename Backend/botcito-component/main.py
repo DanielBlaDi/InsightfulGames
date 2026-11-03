@@ -147,8 +147,13 @@ class StockfishEngine:
         self.engine = None
 
     def healthy(self) -> bool:
-        engine = self.engine
-        return engine is not None and not engine.returncode.done()
+        """Comprueba si al menos un motor del pool esta operativo."""
+
+        return any(
+            slot.engine is not None
+            and not slot.engine.returncode.done()
+            for slot in self.slots
+        )
 
     def _acquire_slot(self) -> EngineSlot:
         """Reserva un motor disponible sin esperar."""
@@ -295,11 +300,15 @@ async def validation_error_handler(_request: Request, _exc: RequestValidationErr
         "message": "Datos inválidos: verifica el FEN y el nivel de dificultad (entero entre 1 y 20).",
     }})
 
-
 @app.get("/health")
 def health(request: Request):
     if not request.app.state.engine.healthy():
-        raise BotError(503, "ENGINE_UNAVAILABLE", "El motor no está disponible.")
+        raise BotError(
+            503,
+            "SERVICES_UNAVAILABLE",
+            "No hay motores Stockfish disponibles."
+        )
+
     return {"status": "ok"}
 
 @app.post("/internal/engine/best-move", response_model=InternalMoveResponse)

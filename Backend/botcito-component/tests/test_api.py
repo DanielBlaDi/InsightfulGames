@@ -123,9 +123,89 @@ def test_busy_engine_returns_recoverable_error(client):
     # Verificamos que Botcito sigue funcionando.
     assert client.get("/health").status_code == 200
 
+
 def test_restart_after_engine_exit(client):
-    app.state.engine.engine.quit()
-    assert_error(client.get("/health"), 503, "ENGINE_UNAVAILABLE")
-    response = client.post("/engine/best-move", json={"fen": chess.STARTING_FEN, "level": 1})
-    assert response.status_code == 200, response.text
+    pool = app.state.engine
+
+    # Obtener los dos motores.
+    first_slot = pool.slots[0]
+    second_slot = pool.slots[1]
+
+    assert first_slot.engine is not None
+    assert second_slot.engine is not None
+
+    # Guardar la referencia al segundo motor.
+    second_engine = second_slot.engine
+
+    # Simular la caida del primer motor.
+    first_slot.engine.quit()
+
+    # El servicio debe seguir disponible.
+    assert pool.healthy()
     assert client.get("/health").status_code == 200
+
+    # Solicitar una nueva jugada.
+    response = client.post(
+        "/internal/engine/best-move",
+        json={
+            "fen": chess.STARTING_FEN,
+            "botLevel": 10
+        }
+    )
+
+    assert response.status_code == 200, response.text
+
+    # El primer motor debe haberse reiniciado.
+    assert first_slot.engine is not None
+    assert not first_slot.engine.returncode.done()
+
+    # El segundo motor no debe haber sido reemplazado.
+    assert second_slot.engine is second_engine
+    assert not second_slot.engine.returncode.done()
+
+    # Ambos motores vuelven a estar disponibles.
+    assert pool.healthy()
+
+
+def test_restart_second_engine_after_exit(client):
+    pool = app.state.engine
+
+    first_slot = pool.slots[0]
+    second_slot = pool.slots[1]
+
+    assert first_slot.engine is not None
+    assert second_slot.engine is not None
+
+    # Guardar los procesos originales.
+    first_engine = first_slot.engine
+    second_engine = second_slot.engine
+
+    # Detener el segundo motor.
+    second_engine.quit()
+
+    # El primer motor debe mantener disponible el servicio.
+    assert pool.healthy()
+    assert client.get("/health").status_code == 200
+
+    # Reservar el primer motor para utilizar el segundo.
+    with first_slot.lock:
+        response = client.post(
+            "/internal/engine/best-move",
+            json={
+                "fen": chess.STARTING_FEN,
+                "botLevel": 10
+            }
+        )
+
+    assert response.status_code == 200, response.text
+
+    # El segundo motor debe ser reemplazado.
+    assert second_slot.engine is not None
+    assert second_slot.engine is not second_engine
+    assert not second_slot.engine.returncode.done()
+
+    # El primer motor debe permanecer intacto.
+    assert first_slot.engine is first_engine
+    assert not first_slot.engine.returncode.done()
+
+    assert pool.healthy()
