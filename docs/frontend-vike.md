@@ -17,8 +17,9 @@ Nginx, `index.html` y `game.html` ya no existen.
 | `/api/ws/*` | Proxy WebSocket al gateway, sin `/api`, conservando `Origin` y `Cookie` | `server/index.js` |
 | `/api/*` | Proxy REST al gateway, sin `/api`, conservando `Set-Cookie`, `Cookie`, `Idempotency-Key` e `Idempotency-Replayed`. Gateway caído: `503 SERVICES_UNAVAILABLE` | `server/index.js` |
 | `/estadisticas` | **Renderizado en servidor**: el HTML ya trae los números. Sin sesión, 302 a `/login?next=%2Festadisticas` | `pages/estadisticas/` |
-| `/` | La aplicación actual (`App.tsx`: portada, login y ajedrez), sin cambios, como aplicación de una sola página | `pages/index/` |
-| `/login` | Provisional: monta `Login.tsx` sin cambios y vuelve a `next` tras iniciar sesión | `pages/login/` |
+| `/` | La aplicación actual (`App.tsx`: portada, login y ajedrez) como aplicación de una sola página. Sesión por cookie y menú de la cuenta en el ícono de usuario (Mi perfil, Estadísticas, Cerrar sesión) | `pages/index/` |
+| `/perfil` | Aplicación de una sola página: pide `GET /api/profile/me` en el navegador. 401 → `/login?next=%2Fperfil`; 404 → "perfil todavía no disponible" (la sesión sigue); 503 → aviso con reintento | `pages/perfil/`, `src/profile/` |
+| `/login` | Provisional: monta `Login.tsx` y vuelve a `next` (solo rutas del propio sitio) tras iniciar sesión | `pages/login/` |
 | `/dev/partida` | Simulador del módulo de juego (antes `game.html`). Solo existe con `npm run dev`; en producción da 404 y su código no está en el build | `pages/dev-partida/` |
 
 El servidor no valida JWT ni guarda el token: eso lo hace el gateway.
@@ -31,7 +32,7 @@ npm ci
 npm run dev                  # Vite + Vike en :5173, proxy /api a http://localhost:8080 (ws: true)
 npm run build                # tsc -b && vite build -> dist/client y dist/server
 API_GATEWAY_URL=http://localhost:8080 PORT=3000 npm start   # servidor de producción
-npm test                     # requiere npm run build antes
+npm test                     # servidor (requiere npm run build antes) y src/auth/session.ts
 npm run lint
 ```
 
@@ -47,7 +48,7 @@ el contenedor no se define y el proceso escucha en 80.
 2. Crear cada pantalla como página en `Frontend/pages/<ruta>/+Page.tsx` (3.1), reutilizando los
    componentes de `src/`.
 3. Navegar con enlaces `<a href>` o `navigate()` en vez del estado `view` de `App.tsx` (3.2).
-4. Quitar `localStorage` y pasar a la sesión por cookie (3.3).
+4. ~~Quitar `localStorage` y pasar a la sesión por cookie (3.3).~~ Hecho el 3 de noviembre (`src/auth/session.ts`).
 5. Montar el ajedrez sin token en `/jugar` (3.4).
 6. Reemplazar la `/login` provisional por la definitiva, conservando el parámetro `next`.
 7. Antes de cada commit: `npm run build && npm run lint && npm test`.
@@ -63,9 +64,9 @@ pages/
   index/+Page.tsx     "/"
   login/+Page.tsx     "/login"      (provisional: reemplázala)
   estadisticas/       "/estadisticas" (Frontend B: no tocar)
+  perfil/             "/perfil"       (hecho: src/profile/ProfilePage.tsx)
   jugar/+Page.tsx     "/jugar"           <- ejemplos de lo que falta
   historial/+Page.tsx "/historial"
-  perfil/+Page.tsx    "/perfil"
   registro/+Page.tsx  "/registro"
   partida/@id/+Page.tsx  "/partida/{id}"   (parámetro: usePageContext().routeParams.id)
   unirse/@matchId/+Page.tsx "/unirse/{matchId}"
@@ -100,17 +101,12 @@ así cualquier página con renderizado en servidor ve la cookie nueva. Es lo que
   `accessToken` del cuerpo se ignora; para mostrar el nombre se usa `user.username` de esa respuesta.
 - **Logout**: `POST /api/auth/logout` (204, borra la cookie). Hoy `App.tsx` solo borra su estado.
 - **401 o cierre WebSocket 4401**: ir a `/login?next=<ruta actual>`.
-- **Por cambiar en lo existente** (tarea «Retiro del token del navegador»). No lo cambié porque es la
-  migración de autenticación que les corresponde:
-  1. Borrar `src/authSession.ts` y sus importaciones en `App.tsx` (`loadSession`, `saveSession`,
-     `clearSession`).
-  2. Al cargar, limpiar una sola vez las claves antiguas: `localStorage.removeItem('accessToken')` y
-     `localStorage.removeItem('user')`.
-  3. Guardar en el estado de React solo el `user` de la respuesta del login, nunca `accessToken`.
-  4. Saber si hay sesión con la sonda de abajo, en un efecto.
-  5. Al salir, llamar a `POST /api/auth/logout` y luego navegar.
-  6. Comprobar en el navegador que `localStorage` queda vacío y que `document.cookie` no muestra
-     `session`.
+- **Implementado** (3 de noviembre) en `src/auth/session.ts`, `App.tsx` y `Landing.tsx`:
+  `src/authSession.ts` ya no existe; al cargar se borran las claves antiguas `accessToken` y `user`;
+  el estado de React guarda solo el nombre; la sonda es `readSession()` (stats para la sesión y
+  perfil para el nombre: un 404 o 503 del perfil no cierra la sesión); salir llama a
+  `POST /api/auth/logout`. Verificado en Chrome: `localStorage` y `sessionStorage` vacíos y
+  `document.cookie` sin `session`.
 
 ```ts
 // Sonda de sesión (contrato 5.4.4). Solo en efectos o manejadores, nunca al renderizar.
