@@ -64,49 +64,49 @@ class AnalysisRepository:
         reclama si ya se alcanzó el límite de reclamos.
         """
         stale_ms = _stale_ms(stale_seconds)
-        pipeline = [
-            {"$set": {"_now": "$$NOW"}},
-            {
-                "$match": {
-                    "$expr": {
-                        "$and": [
+        # ``$match`` no está permitido en un update pipeline, así que las
+        # condiciones van en el filtro. ``$expr`` sí admite ``$$NOW`` y evalúa
+        # el reloj del servidor, no el del worker.
+        query = {
+            "analysisId": analysis_id,
+            "$expr": {
+                "$and": [
+                    {
+                        "$or": [
+                            {"$eq": ["$status", "pending"]},
                             {
-                                "$or": [
-                                    {"$eq": ["$status", "pending"]},
-                                    {
-                                        "$and": [
-                                            {"$eq": ["$status", "processing"]},
-                                            {"$lt": ["$leaseUntil", "$$NOW"]},
-                                        ]
-                                    },
-                                ]
-                            },
-                            {
-                                "$lt": [
-                                    {"$ifNull": ["$claimCount", 0]},
-                                    max_claims,
+                                "$and": [
+                                    {"$eq": ["$status", "processing"]},
+                                    {"$lt": ["$leaseUntil", "$$NOW"]},
                                 ]
                             },
                         ]
-                    }
-                }
+                    },
+                    {
+                        "$lt": [
+                            {"$ifNull": ["$claimCount", 0]},
+                            max_claims,
+                        ]
+                    },
+                ]
             },
+        }
+        pipeline = [
             {
                 "$set": {
                     "status": "processing",
                     "leaseOwner": owner,
-                    "leaseUntil": {"$add": ["$_now", stale_ms]},
+                    "leaseUntil": {"$add": ["$$NOW", stale_ms]},
                     "claimCount": {
                         "$add": [{"$ifNull": ["$claimCount", 0]}, 1]
                     },
-                    "startedAt": {"$ifNull": ["$startedAt", "$_now"]},
-                    "updatedAt": "$_now",
+                    "startedAt": {"$ifNull": ["$startedAt", "$$NOW"]},
+                    "updatedAt": "$$NOW",
                 }
             },
-            {"$unset": ["_now"]},
         ]
         return await self._collection.find_one_and_update(
-            {"analysisId": analysis_id},
+            query,
             pipeline,
             return_document=ReturnDocument.AFTER,
         )
@@ -116,62 +116,53 @@ class AnalysisRepository:
     ) -> bool:
         """Renueva el lease solo si el worker sigue siendo el dueño."""
         stale_ms = _stale_ms(stale_seconds)
-        pipeline = [
-            {"$set": {"_now": "$$NOW"}},
-            {
-                "$match": {
-                    "$expr": {
-                        "$and": [
-                            {"$eq": ["$status", "processing"]},
-                            {"$eq": ["$leaseOwner", owner]},
-                        ]
-                    }
-                }
+        query = {
+            "analysisId": analysis_id,
+            "$expr": {
+                "$and": [
+                    {"$eq": ["$status", "processing"]},
+                    {"$eq": ["$leaseOwner", owner]},
+                ]
             },
+        }
+        pipeline = [
             {
                 "$set": {
-                    "leaseUntil": {"$add": ["$_now", stale_ms]},
-                    "updatedAt": "$_now",
+                    "leaseUntil": {"$add": ["$$NOW", stale_ms]},
+                    "updatedAt": "$$NOW",
                 }
             },
-            {"$unset": ["_now"]},
         ]
-        result = await self._collection.update_one(
-            {"analysisId": analysis_id}, pipeline
-        )
+        result = await self._collection.update_one(query, pipeline)
         return result.modified_count == 1
 
     async def finalize_completed(
         self, analysis_id: str, owner: str, result: dict[str, Any]
     ) -> bool:
         """Escribe el resultado solo si el lease sigue vigente y es del dueño."""
-        pipeline = [
-            {"$set": {"_now": "$$NOW"}},
-            {
-                "$match": {
-                    "$expr": {
-                        "$and": [
-                            {"$eq": ["$status", "processing"]},
-                            {"$eq": ["$leaseOwner", owner]},
-                            {"$gt": ["$leaseUntil", "$$NOW"]},
-                        ]
-                    }
-                }
+        query = {
+            "analysisId": analysis_id,
+            "$expr": {
+                "$and": [
+                    {"$eq": ["$status", "processing"]},
+                    {"$eq": ["$leaseOwner", owner]},
+                    {"$gt": ["$leaseUntil", "$$NOW"]},
+                ]
             },
+        }
+        pipeline = [
             {
                 "$set": {
                     "result": result,
                     "status": "completed",
-                    "completedAt": "$_now",
-                    "updatedAt": "$_now",
+                    "completedAt": "$$NOW",
+                    "updatedAt": "$$NOW",
                     "error": None,
                 }
             },
-            {"$unset": ["_now", "leaseUntil", "leaseOwner"]},
+            {"$unset": ["leaseUntil", "leaseOwner"]},
         ]
-        update = await self._collection.update_one(
-            {"analysisId": analysis_id}, pipeline
-        )
+        update = await self._collection.update_one(query, pipeline)
         return update.modified_count == 1
 
     async def finalize_failed(
@@ -182,33 +173,29 @@ class AnalysisRepository:
         error: str,
     ) -> bool:
         """Marca ``failed`` solo si el lease sigue vigente y es del dueño."""
-        pipeline = [
-            {"$set": {"_now": "$$NOW"}},
-            {
-                "$match": {
-                    "$expr": {
-                        "$and": [
-                            {"$eq": ["$status", "processing"]},
-                            {"$eq": ["$leaseOwner", owner]},
-                            {"$gt": ["$leaseUntil", "$$NOW"]},
-                        ]
-                    }
-                }
+        query = {
+            "analysisId": analysis_id,
+            "$expr": {
+                "$and": [
+                    {"$eq": ["$status", "processing"]},
+                    {"$eq": ["$leaseOwner", owner]},
+                    {"$gt": ["$leaseUntil", "$$NOW"]},
+                ]
             },
+        }
+        pipeline = [
             {
                 "$set": {
                     "status": "failed",
                     "failureKind": failure_kind,
                     "error": error,
-                    "completedAt": "$_now",
-                    "updatedAt": "$_now",
+                    "completedAt": "$$NOW",
+                    "updatedAt": "$$NOW",
                 }
             },
-            {"$unset": ["_now", "leaseUntil", "leaseOwner"]},
+            {"$unset": ["leaseUntil", "leaseOwner"]},
         ]
-        update = await self._collection.update_one(
-            {"analysisId": analysis_id}, pipeline
-        )
+        update = await self._collection.update_one(query, pipeline)
         return update.modified_count == 1
 
     async def find_recoverable(
@@ -258,60 +245,56 @@ class AnalysisRepository:
     ) -> bool:
         """Pasa a failed un análisis que agotó el límite de reclamos."""
         stale_ms = _stale_ms(stale_seconds)
-        pipeline = [
-            {"$set": {"_now": "$$NOW"}},
-            {
-                "$match": {
-                    "$expr": {
-                        "$and": [
+        query = {
+            "analysisId": analysis_id,
+            "$expr": {
+                "$and": [
+                    {
+                        "$gte": [
+                            {"$ifNull": ["$claimCount", 0]},
+                            max_claims,
+                        ]
+                    },
+                    {
+                        "$or": [
                             {
-                                "$gte": [
-                                    {"$ifNull": ["$claimCount", 0]},
-                                    max_claims,
-                                ]
-                            },
-                            {
-                                "$or": [
+                                "$and": [
+                                    {"$eq": ["$status", "pending"]},
                                     {
-                                        "$and": [
-                                            {"$eq": ["$status", "pending"]},
+                                        "$lt": [
+                                            "$updatedAt",
                                             {
-                                                "$lt": [
-                                                    "$updatedAt",
-                                                    {
-                                                        "$subtract": [
-                                                            "$$NOW",
-                                                            stale_ms,
-                                                        ]
-                                                    },
+                                                "$subtract": [
+                                                    "$$NOW",
+                                                    stale_ms,
                                                 ]
                                             },
                                         ]
                                     },
-                                    {
-                                        "$and": [
-                                            {"$eq": ["$status", "processing"]},
-                                            {"$lt": ["$leaseUntil", "$$NOW"]},
-                                        ]
-                                    },
+                                ]
+                            },
+                            {
+                                "$and": [
+                                    {"$eq": ["$status", "processing"]},
+                                    {"$lt": ["$leaseUntil", "$$NOW"]},
                                 ]
                             },
                         ]
-                    }
-                }
+                    },
+                ]
             },
+        }
+        pipeline = [
             {
                 "$set": {
                     "status": "failed",
                     "failureKind": "transient",
                     "error": error,
-                    "completedAt": "$_now",
-                    "updatedAt": "$_now",
+                    "completedAt": "$$NOW",
+                    "updatedAt": "$$NOW",
                 }
             },
-            {"$unset": ["_now", "leaseUntil", "leaseOwner"]},
+            {"$unset": ["leaseUntil", "leaseOwner"]},
         ]
-        update = await self._collection.update_one(
-            {"analysisId": analysis_id}, pipeline
-        )
+        update = await self._collection.update_one(query, pipeline)
         return update.modified_count == 1
