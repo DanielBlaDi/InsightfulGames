@@ -141,6 +141,16 @@ public class Match{
      */
     private Instant finishedAt;
 
+    /**
+     * Outbox de game.finished dentro del propio documento: se fija al terminar la partida y se guarda
+     * en la misma escritura (atómica en MongoDB). El eventId es estable, así que reenviarlo tras un
+     * reinicio no duplica estadísticas (los consumidores deduplican por eventId).
+     */
+    private String finishedEventId;
+
+    /** false mientras game.finished no tenga confirmación del broker; null en partidas sin terminar o antiguas. */
+    private Boolean finishedEventPublished;
+
     /** Lo usa Spring Data para reconstruir la partida desde Mongo. */
     public Match(){
         this.movements = new LinkedList<>();
@@ -219,6 +229,18 @@ public class Match{
         this.result = result;
         this.endReason = endReason;
         this.finishedAt = now();
+        if(this.finishedEventId == null){
+            this.finishedEventId = UUID.randomUUID().toString();
+            this.finishedEventPublished = false;
+        }
+    }
+
+    public String getFinishedEventId(){
+        return finishedEventId;
+    }
+
+    public Boolean getFinishedEventPublished(){
+        return finishedEventPublished;
     }
 
     public void finishAndUpdateVersion(String result, String endReason){
