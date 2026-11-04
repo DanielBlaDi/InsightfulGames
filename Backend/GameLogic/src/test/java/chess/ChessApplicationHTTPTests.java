@@ -316,7 +316,7 @@ public class ChessApplicationHTTPTests{
 		testParticipants.add(new Participant(TEST_USER_ID, Color.BLACK.toString()));
 
 		List<Match> mockMatches = List.of(
-			new Match(Mode.LOCAL.toString(), new TimeControl(10), Visibility.SHARED.toString(), null, null, testParticipants)
+			createTestMatch(Mode.LOCAL.toString(), null, testParticipants)
 		);
 
 		String farCursor = Base64.getUrlEncoder().withoutPadding().encodeToString(String.valueOf(5).getBytes(StandardCharsets.UTF_8));

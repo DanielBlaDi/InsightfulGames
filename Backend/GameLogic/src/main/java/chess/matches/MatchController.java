@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
@@ -56,7 +57,8 @@ public class MatchController{
             Optional<Match> alreadyExistingMatch = repository.findByCreationKey(request.creationKey());
 
             if(alreadyExistingMatch.isPresent()){
-                if(alreadyExistingMatch.get().getRequestFingerPrint().equals(request.requestFingerPrint())){
+                // Objects.equals: las partidas guardadas antes de esta corrección tienen el fingerprint en null.
+                if(Objects.equals(alreadyExistingMatch.get().getRequestFingerPrint(), request.requestFingerprint())){
                     saved = alreadyExistingMatch.get();
                     matchAlreadyExists = true;
                 }else{
@@ -163,7 +165,7 @@ public class MatchController{
         foundMatch.addParticipant(new Participant(requestBody.userId(), remainingColor));
         foundMatch.setStatus(Status.IN_PROGRESS.toString());
         
-        foundMatch.getClocks().startClock();
+        foundMatch.startClock();
 
         foundMatch.updateVersion();
 
@@ -188,7 +190,7 @@ public class MatchController{
         if(match.getVersion() != movement.expectedVersion()){
             throw VersionConflictException.versionConflict();
         }
-        if(match.getClocks().isTimedOut()){
+        if(match.isTimedOut()){
             match.finishAndUpdateVersion(match.getTurn().equals(Color.WHITE.toString()) ? Color.BLACK.toString() : Color.WHITE.toString(), EndReason.TIMEOUT.toString());
 
             repository.save(match);
@@ -292,7 +294,8 @@ public class MatchController{
             throw CannotOfferDrawException.alreadyOffered();
         }
 
-        match.setDrawOffer(Color.WHITE.toString().equals(requestBody.side()) ? Color.BLACK.toString() : Color.WHITE.toString());
+        // drawOffer es el color de quien ofrece (contrato): accept/decline/cancel lo comprueban así.
+        match.setDrawOffer(requestBody.side());
 
         match.updateVersion();
 
@@ -395,7 +398,7 @@ public class MatchController{
         if(match.getVersion() != requestBody.expectedVersion()){
             throw VersionConflictException.versionConflict();
         }
-        if(!match.getClocks().isTimedOut()){
+        if(!match.isTimedOut()){
             throw ClockException.notTimedOut();
         }
 
@@ -623,7 +626,7 @@ public class MatchController{
             throw RequestNotValidException.notValid("userId debe ser un UUID");
         }
         
-        return new Match(mode, request.timeControl(), request.visibility(), botLevel, request.matchId(), request.creationKey(), request.requestFingerPrint(), participants);
+        return new Match(mode, request.timeControl(), request.visibility(), botLevel, request.matchId(), request.creationKey(), request.requestFingerprint(), participants);
     }
 
     private static boolean isColor(String value){
