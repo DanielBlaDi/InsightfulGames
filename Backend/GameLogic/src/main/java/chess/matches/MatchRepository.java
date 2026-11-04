@@ -15,4 +15,7 @@ public interface MatchRepository extends MongoRepository<Match, String>{
     /** Las partidas de un usuario, la más reciente primero. */
     List<Match> findByParticipantsUserIdOrderByCreatedAtDesc(String userId);
     List<Match> findByStatus(String userId);
+
+    /** Outbox: partidas terminadas cuyo game.finished aún no confirmó el broker, las más antiguas primero. */
+    List<Match> findTop100ByFinishedEventPublishedFalseOrderByFinishedAtAsc();
 }

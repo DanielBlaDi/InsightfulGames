@@ -195,7 +195,7 @@ public class MatchController{
 
             repository.save(match);
 
-            publisher.publishMatchFinishedMessage(buildMatchFinishedMessage(match));
+            publisher.publishFinished(match);
 
             throw ClockException.timedOut();
         }
@@ -222,9 +222,8 @@ public class MatchController{
         }
 
         if(result.outcome() != null){
+            // finish() deja el game.finished pendiente en el propio documento; se envía después de guardar.
             match.finish(result.outcome().result(), result.outcome().endReason());
-
-            publisher.publishMatchFinishedMessage(buildMatchFinishedMessage(match));
         }
 
         if(match.getDrawOffer() != null){
@@ -233,7 +232,10 @@ public class MatchController{
 
         match.updateVersion();
 
-        return assembler.toState(repository.save(match));
+        Match saved = repository.save(match);
+        publisher.publishFinished(saved);
+
+        return assembler.toState(saved);
     }
 
     /** El bando indicado se rinde: gana el contrario por "surrender". */
@@ -252,7 +254,7 @@ public class MatchController{
 
         repository.save(match);
 
-        publisher.publishMatchFinishedMessage(buildMatchFinishedMessage(match));
+        publisher.publishFinished(match);
 
         return assembler.toState(match);
     }
@@ -273,7 +275,7 @@ public class MatchController{
 
         repository.save(match);
 
-        publisher.publishMatchFinishedMessage(buildMatchFinishedMessage(match));
+        publisher.publishFinished(match);
 
         return ResponseEntity.ok(assembler.toState(match));
     }
@@ -326,7 +328,7 @@ public class MatchController{
 
         repository.save(match);
 
-        publisher.publishMatchFinishedMessage(buildMatchFinishedMessage(match));
+        publisher.publishFinished(match);
 
         return ResponseEntity.ok(assembler.toState(match));
     }
@@ -406,7 +408,7 @@ public class MatchController{
 
         repository.save(match);
 
-        publisher.publishMatchFinishedMessage(buildMatchFinishedMessage(match));
+        publisher.publishFinished(match);
 
         return ResponseEntity.ok(new TimeoutResponse(id, match.getStatus(), match.getResult(), match.getEndReason(), match.getFinishedAt().toString()));
     }
@@ -432,7 +434,7 @@ public class MatchController{
 
         repository.save(match);
 
-        publisher.publishMatchFinishedMessage(buildMatchFinishedMessage(match));
+        publisher.publishFinished(match);
 
         return ResponseEntity.ok(assembler.toState(match));
     }
@@ -522,7 +524,7 @@ public class MatchController{
 
                         repository.save(match);
                         
-                        publisher.publishMatchFinishedMessage(buildMatchFinishedMessage(match));
+                        publisher.publishFinished(match);
                     }else{
                         if(match.getStatus().equals(Status.WAITING.toString()) || match.getMode().equals(Mode.LOCAL.toString()) || match.getMode().equals(Mode.VS_BOT.toString())){
                             match.finish(null, EndReason.ACCOUNT_DELETED.toString());
@@ -534,7 +536,7 @@ public class MatchController{
 
                         repository.save(match);
 
-                        publisher.publishMatchFinishedMessage(buildMatchFinishedMessage(match));
+                        publisher.publishFinished(match);
                     }
                 }
             }
@@ -550,10 +552,6 @@ public class MatchController{
 
     private Match findMatch(String gameId){
         return repository.findByGameId(gameId).orElseThrow(() -> MatchNotFoundException.notFound(gameId));
-    }
-
-    private MatchFinishedMessage buildMatchFinishedMessage(Match match){
-        return new MatchFinishedMessage("game.finished", Instant.now().toString(), match.getGameId(), match.getMatchId(), match.getMode(), match.getParticipants(), match.getResult(), match.getEndReason(), match.getFinishedAt().toString());
     }
 
     /** Valida el cuerpo de POST /internal/logic/games y arma la partida nueva o retorna la partida existente si una con el mismo matchId ya existe. */
