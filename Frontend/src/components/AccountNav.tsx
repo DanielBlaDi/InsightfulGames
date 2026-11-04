@@ -3,7 +3,7 @@ import { logout } from '../auth/session';
 
 interface AccountNavProps {
   /** Página actual, para marcarla en la barra. */
-  current?: 'perfil' | 'estadisticas';
+  current?: 'perfil' | 'estadisticas' | 'historial';
 }
 
 const linkClass = (active: boolean) =>
@@ -58,6 +58,16 @@ export default function AccountNav({ current }: AccountNavProps) {
               bar_chart
             </span>
             Estadísticas
+          </a>
+          <a
+            href="/historial"
+            className={linkClass(current === 'historial')}
+            aria-current={current === 'historial' ? 'page' : undefined}
+          >
+            <span className="material-symbols-outlined text-[20px]" aria-hidden="true">
+              history
+            </span>
+            Historial
           </a>
           <button
             type="button"

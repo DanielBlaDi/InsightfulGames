@@ -78,6 +78,12 @@ export default function AccountMenu({ username, onLogout }: AccountMenuProps) {
             </span>
             Estadísticas
           </a>
+          <a role="menuitem" href="/historial" className={itemClass} onClick={() => setOpen(false)}>
+            <span className="material-symbols-outlined text-[20px]" aria-hidden="true">
+              history
+            </span>
+            Historial de partidas
+          </a>
           <button
             role="menuitem"
             type="button"

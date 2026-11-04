@@ -217,6 +217,7 @@ describe('servidor del frontend con el gateway disponible', () => {
       ['/multijugador', 'Multijugador online'],
       [`/unirse/${id}`, 'Invitación a una partida'],
       [`/partida/${id}`, 'Partida online'],
+      ['/historial', 'Historial de partidas'],
     ];
     const before = gateway.seen.length;
     for (const [path, title] of pages) {

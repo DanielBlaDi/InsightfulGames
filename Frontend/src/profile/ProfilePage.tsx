@@ -110,15 +110,26 @@ export default function ProfilePage() {
                 <Field label="Miembro desde" value={formatDate(state.profile.createdAt)} />
                 <Field label="Identificador" value={state.profile.userId} mono />
               </dl>
-              <a
-                href="/estadisticas"
-                className="self-start inline-flex items-center gap-space-xs px-space-md py-space-xs rounded-lg bg-primary text-on-primary font-label-lg text-label-lg shadow-sm hover:bg-primary-container transition-colors"
-              >
-                <span className="material-symbols-outlined text-[20px]" aria-hidden="true">
-                  bar_chart
-                </span>
-                Ver mis estadísticas
-              </a>
+              <div className="flex flex-wrap gap-space-xs pt-space-xs">
+                <a
+                  href="/estadisticas"
+                  className="inline-flex items-center gap-space-xs px-space-md py-space-xs rounded-lg bg-primary text-on-primary font-label-lg text-label-lg shadow-sm hover:bg-primary-container transition-colors"
+                >
+                  <span className="material-symbols-outlined text-[20px]" aria-hidden="true">
+                    bar_chart
+                  </span>
+                  Ver mis estadísticas
+                </a>
+                <a
+                  href="/historial"
+                  className="inline-flex items-center gap-space-xs px-space-md py-space-xs rounded-lg bg-surface-container-high text-on-surface font-label-lg text-label-lg hover:bg-surface-container-highest transition-colors"
+                >
+                  <span className="material-symbols-outlined text-[20px]" aria-hidden="true">
+                    history
+                  </span>
+                  Ver historial de partidas
+                </a>
+              </div>
             </section>
           )}
 

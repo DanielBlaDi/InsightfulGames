@@ -17,6 +17,7 @@ import type { MatchView } from './matchSession';
 import { useIdentity } from './useIdentity';
 import { useMatchSocket } from './useMatchSocket';
 import { colorOf, invitePath, isMatchId, matchPath, opposite } from './types';
+import AnalysisModal from '../tutor/AnalysisModal';
 
 const COLOR_LABEL: Record<Color, string> = { white: 'Blancas', black: 'Negras' };
 
@@ -28,6 +29,7 @@ const REASON: Record<EndReason, string> = {
   timeout: 'por tiempo',
   abandonment: 'por abandono (el rival no volvió a conectarse)',
   expired: '',
+  account_deleted: 'por cuenta eliminada',
 };
 
 const CARD = 'p-space-md rounded-2xl bg-surface-container-low border border-outline-variant/30 shadow-sm flex flex-col gap-space-sm';
@@ -139,6 +141,7 @@ export default function MatchPage({ matchId }: { matchId: string }) {
   const { state, connection, closeCode, closeReason, gameOver, awaitingReply, rejection, serverError } = session;
   const [flipped, setFlipped] = useState(false);
   const [confirmingResign, setConfirmingResign] = useState(false);
+  const [showAnalysis, setShowAnalysis] = useState(false);
 
   // Respaldo si el perfil no está disponible: el creador visto en la sala de espera (ver matchSession).
   const myId = identity.status === 'ok' ? identity.userId : session.waitingCreator;
@@ -385,18 +388,35 @@ export default function MatchPage({ matchId }: { matchId: string }) {
           </div>
 
           {finished && (
-            <div className="flex gap-space-xs">
-              <a href="/multijugador" className={`flex-1 ${BTN_PRIMARY}`}>
-                <span className="material-symbols-outlined text-[18px]">add</span>
-                Nueva partida online
-              </a>
-              <a href="/" className={`flex-1 ${BTN_NEUTRAL}`}>
-                Inicio
-              </a>
+            <div className="flex flex-col gap-space-xs">
+              {state.gameId && (
+                <button
+                  type="button"
+                  onClick={() => setShowAnalysis(true)}
+                  className={`w-full ${BTN_PRIMARY}`}
+                >
+                  <span className="material-symbols-outlined text-[18px]">psychology</span>
+                  Analizar partida con Tutor IA
+                </button>
+              )}
+              <div className="flex gap-space-xs">
+                <a href="/multijugador" className={`flex-1 ${BTN_NEUTRAL}`}>
+                  <span className="material-symbols-outlined text-[18px]">add</span>
+                  Nueva online
+                </a>
+                <a href="/historial" className={`flex-1 ${BTN_NEUTRAL}`}>
+                  <span className="material-symbols-outlined text-[18px]">history</span>
+                  Historial
+                </a>
+              </div>
             </div>
           )}
         </aside>
       </div>
+
+      {showAnalysis && state.gameId && (
+        <AnalysisModal gameId={state.gameId} onClose={() => setShowAnalysis(false)} />
+      )}
     </Shell>
   );
 }

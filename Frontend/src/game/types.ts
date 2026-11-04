@@ -4,7 +4,7 @@ export type Color = 'white' | 'black';
 export type GameMode = 'local' | 'vs_bot' | 'multiplayer';
 export type GameStatus = 'waiting' | 'in_progress' | 'finished';
 export type GameResult = Color | 'draw';
-export type EndReason = 'checkmate' | 'stalemate' | 'surrender' | 'draw' | 'timeout' | 'abandonment' | 'expired';
+export type EndReason = 'checkmate' | 'stalemate' | 'surrender' | 'draw' | 'timeout' | 'abandonment' | 'expired' | 'account_deleted';
 export type Visibility = 'private' | 'shared';
 export type PromotionPiece = 'q' | 'r' | 'b' | 'n';
 
