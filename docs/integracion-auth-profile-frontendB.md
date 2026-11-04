@@ -65,14 +65,12 @@ mocks y un navegador simulado.
 están hechos en `frontend-B`. Guía completa en [frontend-vike.md](frontend-vike.md). Queda para
 Frontend A:
 
-1. **Quitar `localStorage`** de `App.tsx` (y `src/authSession.ts`): la sesión vive solo en la
-   cookie. Para saber si hay sesión al cargar, `GET /api/stats/me` (200 = con sesión, 401 = sin
-   sesión), según el contrato definitivo, 5.4.4; no `/api/profile/me`. Cerrar sesión =
-   `POST /api/auth/logout`.
-2. **Montar el ajedrez sin token**: `<PlayChess onUnauthorized={irAlLogin} onExit={irAlInicio} />`.
-   La prop `token` sigue aceptándose e ignorándose para no romper el `App.tsx` actual.
+1. ~~**Quitar `localStorage`**~~ Hecho el 3 de noviembre en `frontend-B-vike`: sesión solo en la
+   cookie, sonda `GET /api/stats/me`, nombre desde `GET /api/profile/me` y salida con
+   `POST /api/auth/logout` (ver `src/auth/session.ts`).
+2. ~~**Montar el ajedrez sin token**~~ Hecho: `App.tsx` ya monta `<PlayChess onUnauthorized onExit />`.
 3. **Páginas propias** en `Frontend/pages/` (`/login`, `/registro`, `/jugar`, `/historial`,
-   `/perfil`, `/partida/{id}`, `/unirse/{matchId}`). La `/login` actual es provisional.
+   `/partida/{id}`, `/unirse/{matchId}`). La `/login` actual es provisional. `/perfil` ya existe.
 
 ## 5. Otros componentes de los que dependemos
 

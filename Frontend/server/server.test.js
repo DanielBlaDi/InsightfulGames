@@ -190,6 +190,45 @@ describe('servidor del frontend con el gateway disponible', () => {
     assert.match(html, /<div id="root"[^>]*><\/div>/);
   });
 
+  test('/estadisticas trae en el HTML la barra con Inicio, Mi perfil y Cerrar sesión', async () => {
+    const html = await (await get(frontend.url, '/estadisticas', { Cookie: 'session=valid' })).text();
+    const root = html.slice(html.indexOf('<div id="root"'));
+    for (const value of ['href="/"', 'href="/perfil"', 'href="/estadisticas"', 'Cerrar sesión']) {
+      assert.ok(root.includes(value), `falta ${value} en la barra`);
+    }
+    assert.match(root, /href="\/estadisticas"[^>]*aria-current="page"/);
+  });
+
+  test('/perfil es de una sola página: 200 con su título, sin datos del servidor ni llamada al gateway', async () => {
+    const before = gateway.seen.length;
+    for (const cookie of [undefined, 'session=valid']) {
+      const res = await get(frontend.url, '/perfil', cookie ? { Cookie: cookie } : {});
+      assert.equal(res.status, 200);
+      const html = await res.text();
+      assert.match(html, /<title>Mi perfil — Insightful Games<\/title>/);
+      assert.match(html, /<div id="root"[^>]*><\/div>/);
+    }
+    assert.equal(gateway.seen.length, before, 'el servidor no debe pedir el perfil');
+  });
+
+  test('/multijugador, /unirse/{id} y /partida/{id} son de una sola página (sin SSR) con su título', async () => {
+    const id = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+    const pages = [
+      ['/multijugador', 'Multijugador online'],
+      [`/unirse/${id}`, 'Invitación a una partida'],
+      [`/partida/${id}`, 'Partida online'],
+    ];
+    const before = gateway.seen.length;
+    for (const [path, title] of pages) {
+      const res = await get(frontend.url, path, { Cookie: 'session=valid' });
+      assert.equal(res.status, 200, path);
+      const html = await res.text();
+      assert.ok(html.includes(`<title>${title} — Insightful Games</title>`), `título de ${path}`);
+      assert.match(html, /<div id="root"[^>]*><\/div>/, `${path} no debe renderizarse en el servidor`);
+    }
+    assert.equal(gateway.seen.length, before, 'el servidor no llama al gateway para estas páginas');
+  });
+
   test('/api/internal/* responde 404 en todas sus variantes y nunca llega al gateway', async () => {
     const paths = [
       '/api/internal/logic/users/00000000-0000-0000-0000-000000000001',

@@ -97,6 +97,21 @@ export default function GameSetup({ loading, error, onStart, onExit }: GameSetup
                 </span>
               </button>
             ))}
+            {/* Multijugador tiene su propio flujo y sus rutas (/multijugador, /unirse, /partida). */}
+            <a
+              href="/multijugador"
+              className={`${optionClass(false)} sm:col-span-2 flex items-start gap-space-sm no-underline`}
+            >
+              <span className="w-10 h-10 shrink-0 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                <span className="material-symbols-outlined text-[24px]">public</span>
+              </span>
+              <span>
+                <span className="block font-headline-sm text-headline-sm text-on-surface">Multijugador online</span>
+                <span className="block font-body-sm text-body-sm text-on-surface-variant mt-1">
+                  Juega contra otra persona desde otro dispositivo.
+                </span>
+              </span>
+            </a>
           </div>
         </fieldset>
 

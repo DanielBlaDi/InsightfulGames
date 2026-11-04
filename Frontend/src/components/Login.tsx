@@ -1,7 +1,8 @@
 import React, { useState, type FormEvent } from 'react';
 
 interface LoginProps {
-  onLoginSuccess: (token: string, user: { userId: string; username: string }) => void;
+  /** El gateway ya dejó la cookie session; el accessToken del cuerpo se ignora (no se guarda). */
+  onLoginSuccess: (user: { userId: string; username: string }) => void;
   onBack: () => void;
 }
 
@@ -140,7 +141,7 @@ export default function Login({ onLoginSuccess, onBack }: LoginProps) {
       }
 
       const authData = data as AuthResponse;
-      onLoginSuccess(authData.accessToken, authData.user);
+      onLoginSuccess(authData.user);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al iniciar sesión');
     } finally {
@@ -191,7 +192,7 @@ export default function Login({ onLoginSuccess, onBack }: LoginProps) {
         throw new Error(parseErrorMessage(loginData, 'Registro OK pero fallo al iniciar sesión'));
       }
 
-      onLoginSuccess(loginData.accessToken, loginData.user);
+      onLoginSuccess((loginData as AuthResponse).user);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al crear cuenta');
     } finally {
