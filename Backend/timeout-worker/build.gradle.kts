@@ -25,6 +25,11 @@ dependencies {
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
+// Nombre fijo: el Dockerfile copia este archivo, sin depender de la versión.
+tasks.bootJar {
+	archiveFileName = "timeout-worker.jar"
+}
+
 tasks.withType<Test> {
 	useJUnitPlatform()
 }

@@ -553,27 +553,6 @@ async def internal_passthrough(service: str, path: str, request: Request):
 
 
 # --------------------------------------------------------------------------- #
-# TEMPORAL (tarea GW-13): Single Player aún llama a /engine/best-move por el
-# gateway. Borrar este bloque cuando use /internal/engine/best-move (SP-07, BOT-01).
-# --------------------------------------------------------------------------- #
-
-
-@app.api_route("/engine/{path:path}", methods=["GET", "POST"])
-async def legacy_engine(path: str, request: Request):
-    body = await request.body()
-    try:
-        r = await request.app.state.client.request(
-            request.method,
-            f"{UPSTREAMS['engine']}/engine/{path}",
-            content=body or None,
-            headers={"Content-Type": "application/json"} if body else None,
-        )
-    except httpx.RequestError:
-        raise UpstreamUnreachable()
-    return Response(content=r.content, status_code=r.status_code, media_type="application/json")
-
-
-# --------------------------------------------------------------------------- #
 # WebSocket: aceptar -> Origin -> sesión -> id -> servicio
 # --------------------------------------------------------------------------- #
 

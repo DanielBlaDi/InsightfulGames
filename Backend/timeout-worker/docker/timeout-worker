@@ -1,0 +1,4 @@
+#!/bin/sh
+# Ejecutable del worker. Sin argumentos arranca el servicio; con -health consulta el /health
+# del proceso en marcha y sale con 0 (saludable) o 1 (healthcheck de Compose).
+exec java ${JAVA_OPTS} -jar /app/app.jar "$@"
