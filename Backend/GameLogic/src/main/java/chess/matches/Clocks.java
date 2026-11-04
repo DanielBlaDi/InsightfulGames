@@ -3,6 +3,8 @@ package chess.matches;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 import chess.constants.Color;
 
 public class Clocks{
@@ -43,6 +45,8 @@ public class Clocks{
         return deadline;
     }
 
+    /** Lógica interna: no forma parte del JSON de clocks (contrato, 11.4.1). */
+    @JsonIgnore
     public boolean isTimedOut(){
         if(this.deadline != null){
             return Instant.parse(deadline).isBefore(Instant.now());

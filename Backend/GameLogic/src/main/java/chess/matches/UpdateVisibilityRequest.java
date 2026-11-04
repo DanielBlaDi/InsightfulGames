@@ -1,3 +1,4 @@
 package chess.matches;
 
-public record UpdateVisibilityRequest(String visibility, int expectedVersion){}
+/** Cuerpo de PATCH /internal/logic/games/{id}/visibility: { visibility, expectedVersion }. */
+public record UpdateVisibilityRequest(String visibility, Integer expectedVersion){}

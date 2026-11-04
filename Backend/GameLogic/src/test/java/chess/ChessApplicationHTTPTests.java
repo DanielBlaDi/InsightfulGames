@@ -18,12 +18,13 @@ import chess.constants.Mode;
 import chess.constants.Result;
 import chess.constants.Status;
 import chess.constants.Visibility;
-import chess.exceptions.MatchNotInProgressException;
+import chess.exceptions.GameFinishedException;
 import chess.matches.CreateMatchRequest;
 import chess.matches.Match;
 import chess.matches.MatchAssembler;
 import chess.matches.MatchController;
 import chess.matches.MatchRepository;
+import chess.matches.MatchStore;
 import chess.matches.Participant;
 import chess.matches.RabbitPublisher;
 import chess.matches.TimeControl;
@@ -33,6 +34,7 @@ import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.when;
 import static org.springframework.restdocs.mockmvc.MockMvcRestDocumentation.document;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -65,6 +67,9 @@ public class ChessApplicationHTTPTests{
 	@MockitoBean
 	private RabbitPublisher rabbitPublisher;
 
+	@MockitoBean
+	private MatchStore store;
+
 	@TestConfiguration
     static class TestConfig{
         @Bean
@@ -80,7 +85,7 @@ public class ChessApplicationHTTPTests{
 	/**Stubs the repository so that the given match can be found by id, and so that save() returns what it receives. Since the Match object is mutated in place, later requests see the moves of earlier ones.*/
 	private Match givenStoredMatch(Match match){
 		when(repository.findByGameId(match.getGameId())).thenReturn(Optional.of(match));
-		when(repository.save(any(Match.class))).thenAnswer(invocation -> invocation.getArgument(0));
+		when(store.replaceIfVersion(any(Match.class), anyInt())).thenReturn(true);
 
 		return match;
 	}
@@ -96,7 +101,7 @@ public class ChessApplicationHTTPTests{
 
 	/**Test for the function newMatch(@RequestBody CreateMatchRequest request)*/
 	@Test public void shouldReturnNewMatch() throws Exception{
-		when(repository.save(any(Match.class))).thenAnswer(invocation -> invocation.getArgument(0));
+		when(store.insert(any(Match.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
 		List<Participant> testParticipants = new ArrayList<>(1);
 		testParticipants.add(new Participant(TEST_USER_ID, Color.WHITE.toString()));
@@ -145,7 +150,7 @@ public class ChessApplicationHTTPTests{
 
 	/**Test for the function newMatch(@RequestBody CreateMatchRequest request) on a local match*/
 	@Test public void shouldLeaveBotFieldsEmptyOnLocalMatch() throws Exception{
-		when(repository.save(any(Match.class))).thenAnswer(invocation -> invocation.getArgument(0));
+		when(store.insert(any(Match.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
 		List<Participant> testParticipants = new ArrayList<>(2);
 		testParticipants.add(new Participant(TEST_USER_ID, Color.WHITE.toString()));
@@ -279,6 +284,9 @@ public class ChessApplicationHTTPTests{
 						fieldWithPath("items.[].status").description(Status.allPossibleStatuses()),
 						fieldWithPath("items.[].result").description("String that describes the end result of this match. Takes one of " + (Result.size() + 1) + " values: " + Result.allPossibleResults() + " | Null (in the case that the match hasn't ended)"),
 						fieldWithPath("items.[].createdAt").description("The date and time in which each of the returned matches started."),
+						fieldWithPath("items.[].matchId").description("The public identifier of a multiplayer match. Null in any other mode."),
+						fieldWithPath("items.[].endReason").description("The reason the match ended: " + EndReason.allPossibleEndReasons() + " | Null while it is not finished."),
+						fieldWithPath("items.[].color").description("The color of the user who requested the list. Null in local matches."),
 						fieldWithPath("nextCursor").description("The current page number for the query, encoded in base64url, starts on 1, null if there are no more Matches to show")
 					)
 				)
@@ -316,7 +324,7 @@ public class ChessApplicationHTTPTests{
 		testParticipants.add(new Participant(TEST_USER_ID, Color.BLACK.toString()));
 
 		List<Match> mockMatches = List.of(
-			new Match(Mode.LOCAL.toString(), new TimeControl(10), Visibility.SHARED.toString(), null, null, testParticipants)
+			new Match(Mode.LOCAL.toString(), new TimeControl(10), Visibility.SHARED.toString(), null, null, null, null, testParticipants)
 		);
 
 		String farCursor = Base64.getUrlEncoder().withoutPadding().encodeToString(String.valueOf(5).getBytes(StandardCharsets.UTF_8));
@@ -452,13 +460,13 @@ public class ChessApplicationHTTPTests{
 		givenStoredMatch(finishedMatch);
 
 		postMove(finishedMatch.getGameId(), "e2e4", 1)
-			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.error.code").value(MatchNotInProgressException.GAME_NOT_IN_PROGRESS))
+			.andExpect(status().isUnprocessableContent())
+			.andExpect(jsonPath("$.error.code").value(GameFinishedException.GAME_FINISHED))
 			.andDo(
 				document(
 					"attemptMoveOnFinishedMatch",
 					responseFields(
-						fieldWithPath("error.code").description("Machine-readable code of the error, for this case \"" + MatchNotInProgressException.GAME_NOT_IN_PROGRESS + "\"."),
+						fieldWithPath("error.code").description("Machine-readable code of the error, for this case \"" + GameFinishedException.GAME_FINISHED + "\"."),
 						fieldWithPath("error.message").description("Human-readable description of the error.")
 					)
 				)
@@ -545,8 +553,8 @@ public class ChessApplicationHTTPTests{
 		givenStoredMatch(finishedMatch);
 
 		this.mockMvc.perform(post("/internal/logic/games/" + finishedMatch.getGameId() + "/resign").contentType(MediaType.APPLICATION_JSON).content("{\"side\": \"" + Color.BLACK.toString() + "\"}"))
-			.andExpect(status().isConflict())
-			.andExpect(jsonPath("$.error.code").value(MatchNotInProgressException.GAME_NOT_IN_PROGRESS));
+			.andExpect(status().isUnprocessableContent())
+			.andExpect(jsonPath("$.error.code").value(GameFinishedException.GAME_FINISHED));
 	}
 
 	/**Test for the function finishMatch(@PathVariable String id, @RequestBody MatchResultRequest body) with an invalid side*/

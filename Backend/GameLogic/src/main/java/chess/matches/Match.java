@@ -1,5 +1,6 @@
 package chess.matches;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -30,7 +31,6 @@ import chess.movements.Movement;
 @CompoundIndex(def = "{'status': 1, 'createdAt': 1}")
 public class Match{
     public static final String ANONYMOUS_USER_ID = "00000000-0000-0000-0000-000000000000";
-    private static final int WAITING_TIMEOUT_MINUTES = 2;
 
     /**
      * gameId: UUID v4 en texto
@@ -51,13 +51,13 @@ public class Match{
     /**
      * La id que utiliza Multiplayer para cada partida
      */
-    @Indexed(partialFilter = "{'matchId' : {'$type' : 'string'}}")
+    @Indexed(unique = true, partialFilter = "{'matchId' : {'$type' : 'string'}}")
     private String matchId;
 
     /**
      * Únicamente presente en partidas multijugador, un sha256 hex creado por Multiplayer para evitar crear partidas duplicadas
      */
-    @Indexed(partialFilter = "{'creationKey' : {'$type' : 'string'}}")
+    @Indexed(unique = true, partialFilter = "{'creationKey' : {'$type' : 'string'}}")
     private String creationKey;
 
     /**
@@ -234,11 +234,32 @@ public class Match{
         return Status.WAITING.toString().equals(status);
     }
 
-    public boolean isExpiredFromWaiting(){
-        return ChronoUnit.MINUTES.between(createdAt, Instant.now()) > WAITING_TIMEOUT_MINUTES;
+    /** En waiting y con createdAt + WAITING_TIMEOUT_MINUTES ya vencido (contrato, 11.4.9). */
+    public boolean isExpiredFromWaiting(Duration waitingTimeout){
+        return isWaiting() && createdAt.plus(waitingTimeout).isBefore(Instant.now());
     }
 
-    /** Checks whether the Match is timed out or not, takes into account when the Match doesn't have a clock */
+    /** Participante con ese color, o null si nadie juega con él (por ejemplo, el bot en vs_bot). */
+    public Participant participantWithColor(String color){
+        for(Participant participant : participants){
+            if(participant.color().equals(color)){
+                return participant;
+            }
+        }
+        return null;
+    }
+
+    /** Primera entrada del usuario en participants, o null si no participa. */
+    public Participant participantWithUserId(String userId){
+        for(Participant participant : participants){
+            if(participant.userId().equals(userId)){
+                return participant;
+            }
+        }
+        return null;
+    }
+
+    /** true solo si la partida tiene reloj y su deadline ya pasó. Sin reloj (timeControl null) nunca vence. */
     public boolean isTimedOut(){
         if(this.clocks != null){
             return this.clocks.isTimedOut();

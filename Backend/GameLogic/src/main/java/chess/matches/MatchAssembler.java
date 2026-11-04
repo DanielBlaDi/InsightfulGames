@@ -48,7 +48,14 @@ public class MatchAssembler{
         );
     }
 
-    public GameSummary toSummary(Match match){
-        return new GameSummary(match.getGameId(), match.getMode(), match.getStatus(), match.getResult(), match.getCreatedAt().toString());
+    /** color es el del usuario que pide la lista; null en local, donde juega con los dos colores. */
+    public GameSummary toSummary(Match match, String userId){
+        String color = null;
+        if(!chess.constants.Mode.LOCAL.toString().equals(match.getMode())){
+            Participant participant = match.participantWithUserId(userId);
+            color = participant == null ? null : participant.color();
+        }
+        return new GameSummary(match.getGameId(), match.getMode(), match.getMatchId(), match.getStatus(), match.getResult(),
+            match.getEndReason(), color, match.getCreatedAt().toString());
     }
 }
