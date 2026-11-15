@@ -23,15 +23,17 @@ Hito alcanzable con este paquete: **H0** del plan, que es Compose arriba y regis
 
 | Grupo | Servicios | Publicado en el host |
 |---|---|---|
-| Por defecto | `api-gateway-mobile` | `${MOBILE_GATEWAY_PORT}`, 8090 |
+| Por defecto | `reverse-proxy` (único punto de entrada, ver `docs/proxy-inverso.md`) | `${FRONTEND_PORT}` (web) y `${MOBILE_GATEWAY_PORT}`, 8090 (móvil) |
+| Por defecto | `api-gateway-mobile` | No |
 | Por defecto | `api-gateway-component`, `auth-component`, `game-logic-component`, `single-player-component`, `tutor-component`, `botcito-component`, `profile-stats-component` | No |
 | Por defecto | `mysql`, `mongo`, `mongo-analysis`, `postgres-profile`, `rabbitmq` | No |
-| Perfil `pendiente` | `frontend` | `${FRONTEND_PORT}`, 80 |
+| Perfil `pendiente` | `frontend` | No (se accede por `reverse-proxy`) |
 | Perfil `pendiente` | `multiplayer-component`, `botcito-analysis-component`, `timeout-worker`, `analysis-worker` | No |
 
 Red: `app`. Volúmenes: `mysql-data`, `mongo-data`, `mongo-analysis-data`, `postgres-data`, `rabbitmq-data`.
 
-Android no es un contenedor: se conecta a `api-gateway-mobile`.
+Android no es un contenedor: se conecta a `reverse-proxy` en `${MOBILE_GATEWAY_PORT}`, que reenvía a `api-gateway-mobile`.
+Para probar un servicio con curl saltándose el proxy: `docker compose -f compose.yaml -f compose.debug.yaml up -d` (puertos en 127.0.0.1; el gateway móvil queda en 8091).
 
 ## 3. Requisitos
 

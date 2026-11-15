@@ -8,6 +8,29 @@ x-service: &service
 services:
 
 
+# proxy inverso (único servicio que publica puertos) ------------------------------------------------------
+
+  # Reverse Proxy Pattern. Entradas: FRONTEND_PORT -> navegador (frontend + /api + /api/ws) y
+  # MOBILE_GATEWAY_PORT -> app Android (gateway móvil). El resto de servicios solo se alcanza
+  # por la red interna; para depurar con curl usa compose.debug.yaml.
+  reverse-proxy:
+    <<: *service
+    container_name: reverse-proxy
+    build:
+      context: ./Backend/reverse-proxy
+      dockerfile: Dockerfile
+    image: reverse-proxy:dev
+    ports:
+      - "${FRONTEND_PORT:?}:8000"
+      - "${MOBILE_GATEWAY_PORT:?}:8090"
+    depends_on:
+      frontend:
+        condition: service_healthy
+      api-gateway-component:
+        condition: service_healthy
+      api-gateway-mobile:
+        condition: service_started
+
 # presetacion----------------------------------------------------------------------------------------------------------------------------
 
   frontend:
@@ -18,8 +41,6 @@ services:
       context: ./Frontend
       dockerfile: Dockerfile
     image: frontend:dev
-    ports:
-      - "${FRONTEND_PORT:?}:80"
     environment:
       API_GATEWAY_URL: http://api-gateway-component:8080
     depends_on:
@@ -38,8 +59,6 @@ services:
       context: ./Backend/api-gateway-mobile
       dockerfile: Dockerfile
     image: api-gateway-mobile:dev
-    ports:
-      - "${MOBILE_GATEWAY_PORT:?}:8090"
     environment:
       PORT: "8090"
       GATEWAY_INTERNAL_URL: http://api-gateway-component:8080
@@ -52,9 +71,6 @@ services:
 
   api-gateway-component:
     <<: *service
-    ports:
-      - "127.0.0.1:8080:8080"
-        # <--- for testing with curl
 
     container_name: api-gateway-component
     build:
@@ -103,8 +119,6 @@ services:
 
   auth-component:
     <<: *service
-    ports:
-    - "8081:8081" #  <--- for testing with curl
     container_name: auth-component
     build:
       context: ./Backend/auth-component
@@ -132,8 +146,6 @@ services:
 
   game-logic-component:
     <<: *service
-    ports:
-      - "8082:8082" #  <--- for testing with curl
     container_name: game-logic-component
     build:
       context: ./Backend/GameLogic
@@ -162,8 +174,6 @@ services:
 
   single-player-component:
     <<: *service
-    ports:
-      - "8083:8083" # <--- for testing with curl
     container_name: single-player-component
     build:
       context: ./Backend/GameService
@@ -183,8 +193,6 @@ services:
   multiplayer-component:
     <<: *service
     # profiles: ["pendiente"]
-    ports:
-      - "8084:8084"
     container_name: multiplayer-component
     restart: unless-stopped
     build:
@@ -204,8 +212,6 @@ services:
 
   tutor-component:
     <<: *service
-    ports:
-      - "8085:8085"
     container_name: tutor-component
     build:
       context: ./Backend/tutor-component
@@ -235,8 +241,6 @@ services:
   
   botcito-component:
     <<: *service
-    ports:
-      - "8086:8086" # <--- for testing with curl
     container_name: botcito-component
     build:
       context: ./Backend/botcito-component
