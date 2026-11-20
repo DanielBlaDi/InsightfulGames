@@ -1,4 +1,4 @@
-import { gatewayBaseUrl } from './config';
+import { apiUrl } from './config';
 import { isRecord } from './guards';
 import type { CreateGameRequest, GameState } from './types';
 
@@ -15,15 +15,15 @@ export class ApiError extends Error {
   }
 }
 
-/** POST /games en el API Gateway. Devuelve el GameState de la partida creada. */
-export async function createGame(
-  request: CreateGameRequest,
-  token: string,
-  signal?: AbortSignal,
-): Promise<GameState> {
-  const response = await fetch(`${gatewayBaseUrl()}/api/games`, {
+/**
+ * POST /api/games. Devuelve el GameState de la partida creada. La sesión va en la cookie
+ * session, que el navegador envía sola; el código no maneja el token (sección 6).
+ */
+export async function createGame(request: CreateGameRequest, signal?: AbortSignal): Promise<GameState> {
+  const response = await fetch(apiUrl('/games'), {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(request),
     signal,
   });

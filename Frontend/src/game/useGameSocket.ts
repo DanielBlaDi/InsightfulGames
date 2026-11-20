@@ -4,12 +4,11 @@ import { useGameTransport } from './useGameTransport';
 import { createWebSocketTransport, gameSocketUrl } from './wsTransport';
 
 interface GameSocketOptions {
-  gameId: string; // devuelto por POST /games
-  token: string; // accessToken del login
+  gameId: string; // devuelto por POST /api/games
 }
 
-/** Sesión de juego sobre el WebSocket del API Gateway. */
-export function useGameSocket({ gameId, token }: GameSocketOptions): GameSession {
-  const create = useCallback(() => createWebSocketTransport(gameSocketUrl(gameId, token)), [gameId, token]);
+/** Sesión de juego sobre el WebSocket de Single Player. La identidad va en la cookie session. */
+export function useGameSocket({ gameId }: GameSocketOptions): GameSession {
+  const create = useCallback(() => createWebSocketTransport(gameSocketUrl(gameId)), [gameId]);
   return useGameTransport(create);
 }

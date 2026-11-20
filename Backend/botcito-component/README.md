@@ -5,27 +5,196 @@ consulta Stockfish y devuelve una jugada legal con su notación SAN y evaluació
 No crea partidas ni persiste movimientos; esas responsabilidades permanecen en
 Single Player y Game Logic.
 
-## Arranque independiente con Docker
+
+## Arquitectura actual: Botcito-juego y Botcito-análisis
+
+Botcito utiliza Python 3.12, FastAPI y Stockfish 15.1.
+
+Una misma imagen Docker permite ejecutar dos servicios independientes,
+cada uno con su propio pool de motores Stockfish.
+
+### Botcito-juego
+
+- Rol: `ENGINE_ROLE=game`
+- Puerto: `8086`
+- Endpoint: `POST /internal/engine/best-move`
+- Consumidor: Single Player, mediante el gateway interno.
+- Objetivo: calcular una jugada según el nivel de dificultad.
+
+Solicitud:
+
+```json
+{
+  "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+  "botLevel": 10
+}
+```
+
+Respuesta de ejemplo:
+
+```json
+{
+  "uci": "g1f3",
+  "san": "Nf3",
+  "evaluation": {
+    "type": "cp",
+    "value": 28,
+    "perspective": "side_to_move"
+  }
+}
+```
+
+### Botcito-análisis
+
+- Rol: `ENGINE_ROLE=analysis`
+- Puerto: `8091`
+- Endpoint: `POST /internal/engine-analysis/evaluate`
+- Consumidor: Analysis Worker, mediante el gateway interno.
+- Objetivo: evaluar una posición a la profundidad solicitada.
+
+Solicitud:
+
+```json
+{
+  "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+  "depth": 8
+}
+```
+
+Respuesta de ejemplo:
+
+```json
+{
+  "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQkBNR w KQkq - 0 1",
+  "evaluation": {
+    "type": "cp",
+    "value": 26,
+    "perspective": "white"
+  },
+  "bestMove": {
+    "uci": "g1f3",
+    "san": "Nf3"
+  },
+  "depth": 8
+}
+```
+
+La profundidad máxima es configurable mediante `ANALYSIS_DEPTH_MAX`,
+con valor predeterminado de 18.
+
+Las posiciones terminales se evalúan sin consultar Stockfish:
+
+- Jaque mate a favor de blancas: `100000` centipeones.
+- Jaque mate a favor de negras: `-100000` centipeones.
+- Ahogado o tablas: `0` centipeones.
+
+En estos casos, `bestMove` es `null`.
+
+### Configuración de los contenedores
+
+| Variable | Juego | Análisis |
+|---|---|---|
+| PORT | 8086 | 8091 |
+| ENGINE_ROLE | game | analysis |
+| ENGINE_POOL_SIZE | 2 | 2 |
+| ENGINE_THREADS | 1 | 1 |
+| ENGINE_TIMEOUT_MS | 2000 | 10000 |
+
+Ambos servicios ofrecen `GET /health`.
+
+Los endpoints `/internal/*` están destinados a la comunicación
+entre servicios mediante el gateway interno, no a exposición pública.
+
+Las rutas antiguas `/engine/best-move` y `/best-move` se conservan
+temporalmente por compatibilidad hasta completar la migración
+de Single Player y el gateway.
+
+
+## Arranque independiente con Docker Compose
+
+Botcito-juego y Botcito-análisis pueden ejecutarse mediante un único
+archivo Docker Compose, utilizando la misma imagen con Stockfish 15.1.
+
+Cada servicio tiene su propio contenedor, pool de motores y configuración.
+
+### Iniciar ambos servicios
 
 Desde la raíz del repositorio:
 
 ```bash
-docker compose -f Backend/botcito-component/compose.yaml up --build -d
-curl http://localhost:8086/health
+docker compose -f Backend/botcito-component/compose.yaml up -d --build
 ```
 
-Respuesta esperada: `{"status":"ok"}`. La documentación interactiva está en
-<http://localhost:8086/docs>. El contenedor instala Stockfish desde Debian,
-ejecuta la API con Python 3.12 y un usuario sin privilegios, y comprueba su salud.
-No necesita base de datos, credenciales ni archivo `.env` para este arranque.
+Los servicios disponibles son:
 
-Para detenerlo:
+| Servicio | Rol | Puerto |
+|---|---|---|
+| botcito | game | 8086 |
+| botcito-analysis | analysis | 8091 |
+
+Los puertos se publican únicamente en `127.0.0.1` para pruebas locales.
+
+### Verificar el estado
+
+```bash
+docker compose -f Backend/botcito-component/compose.yaml ps
+```
+
+Ambos contenedores deben encontrarse en estado `healthy`.
+
+Verificar los endpoints de salud:
+
+```bash
+curl http://localhost:8086/health
+curl http://localhost:8091/health
+```
+
+Respuesta esperada de ambos servicios:
+
+```json
+{"status":"ok"}
+```
+
+La documentación interactiva está disponible localmente en:
+
+- Botcito-juego: http://localhost:8086/docs
+- Botcito-análisis: http://localhost:8091/docs
+
+Los contenedores utilizan Python 3.12 y Stockfish 15.1,
+instalado desde el paquete Debian `stockfish=15.1-4`.
+
+No requieren bases de datos ni credenciales para su arranque independiente.
+
+### Detener ambos servicios
+
+Desde la raíz del repositorio:
 
 ```bash
 docker compose -f Backend/botcito-component/compose.yaml down
 ```
 
-## Contrato principal
+Esto detiene y elimina los contenedores administrados por Compose,
+sin eliminar el código ni las imágenes Docker.
+
+Esta configuración corresponde al entorno independiente de desarrollo.
+La integración en el Docker Compose principal del proyecto y las
+comunicaciones mediante el gateway interno requieren validaciones adicionales.
+
+## Contrato de compatibilidad (temporal)
+
+Las rutas `/engine/best-move` y `/best-move` pertenecen al contrato
+anterior de Botcito-juego y se mantienen temporalmente para conservar
+la compatibilidad con los consumidores que todavía no han migrado.
+
+El contrato vigente utiliza `POST /internal/engine/best-move`, con el
+parámetro `botLevel` (1 a 20).
+
+Los ejemplos siguientes corresponden a las rutas de compatibilidad
+y pueden seguir utilizando el parámetro histórico `level`.
+
+Estas rutas se retirarán cuando Single Player y el gateway hayan
+completado la migración al contrato interno.
+
 
 `POST /engine/best-move`, puerto **8086**:
 
@@ -119,18 +288,38 @@ Todos los errores propios del servicio tienen esta forma:
 | 400 | `VALIDATION_ERROR` | JSON/campos/tipos/nivel inválidos |
 | 400 | `INVALID_FEN` | FEN mal formado o posición inconsistente |
 | 422 | `NO_LEGAL_MOVES` | Jaque mate o ahogado |
-| 503 | `ENGINE_BUSY` | Otra consulta ocupa el proceso del motor |
-| 503 | `ENGINE_UNAVAILABLE` | Motor terminado, fallo UCI o conexión del Gateway fallida |
+| 503 | `ENGINE_BUSY` | Todos los motores del pool están ocupados; no se mantienen solicitudes en cola |
+| 503 | `SERVICES_UNAVAILABLE` | Motor no disponible o fallo del proceso Stockfish |
+| 504 | `ENGINE_TIMEOUT` | El motor superó el tiempo máximo de ejecución configurado |
 
-Hay un proceso Stockfish por worker, con un hilo y 32 MB de hash. No se mezclan
-consultas UCI ni se crea una cola ilimitada. El despliegue inicial atiende una
-consulta a la vez: el consumidor debe manejar/reintentar `ENGINE_BUSY` con espera
-acotada. El cliente Java actual propaga los errores y aún no implementa ese
-reintento; la prueba integrada con partidas simultáneas queda pendiente.
 
-Si Stockfish termina, `/health` responde 503 y la siguiente solicitud de jugada
-intenta reiniciarlo. Si el binario falta al arrancar, la aplicación falla
-explícitamente. No se sustituye el motor por respuestas simuladas.
+
+Cada contenedor dispone de un pool independiente de procesos Stockfish,
+configurado mediante `ENGINE_POOL_SIZE`, `ENGINE_THREADS` y
+`ENGINE_TIMEOUT_MS`.
+
+La configuración actual utiliza dos motores por contenedor, con un hilo
+y 32 MB de hash por motor.
+
+Cada proceso atiende una solicitud a la vez. Cuando todos los motores
+del pool están ocupados, el servicio responde `503 ENGINE_BUSY` sin
+mantener una cola de espera.
+
+Si un motor falla, se descarta únicamente ese proceso y se intenta
+reiniciarlo en una solicitud posterior. Los demás motores pueden
+continuar atendiendo peticiones.
+
+Botcito-juego utiliza un timeout de 2000 ms y Botcito-análisis uno de
+10000 ms, según la configuración de cada contenedor.
+
+
+El endpoint `/health` responde correctamente mientras exista al menos
+un motor operativo en el pool. Si todos los motores están fuera de
+servicio, responde `503 SERVICES_UNAVAILABLE`.
+
+Los motores que fallen se intentan recuperar individualmente.
+Si el binario Stockfish no está disponible durante el arranque,
+la aplicación falla explícitamente.
 
 Stockfish dispone de hasta 30 segundos para inicializarse al arrancar la API,
 y 5 segundos para reiniciarse durante una solicitud. Después de inicializarlo,
@@ -183,6 +372,34 @@ También se verificaron la sintaxis YAML, las rutas de los Dockerfiles y las
 referencias entre servicios. Docker y la partida completa con Java/Frontend
 no se ejecutaron en este entorno; el binario de Debian incluido por el Dockerfile
 puede tener una versión distinta del usado en las pruebas locales.
+
+La validación histórica con Stockfish 17.1 corresponde al prototipo
+anterior y no representa la versión normativa de esta implementación.
+
+### Validación actual — 3 de noviembre de 2026
+
+La implementación actual de Botcito utiliza Python 3.12 y Stockfish 15.1,
+instalado en Docker mediante el paquete Debian `stockfish=15.1-4`.
+
+La misma imagen Docker permite ejecutar dos servicios independientes:
+
+- **Botcito-juego:** puerto 8086, `ENGINE_ROLE=game`.
+- **Botcito-análisis:** puerto 8091, `ENGINE_ROLE=analysis`.
+
+Ambos servicios utilizan un pool configurable de procesos Stockfish,
+con dos motores y un hilo por motor en la configuración probada.
+
+Resultados de validación:
+
+- 41 pruebas automatizadas aprobadas mediante Pytest.
+- Ambos contenedores ejecutándose correctamente en Docker.
+- Healthchecks satisfactorios en los puertos 8086 y 8091.
+- Evaluaciones reales verificadas mediante solicitudes HTTP.
+- Validación de aislamiento de endpoints y rechazo de solicitudes inválidas.
+
+Commit de referencia: `3b1f0b4`, rama `botcito`.
+
+
 
 La prueba HTTP local con dos servidores Uvicorn y Stockfish real también pasó:
 Gateway → Botcito respondió `200` con `f7g7`, `Qg7#` y mate en 1; un FEN inválido

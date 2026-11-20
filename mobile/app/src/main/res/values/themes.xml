@@ -1,0 +1,5 @@
+<resources>
+    <style name="Theme.InsightfulGames" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">#FFF8F6</item>
+    </style>
+</resources>

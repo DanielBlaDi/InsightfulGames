@@ -12,6 +12,7 @@ export type ConnectionStatus = 'connecting' | 'open' | 'closed';
 
 /** Códigos de cierre del WebSocket definidos en el contrato (sección 5). */
 export const CLOSE_UNAUTHORIZED = 4401;
+export const CLOSE_FORBIDDEN_ORIGIN = 4403;
 export const CLOSE_GAME_NOT_FOUND = 4404;
 
 export interface SessionView {

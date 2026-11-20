@@ -2,150 +2,82 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project Overview
+## Development & Test Commands
 
-**Insightful Games** — A distributed web platform for learning and playing Chess, Go, and Shogi with an AI-powered pedagogical tutor. Built as a **Prototype 1 vertical slice** demonstrating the full architectural stack.
+### Running Tests
 
-### Architecture (Distributed, Container-Oriented)
+- **Tutor Component (`Backend/tutor-component`)**:
+  ```powershell
+  cd Backend/tutor-component
+  .\venv\Scripts\python -m pytest -q
+  ```
+  Run a single test file:
+  ```powershell
+  .\venv\Scripts\python -m pytest tests/test_analyses.py -q
+  ```
+  Run a single test function:
+  ```powershell
+  .\venv\Scripts\python -m pytest tests/test_analyses.py::test_create_analysis_success -q
+  ```
 
-| Service | Language | Framework | Internal Port | Database | Responsibility |
-|---------|----------|-----------|---------------|----------|----------------|
-| **Frontend** | TypeScript | Vite + React | 80 | — | Web UI, board rendering, WebSocket client |
-| **API Gateway** | TypeScript | Fastify | 8080 | — | JWT validation, routing, CORS |
-| **Auth** | Java 21 | Spring Boot + Security | 8081 | MySQL | Registration, login, JWT issuance (HS256) |
-| **Game Logic** | Java 21 | Spring Boot | 8082 | MongoDB | Chess rules validation, move application, game state |
-| **Single Player** | Python 3.12 | FastAPI | 8083 | — | Orchestrates vs_bot games, calls Botcito + Game Logic |
-| **Botcito (Stockfish)** | Python 3.12 | FastAPI + python-chess | 8086 | — | Stockfish engine wrapper, best move + evaluation |
-| **MySQL** | — | — | 3306 | Relational | Users, auth data |
-| **MongoDB** | — | — | 27017 | NoSQL | Game documents (GameState) |
+- **Analysis Worker (`Backend/analysis-worker`)**:
+  ```powershell
+  cd Backend/analysis-worker
+  .\.venv\Scripts\python.exe -m pytest -q
+  ```
+  Run integration test with real MongoDB:
+  ```powershell
+  $env:MONGO_TEST_URL = "mongodb://localhost:27018"
+  $env:MONGO_TEST_DATABASE = "analysis_worker_test"
+  .\.venv\Scripts\python.exe -m pytest -q tests/test_integration_mongo.py
+  ```
 
-**Connectors**: REST (HTTP/JSON) + WebSocket (real-time moves)  
-**Languages**: TypeScript, Java, Python  
-**Deployment**: Docker Compose (all services + DBs)
+- **Frontend (`Frontend`)**:
+  ```powershell
+  cd Frontend
+  npm run test
+  ```
 
-### Key Contracts (from `Documentación/contracts.docx.md`)
+### Docker Compose Commands
 
-- **GameState** — Core domain object with `gameId`, `fen`, `legalMoves`, `moves[]`, `status`, `turn`, `result`, `endReason`
-- **Moves** — UCI format (`e2e4`), SAN for display (`e4`)
-- **Positions** — FEN strings
-- **Auth** — JWT in `Authorization: Bearer <token>` header; WS via `?token=` query
-- **Errors** — Uniform shape: `{ "error": { "code": "...", "message": "..." } }`
-- **WebSocket** — `/ws/games/{id}?token=<jwt>`; messages: `move`, `resign` → `state`, `move_rejected`, `bot_thinking`, `game_over`
+- Validate Compose configuration:
+  ```bash
+  docker compose config --quiet
+  ```
+- Build and start all services in detached mode:
+  ```bash
+  docker compose up --build -d
+  ```
+- Inspect running containers and logs:
+  ```bash
+  docker compose ps
+  docker compose logs -f <service_name>
+  ```
+- Stop services:
+  ```bash
+  docker compose down
+  ```
 
-## Development Commands
+---
 
-### Frontend (`InsightfulGames/Frontend`)
-```bash
-cd InsightfulGames/Frontend
-npm run dev       # Start Vite dev server
-npm run build     # Type-check (tsc) + production build
-npm run lint      # oxlint
-npm run preview   # Preview production build
-```
+## High-Level Architecture & Component Structure
 
-### Backend Services (not yet implemented)
-Each service will be in `InsightfulGames/Backend/<service-name>/` with its own build/run commands:
-- **Auth** (Java/Spring): `./mvnw spring-boot:run`
-- **Game Logic** (Java/Spring): `./mvnw spring-boot:run`
-- **Single Player** (Python/FastAPI): `uvicorn main:app --reload`
-- **Botcito** (Python/FastAPI): `uvicorn main:app --reload`
-- **Gateway** (TypeScript/Fastify): `npm run dev`
+Insightful Games follows a microservice, container-oriented architecture with decoupled logical components communicating over HTTP REST and RabbitMQ event messaging.
 
-### Docker Compose (to be created)
-```bash
-docker compose up -d       # Start all services + DBs
-docker compose logs -f     # Follow logs
-docker compose down        # Stop and remove
-```
+### Component Overview
 
-## File Structure (Current State)
+- **Frontend (`Frontend/`)**: React + SSR web presentation component exposing the user interface.
+- **API Gateway (`Backend/api-gateway/`)**: Entry point for all HTTP requests from clients. Handles JWT validation, injects internal headers (`X-User-Id`), and routes requests to downstream services.
+- **Auth Service (`Backend/auth-component/`)**: Java / Spring Boot service managing user credentials, authentication, JWT tokens, and account deletion. Persists user accounts in MySQL (`mysql-db`).
+- **Game Logic (`Backend/GameLogic/`)**: Core chess game state manager. Stores game states, player participation, move histories, FEN positions, and game visibility (`private` vs `shared`) in MongoDB (`mongo-db`).
+- **Single Player Service (`Backend/GameService/`)**: Manages single-player sessions and interacts with Botcito engine services.
+- **Botcito Component (`Backend/botcito-component/`)**: Chess engine wrapper for position evaluations and move suggestions.
+- **Tutor Component (`Backend/tutor-component/`)**: FastAPI service responsible for accepting analysis requests, validating game states against Game Logic, persisting analysis metadata in MongoDB (`mongo-analysis`), generating deterministic move explanations, handling account anonymization, and publishing `tutor.analysis.requested` events to RabbitMQ.
+- **Analysis Worker (`Backend/analysis-worker/`)**: Python 3.12 background process consuming `tutor.analysis.requested` events from RabbitMQ. Evaluates game positions against Botcito-analysis, calculates centipawn losses (`cpLoss`) and move classifications (`best`, `good`, `inaccuracy`, `mistake`, `blunder`), updates analysis results in MongoDB via atomic leases, and handles polling fallback for stale jobs.
 
-```
-InsightfulGames/
-├── Frontend/
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── Landing.tsx    # Main landing page (converted from HTML)
-│   │   │   └── Login.tsx      # Auth form
-│   │   ├── App.tsx            # Routes between Landing and Login
-│   │   └── main.tsx           # React entry point
-│   ├── index.html             # Includes Tailwind CDN + custom config + Google Fonts
-│   ├── package.json
-│   └── vite.config.ts
-├── Backend/                   # Empty — services to be implemented
-├── Databases/                 # Empty — SQL/init scripts to be added
-├── Documentación/             # Requirements, contracts, stack definition
-│   ├── Requisitos project.md
-│   ├── Stack tecnológico.md
-│   ├── contracts.docx.md
-│   └── [SwArch_2026ii] - Project - Prototype 1.pdf
-└── CLAUDE.md                  # This file
-```
+### Data Storage & Messaging
 
-## Prototype 1 Scope (Vertical Slice)
-
-**In scope**:
-- User registration + login (JWT)
-- Chess only (not Go/Shogi yet)
-- **Local 1v1** (same device, hot-seat)
-- **vs Bot** (Stockfish via Botcito, skill level 1–20)
-- Game state persisted in MongoDB
-- WebSocket real-time updates
-- Board modal with Chess/Go/Shogi previews (UI only)
-
-**Out of scope** (later prototypes):
-- Multiplayer online (matchmaking, Elo, WebSocket rooms)
-- Tutor LLM integration (post-game analysis)
-- Go/Shogi game logic engines
-- Replay system
-- Competitive ranked mode
-
-## Implementation Notes
-
-### Frontend
-- Tailwind via CDN in `index.html` (custom theme with design tokens)
-- Google Fonts: Playfair Display (headlines), Plus Jakarta Sans (body), Material Symbols Outlined
-- Landing page is a single large component; consider splitting into sections (Hero, Features, Games, Modal) when expanding
-- `Landing.tsx` handles modal state (`isModalOpen`, `activeBoard`, `boardRotated`)
-
-### Contracts First
-All service communication must follow `Documentación/contracts.docx.md`. When implementing a new service:
-1. Define its OpenAPI/REST endpoints per the contract
-2. Use exact `GameState` shape and error codes
-3. Validate JWT at Gateway level (`HS256`, secret `JWT_SECRET`)
-
-### Data Flow (vs_bot example)
-```
-Frontend (WS move) 
-  → Gateway (JWT check, X-User-Id) 
-  → Single Player (turn check) 
-  → Game Logic (validate + apply move, persist) 
-  → Single Player (if bot's turn) 
-    → Gateway → Botcito (fen + level) 
-  → Single Player (apply bot move) 
-  → Game Logic (validate + apply, persist) 
-  → Frontend (state + game_over)
-```
-
-### Environment Variables (from contracts)
-| Variable | Used By | Example |
-|----------|---------|---------|
-| `JWT_SECRET` | Gateway, Auth | shared secret |
-| `AUTH_URL` | Gateway | `http://auth:8081` |
-| `SINGLE_PLAYER_URL` | Gateway | `http://single-player:8083` |
-| `BOTCITO_URL` | Gateway | `http://botcito:8086` |
-| `GATEWAY_INTERNAL_URL` | Single Player | `http://gateway:8080` |
-| `GAME_LOGIC_URL` | Single Player | `http://game-logic:8082` |
-| `MYSQL_URL` | Auth | `jdbc:mysql://mysql:3306/auth` |
-| `MONGO_URL` | Game Logic | `mongodb://mongo:27017/games` |
-| `STOCKFISH_PATH` | Botcito | `/usr/games/stockfish` |
-
-## Next Steps Priority
-
-1. **Docker Compose** — Scaffold all services + DBs with healthchecks
-2. **Botcito** — Stockfish wrapper (simplest, enables vs_bot)
-3. **Game Logic** — Chess rules, MongoDB persistence
-4. **Auth** — Spring Security + MySQL + JWT
-5. **Gateway** — Fastify routing + JWT validation
-6. **Single Player** — Orchestration + WebSocket server
-7. **Frontend integration** — Connect real WS, replace mock board modal
+- **MongoDB (`mongo-db`)**: Primary game data store for Game Logic.
+- **MongoDB Analysis (`mongo-analysis-db`)**: Dedicated database (`insightful_analysis`) for analysis documents created by Tutor and populated asynchronously by Analysis Worker.
+- **MySQL (`mysql-db`)**: User authentication and profile persistence.
+- **RabbitMQ (`rabbitmq`)**: Event broker hosting topic exchange `tutor.events`, routing key `tutor.analysis.requested`, queue `analysis-worker.requested`, wait/retry exchanges, and dead-letter queue (DLQ).

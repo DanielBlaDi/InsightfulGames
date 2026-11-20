@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import type { FormEvent } from 'react';
 import GameFlow from '../GameFlow';
 import GamePage from '../GamePage';
 import PlayChess from '../PlayChess';
@@ -110,52 +109,37 @@ function ScenarioHarness() {
 }
 
 /**
- * Prueba contra el Gateway real con el mismo componente que usará la aplicación (PlayChess).
- * El token se escribe aquí y vive solo en memoria: no pasa por la URL de la página ni se guarda.
+ * Prueba contra el backend real con el mismo componente que usará la aplicación (PlayChess).
+ * Con v9 la sesión es la cookie session de este mismo origen: hay que iniciar sesión antes en
+ * la aplicación (o en /api/auth/login) para que el navegador la envíe.
  */
 function GatewayHarness() {
-  const [token, setToken] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const value = String(new FormData(event.currentTarget).get('token') ?? '').trim();
-    if (!value) return;
-    setNotice(null);
-    setToken(value);
-  };
-
-  if (token) {
-    return (
-      <>
-        <div className={BAR}>
-          <span className="font-body-sm text-body-sm text-on-surface-variant">Sesión iniciada con el token indicado.</span>
-          <button type="button" onClick={() => setToken(null)} className={BUTTON}>
-            Olvidar token
-          </button>
-        </div>
-        <PlayChess
-          token={token}
-          onUnauthorized={() => {
-            setToken(null);
-            setNotice('El Gateway rechazó el token. Aquí la aplicación volvería al login.');
-          }}
-        />
-      </>
-    );
-  }
+  const [run, setRun] = useState(0);
 
   return (
-    <form onSubmit={handleSubmit} autoComplete="off" className={BAR}>
-      <label className={LABEL}>
-        Token (accessToken del login)
-        <input name="token" type="password" required autoComplete="off" className={`${FIELD} w-72`} />
-      </label>
-      <button type="submit" className={BUTTON}>
-        Usar token
-      </button>
-      {notice && <span className="font-body-sm text-body-sm text-error">{notice}</span>}
-    </form>
+    <>
+      <div className={BAR}>
+        <span className="font-body-sm text-body-sm text-on-surface-variant">
+          Usa la cookie session de este origen. Sin sesión, el servidor responde 401.
+        </span>
+        <button
+          type="button"
+          onClick={() => {
+            setNotice(null);
+            setRun(run + 1);
+          }}
+          className={BUTTON}
+        >
+          Reiniciar
+        </button>
+        {notice && <span className="font-body-sm text-body-sm text-error">{notice}</span>}
+      </div>
+      <PlayChess
+        key={run}
+        onUnauthorized={() => setNotice('Sin sesión válida (401 o cierre 4401). Aquí la aplicación volvería al login.')}
+      />
+    </>
   );
 }
 
@@ -175,7 +159,7 @@ export default function DevHarness() {
           <select value={source} onChange={(e) => setSource(e.target.value as Source)} className={FIELD}>
             <option value="flow">Simulado · flujo completo</option>
             <option value="scenarios">Simulado · escenarios del tablero</option>
-            <option value="gateway">Gateway real (REST + WebSocket)</option>
+            <option value="gateway">Backend real (cookie session)</option>
           </select>
         </label>
         {source !== 'gateway' && (

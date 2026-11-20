@@ -16,14 +16,22 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 import java.io.IOException;
 
 /**
- * WebSocket /ws/games/{id} (contrato, sección 5). El API Gateway valida el token al abrir
- * la conexión y reenvía el ID del usuario en la cabecera X-User-Id.
+ * WebSocket /internal/single-player/ws/games/{id} (contrato, 12.4.1). El gateway web valida Origin
+ * y la sesión, y reenvía el usuario en la cabecera X-User-Id. Solo se aceptan participantes.
+ *
+ * <p>Clasificación de las respuestas a un mensaje del cliente:
+ * <ul>
+ *   <li>move_rejected: la acción no se aceptó (400 VALIDATION_ERROR, 409 VERSION_CONFLICT,
+ *   409 GAME_NOT_IN_PROGRESS, 422 INVALID_MOVE, NOT_YOUR_TURN, GAME_FINISHED, CLOCK_EXPIRED...).</li>
+ *   <li>error: fallo ajeno a la jugada que no cambia la partida (503 SERVICES_UNAVAILABLE,
+ *   ENGINE_BUSY, 504 ENGINE_TIMEOUT, 404, INTERNAL_ERROR...).</li>
+ * </ul>
  */
 @Component
 public class GameWebSocketHandler extends TextWebSocketHandler {
 
     /** Códigos de cierre del contrato. */
-    static final CloseStatus UNAUTHORIZED = new CloseStatus(4401, "Token invalido o vencido");
+    static final CloseStatus UNAUTHORIZED = new CloseStatus(4401, "Sesion invalida o vencida");
     static final CloseStatus GAME_NOT_FOUND = new CloseStatus(4404, "Partida inexistente o ajena");
 
     private static final Logger log = LoggerFactory.getLogger(GameWebSocketHandler.class);
@@ -52,7 +60,7 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
 
         GameState state;
         try {
-            state = service.getGame(userId, gameId);
+            state = service.getParticipantGame(userId, gameId);
         } catch (ApiException e) {
             session.close(e.status().value() == 404 ? GAME_NOT_FOUND : CloseStatus.SERVER_ERROR);
             return;
@@ -79,25 +87,23 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
         try {
             request = mapper.readValue(message.getPayload(), ClientMessage.class);
         } catch (JsonProcessingException e) {
-            channels.send(session, WsMessage.error("VALIDATION_ERROR", "El mensaje no es un JSON válido"));
+            channels.send(session, WsMessage.moveRejected("VALIDATION_ERROR", "El mensaje no es un JSON válido"));
             return;
         }
         if (request == null || request.type() == null) {
-            channels.send(session, WsMessage.error("VALIDATION_ERROR", "Falta el campo type"));
+            channels.send(session, WsMessage.moveRejected("VALIDATION_ERROR", "Falta el campo type"));
             return;
         }
 
         try {
             switch (request.type()) {
-                case "move" -> service.handleMove(userId, gameId, request.uci());
+                case "move" -> service.handleMove(userId, gameId, request.uci(), request.expectedVersion());
                 case "resign" -> service.resign(userId, gameId, request.side());
                 default -> channels.send(session,
-                        WsMessage.error("VALIDATION_ERROR", "Tipo de mensaje desconocido: " + request.type()));
+                        WsMessage.moveRejected("VALIDATION_ERROR", "Tipo de mensaje desconocido: " + request.type()));
             }
         } catch (ApiException e) {
-            // 400 y 422 son jugadas o rendiciones rechazadas; lo demás (404, 502...) es un error
-            boolean rejected = e.status().value() == 400 || e.status().value() == 422;
-            channels.send(session, rejected
+            channels.send(session, isRejection(e)
                     ? WsMessage.moveRejected(e.code(), e.getMessage())
                     : WsMessage.error(e.code(), e.getMessage()));
         } catch (RuntimeException e) {
@@ -114,7 +120,13 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
-    /** La ruta es /ws/games/{id}: el ID es el último segmento. */
+    /** 400, 409 y 422 son acciones no aceptadas; el resto (404, 5xx) son fallos ajenos a la jugada. */
+    static boolean isRejection(ApiException e) {
+        int status = e.status().value();
+        return status == 400 || status == 409 || status == 422;
+    }
+
+    /** La ruta es .../ws/games/{id}: el ID es el último segmento. */
     private static String gameIdFrom(WebSocketSession session) {
         String path = session.getUri() == null ? "" : session.getUri().getPath();
         return path.substring(path.lastIndexOf('/') + 1);

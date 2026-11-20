@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { clearSession, loadSession, saveSession } from './authSession';
-import type { AuthSession, AuthUser } from './authSession';
+import { useEffect, useState } from 'react';
+import { clearLegacyStorage, logout, readSession } from './auth/session';
+import type { SessionState, SessionUser } from './auth/session';
 import Landing from './components/Landing';
 import Login from './components/Login';
 import { PlayChess } from './game';
@@ -8,7 +8,7 @@ import { PlayChess } from './game';
 type View = 'landing' | 'login' | 'chess';
 
 export default function App() {
-  const [session, setSession] = useState<AuthSession | null>(loadSession);
+  const [session, setSession] = useState<SessionState>({ status: 'checking' });
   const [view, setView] = useState<View>('landing');
   // El usuario pidió jugar ajedrez sin sesión: tras el login se le lleva directo a la partida.
   const [chessAfterLogin, setChessAfterLogin] = useState(false);
@@ -18,23 +18,45 @@ export default function App() {
     window.scrollTo(0, 0);
   };
 
-  const handleLoginSuccess = (token: string, user: AuthUser) => {
-    const next = { token, user };
-    saveSession(next);
-    setSession(next);
+  // Al cargar (y al reintentar): la sonda GET /api/stats/me dice si hay sesión (5.4.4). El nombre
+  // sale de GET /api/profile/me; si ese falla con 404 o 503, la sesión sigue siendo válida.
+  const [sessionCheck, setSessionCheck] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    clearLegacyStorage();
+    void readSession().then((next) => {
+      if (active) setSession(next);
+    });
+    return () => {
+      active = false;
+    };
+  }, [sessionCheck]);
+
+  const retrySession = () => {
+    setSession({ status: 'checking' });
+    setSessionCheck((n) => n + 1);
+  };
+
+  const handleLoginSuccess = (user: SessionUser) => {
+    // La cookie ya llegó con la respuesta del login; solo se actualiza el encabezado.
+    setSession({ status: 'authenticated', username: user.username });
     show(chessAfterLogin ? 'chess' : 'landing');
     setChessAfterLogin(false);
   };
 
-  const handleLogout = () => {
-    clearSession();
-    setSession(null);
+  const handleLogout = async () => {
+    if (!(await logout())) {
+      window.alert('No se pudo cerrar la sesión. Inténtalo de nuevo.');
+      return;
+    }
+    setSession({ status: 'anonymous' });
     setChessAfterLogin(false);
     show('landing');
   };
 
   const handlePlayChess = () => {
-    if (session) {
+    if (session.status === 'authenticated') {
       show('chess');
     } else {
       setChessAfterLogin(true);
@@ -42,20 +64,19 @@ export default function App() {
     }
   };
 
-  // El Gateway rechazó el token (401 en REST o cierre 4401 del WebSocket): la sesión ya no
-  // sirve. Se pide iniciar sesión de nuevo y se vuelve al ajedrez al terminar.
+  // El Gateway rechazó la sesión (401 en REST o cierre 4401 del WebSocket): se pide iniciar sesión
+  // de nuevo y se vuelve al ajedrez al terminar.
   const handleUnauthorized = () => {
-    clearSession();
-    setSession(null);
+    setSession({ status: 'anonymous' });
     setChessAfterLogin(true);
     show('login');
   };
 
-  if (view === 'chess' && session) {
-    return <PlayChess token={session.token} onUnauthorized={handleUnauthorized} onExit={() => show('landing')} />;
+  if (view === 'chess' && session.status === 'authenticated') {
+    return <PlayChess onUnauthorized={handleUnauthorized} onExit={() => show('landing')} />;
   }
 
-  if (view === 'login' && !session) {
+  if (view === 'login' && session.status !== 'authenticated') {
     return (
       <Login
         onLoginSuccess={handleLoginSuccess}
@@ -70,10 +91,11 @@ export default function App() {
   return (
     <Landing
       onLogin={() => {
-        if (!session) show('login');
+        if (session.status !== 'authenticated') show('login');
       }}
       onPlayChess={handlePlayChess}
-      user={session?.user}
+      session={session}
+      onRetrySession={retrySession}
       onLogout={handleLogout}
     />
   );

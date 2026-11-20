@@ -10,8 +10,8 @@ export { default as GamePage } from './GamePage';
 export { default as ChessBoard } from './ChessBoard';
 export { useGameSocket } from './useGameSocket';
 export { ApiError, createGame } from './api';
-export { gatewayBaseUrl } from './config';
+export { apiUrl } from './config';
 
 export type { GameSession } from './session';
-export { MAX_BOT_LEVEL, MIN_BOT_LEVEL } from './types';
+export { MAX_BOT_LEVEL, MIN_BOT_LEVEL, humanColor } from './types';
 export type * from './types';

@@ -1,8 +1,11 @@
 import { useState } from 'react';
 import { MAX_BOT_LEVEL, MIN_BOT_LEVEL } from './types';
-import type { Color, CreateGameRequest, GameMode } from './types';
+import type { Color, CreateGameRequest } from './types';
 
-const MODES: { mode: GameMode; icon: string; title: string; description: string }[] = [
+/** Modos que se crean desde esta pantalla; multiplayer tiene su propio flujo (sección 10). */
+type SetupMode = 'local' | 'vs_bot';
+
+const MODES: { mode: SetupMode; icon: string; title: string; description: string }[] = [
   {
     mode: 'local',
     icon: 'group',
@@ -41,11 +44,11 @@ interface GameSetupProps {
 
 /** Formulario de configuración: decide el cuerpo de POST /games, pero no hace la llamada. */
 export default function GameSetup({ loading, error, onStart, onExit }: GameSetupProps) {
-  const [mode, setMode] = useState<GameMode>('local');
+  const [mode, setMode] = useState<SetupMode>('local');
   const [level, setLevel] = useState(DEFAULT_LEVEL);
   const [playerColor, setPlayerColor] = useState<Color>('white');
 
-  const request: CreateGameRequest = mode === 'local' ? { mode } : { mode, level, playerColor };
+  const request: CreateGameRequest = mode === 'local' ? { mode } : { mode, botLevel: level, playerColor };
 
   return (
     <div className="w-full min-h-screen bg-background font-body-md text-on-surface antialiased px-gutter-mobile md:px-margin py-space-xl">
@@ -94,6 +97,21 @@ export default function GameSetup({ loading, error, onStart, onExit }: GameSetup
                 </span>
               </button>
             ))}
+            {/* Multijugador tiene su propio flujo y sus rutas (/multijugador, /unirse, /partida). */}
+            <a
+              href="/multijugador"
+              className={`${optionClass(false)} sm:col-span-2 flex items-start gap-space-sm no-underline`}
+            >
+              <span className="w-10 h-10 shrink-0 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                <span className="material-symbols-outlined text-[24px]">public</span>
+              </span>
+              <span>
+                <span className="block font-headline-sm text-headline-sm text-on-surface">Multijugador online</span>
+                <span className="block font-body-sm text-body-sm text-on-surface-variant mt-1">
+                  Juega contra otra persona desde otro dispositivo.
+                </span>
+              </span>
+            </a>
           </div>
         </fieldset>
 
@@ -167,7 +185,7 @@ export default function GameSetup({ loading, error, onStart, onExit }: GameSetup
               <>
                 <dt className="text-on-surface-variant">Nivel</dt>
                 <dd className="text-on-surface font-semibold">
-                  {request.level} de {MAX_BOT_LEVEL}
+                  {request.botLevel} de {MAX_BOT_LEVEL}
                 </dd>
                 <dt className="text-on-surface-variant">Tus piezas</dt>
                 <dd className="text-on-surface font-semibold">

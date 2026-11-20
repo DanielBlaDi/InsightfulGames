@@ -6,12 +6,14 @@ import type {
   GameMove,
   GameResult,
   GameState,
+  Participant,
   PromotionPiece,
   ServerMessage,
 } from '../types';
 import type { MockPly, MockScenario, Scripted } from './scenarios';
 
 const BOT_DELAY_MS = 1200;
+const MOCK_USER = '00000000-0000-4000-8000-000000000001';
 
 interface Outcome {
   result: GameResult;
@@ -35,6 +37,8 @@ export function createMockTransport(scenario: MockScenario, gameId = `mock-${sce
   let legalMoves = scenario.initialLegalMoves;
   let outcome: Outcome | null = null;
   let finishedAt: string | null = null;
+  // Sube con cada cambio, como en Game Logic (sección 19).
+  let version = 1;
 
   const emit = (message: ServerMessage) => listener?.(message);
   // Lectura indirecta: TypeScript no sigue las asignaciones hechas desde finish().
@@ -49,17 +53,31 @@ export function createMockTransport(scenario: MockScenario, gameId = `mock-${sce
     timers.add(id);
   };
 
+  const participants = (): Participant[] =>
+    scenario.mode === 'vs_bot'
+      ? [{ userId: MOCK_USER, color: scenario.playerColor ?? 'white' }]
+      : [
+          { userId: MOCK_USER, color: 'white' },
+          { userId: MOCK_USER, color: 'black' },
+        ];
+
   const snapshot = (): GameState => ({
     gameId,
-    userId: 'mock-user',
     mode: scenario.mode,
+    visibility: 'private',
+    matchId: null,
+    participants: participants(),
     botLevel: scenario.botLevel,
-    playerColor: scenario.playerColor,
+    timeControl: null,
+    clocks: null,
     status: outcome ? 'finished' : 'in_progress',
     turn: turnOf(fen),
     fen,
+    initialFen: scenario.initialFen,
     legalMoves: outcome ? {} : legalMoves,
     moves: [...moves],
+    drawOffer: null,
+    version,
     result: outcome?.result ?? null,
     endReason: outcome?.endReason ?? null,
     createdAt,
@@ -79,10 +97,13 @@ export function createMockTransport(scenario: MockScenario, gameId = `mock-${sce
   const applyPly = (ply: MockPly, uci: string) => {
     if (outcome) return; // el jugador abandonó mientras el bot pensaba
     if (ply.promotes) promotions.push(uci[4] as PromotionPiece);
+    const color = turnOf(fen);
     fen = resolve(ply.fenAfter);
+    version += 1;
     legalMoves = ply.legalMovesAfter;
     moves.push({
       ply: moves.length + 1,
+      color,
       san: resolve(ply.san),
       uci,
       fenAfter: fen,
@@ -97,8 +118,11 @@ export function createMockTransport(scenario: MockScenario, gameId = `mock-${sce
 
   const reject = (code: string, message: string) => emit({ type: 'move_rejected', code, message });
 
-  const handleMove = (uci: string) => {
+  const handleMove = (uci: string, expectedVersion: number) => {
     if (outcome) return reject('GAME_FINISHED', 'La partida ya terminó.');
+    if (expectedVersion !== version) {
+      return reject('VERSION_CONFLICT', 'La partida cambió mientras jugabas. Se muestra la posición actual.');
+    }
     if (scenario.mode === 'vs_bot' && turnOf(fen) !== scenario.playerColor) {
       return reject('NOT_YOUR_TURN', 'Es el turno de Botcito.');
     }
@@ -125,7 +149,8 @@ export function createMockTransport(scenario: MockScenario, gameId = `mock-${sce
   const handleResign = (side?: Color) => {
     if (outcome) return reject('GAME_FINISHED', 'La partida ya terminó.');
     const loser = scenario.playerColor ?? side ?? turnOf(fen);
-    finish(loser === 'white' ? 'black' : 'white', 'resignation');
+    finish(loser === 'white' ? 'black' : 'white', 'surrender');
+    version += 1;
     emit({ type: 'state', state: snapshot() });
     emitGameOver();
   };
@@ -144,7 +169,7 @@ export function createMockTransport(scenario: MockScenario, gameId = `mock-${sce
       }, 0);
     },
     send(message: ClientMessage) {
-      if (message.type === 'move') handleMove(message.uci);
+      if (message.type === 'move') handleMove(message.uci, message.expectedVersion);
       else handleResign(message.side);
     },
     close() {

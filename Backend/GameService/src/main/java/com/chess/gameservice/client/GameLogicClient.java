@@ -1,9 +1,9 @@
 package com.chess.gameservice.client;
 
 import com.chess.gameservice.model.GameState;
-import com.chess.gameservice.model.GameSummary;
+import com.chess.gameservice.model.Participant;
+import com.chess.gameservice.model.TimeControl;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -11,81 +11,65 @@ import org.springframework.web.client.RestClient;
 import java.time.Duration;
 import java.util.List;
 
-/** Cliente REST de Game Logic (contrato, sección 3.5). */
+/**
+ * Cliente de Game Logic: /internal/logic/* por el gateway interno (contrato, 11.4 y 12.6).
+ * No reenvía X-User-Id: es una llamada de servicio a servicio.
+ */
 @Component
 public class GameLogicClient {
 
     private static final String NAME = "Game Logic";
+    private static final String GAMES = "/internal/logic/games";
 
-    public record CreateBody(String userId, String mode, Integer botLevel, String playerColor) {
+    /** Cuerpo de creación (11.4.5). Lo arma Single Player según el modo, nunca el cliente. */
+    public record CreateBody(String mode, TimeControl timeControl, String visibility, Integer botLevel,
+                             List<Participant> participants) {
     }
 
-    public record MoveBody(String uci) {
+    public record MoveBody(String uci, int expectedVersion) {
     }
 
     public record ResignBody(String side) {
     }
 
-    private final RestClient http;
-
-    public GameLogicClient(@Value("${gamelogic.url}") String baseUrl) {
-        this.http = RestClients.create(baseUrl, Duration.ofSeconds(10));
+    public record VisibilityBody(String visibility, int expectedVersion) {
     }
 
-    public GameState createGame(String userId, String mode, Integer botLevel, String playerColor) {
-        return RestClients.call(NAME, () -> http.post()
-                .uri("/logic/games")
+    private final RestClient http;
+
+    public GameLogicClient(@Value("${gateway.internal-url}") String gatewayUrl) {
+        this.http = RestClients.create(gatewayUrl, Duration.ofSeconds(10));
+    }
+
+    public GameState createGame(CreateBody body) {
+        return RestClients.exchange(NAME, http.post()
+                .uri(GAMES)
                 .contentType(MediaType.APPLICATION_JSON)
-                .body(new CreateBody(userId, mode, botLevel, playerColor))
-                .retrieve()
-                .onStatus(status -> status.isError(), (req, res) -> {
-                    throw RestClients.toApiException(NAME, res.getStatusCode().value(), res.getBody());
-                })
-                .body(GameState.class));
+                .body(body), GameState.class);
     }
 
     public GameState getGame(String gameId) {
-        return RestClients.call(NAME, () -> http.get()
-                .uri("/logic/games/{id}", gameId)
-                .retrieve()
-                .onStatus(status -> status.isError(), (req, res) -> {
-                    throw RestClients.toApiException(NAME, res.getStatusCode().value(), res.getBody());
-                })
-                .body(GameState.class));
+        return RestClients.exchange(NAME, http.get().uri(GAMES + "/{id}", gameId), GameState.class);
     }
 
-    public List<GameSummary> listGames(String userId) {
-        return RestClients.call(NAME, () -> http.get()
-                .uri(uriBuilder -> uriBuilder.path("/logic/games").queryParam("userId", userId).build())
-                .retrieve()
-                .onStatus(status -> status.isError(), (req, res) -> {
-                    throw RestClients.toApiException(NAME, res.getStatusCode().value(), res.getBody());
-                })
-                .body(new ParameterizedTypeReference<List<GameSummary>>() {
-                }));
-    }
-
-    public GameState move(String gameId, String uci) {
-        return RestClients.call(NAME, () -> http.post()
-                .uri("/logic/games/{id}/moves", gameId)
+    public GameState move(String gameId, String uci, int expectedVersion) {
+        return RestClients.exchange(NAME, http.post()
+                .uri(GAMES + "/{id}/moves", gameId)
                 .contentType(MediaType.APPLICATION_JSON)
-                .body(new MoveBody(uci))
-                .retrieve()
-                .onStatus(status -> status.isError(), (req, res) -> {
-                    throw RestClients.toApiException(NAME, res.getStatusCode().value(), res.getBody());
-                })
-                .body(GameState.class));
+                .body(new MoveBody(uci, expectedVersion)), GameState.class);
     }
 
     public GameState resign(String gameId, String side) {
-        return RestClients.call(NAME, () -> http.post()
-                .uri("/logic/games/{id}/resign", gameId)
+        return RestClients.exchange(NAME, http.post()
+                .uri(GAMES + "/{id}/resign", gameId)
                 .contentType(MediaType.APPLICATION_JSON)
-                .body(new ResignBody(side))
-                .retrieve()
-                .onStatus(status -> status.isError(), (req, res) -> {
-                    throw RestClients.toApiException(NAME, res.getStatusCode().value(), res.getBody());
-                })
-                .body(GameState.class));
+                .body(new ResignBody(side)), GameState.class);
+    }
+
+    public GameState changeVisibility(String gameId, String visibility, int expectedVersion) {
+        return RestClients.exchange(NAME, http.patch()
+                .uri(GAMES + "/{id}/visibility", gameId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(new VisibilityBody(visibility, expectedVersion)), GameState.class);
     }
 }

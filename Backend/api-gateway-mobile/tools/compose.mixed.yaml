@@ -1,0 +1,16 @@
+# Override SOLO para pruebas: publica en 127.0.0.1 los servicios que ya sirven, para que el
+# gateway interno mixto (en tu máquina) los alcance. No lo uses en un despliegue.
+#
+#   docker compose -f compose.yaml -f Backend/api-gateway-mobile/tools/compose.mixed.yaml \
+#     up -d --build mysql postgres-profile rabbitmq mongo \
+#            auth-component profile-stats-component game-logic-component
+services:
+  auth-component:
+    ports: !override
+      - "127.0.0.1:8081:8081"
+  game-logic-component:
+    ports: !override
+      - "127.0.0.1:8082:8082"
+  profile-stats-component:
+    ports:
+      - "127.0.0.1:8087:8087"

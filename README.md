@@ -173,3 +173,20 @@ docker compose up --build -d
 
 **Warning:** Avoid `docker compose down -v` unless you intentionally want to remove the Compose-managed named volumes as well. This can permanently delete locally persisted database data.
 
+## Mobile app (Android)
+
+The Android app lives in `mobile/` and talks only to the **mobile gateway** (`Backend/api-gateway-mobile/`, port `MOBILE_GATEWAY_PORT`, 8090 by default), which in turn talks to the web gateway's internal routes (`/internal/*`). It shows profile, statistics, game history and game details; it does not play live games.
+
+```
+Android app ──▶ api-gateway-mobile :8090 ──▶ api-gateway-component :8080 /internal/* ──▶ Auth · Game Logic · Single Player · (Profile/Stats · Multiplayer)
+```
+
+1. `cp .env.example .env` and fill in the values (`MOBILE_GATEWAY_PORT=8090`).
+2. `docker compose up -d --build`
+3. Check `http://localhost:8090/health` → `{"status":"ok"}`.
+4. Open `mobile/` in Android Studio and run it (emulator: `BASE_URL` is already `http://10.0.2.2:8090/`). See `mobile/README.md`.
+
+Profile and statistics come from the Profile/Stats service (not built yet): until `PROFILE_URL` is configured in `compose.yaml`, the app shows those cards as "No disponible en este momento"; login, history and game details work.
+
+Tests: `cd Backend/api-gateway-mobile && pip install -r requirements-dev.txt && pytest -q` and `cd Backend/api-gateway && pip install -r requirements-dev.txt && pytest -q`.
+

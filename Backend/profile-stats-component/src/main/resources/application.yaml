@@ -1,0 +1,33 @@
+server:
+  # v9 (sección 21) pide SERVER_PORT en servicios Java, pero la tabla de Profile/Stats dice PORT.
+  # Se aceptan las dos.
+  port: ${SERVER_PORT:${PORT:8087}}
+
+spring:
+  application:
+    name: profile-stats-component
+
+  datasource:
+    url: ${POSTGRES_URL:jdbc:postgresql://localhost:5432/profile}
+    username: ${POSTGRES_USER:profile}
+    password: ${POSTGRES_PASSWORD:}
+
+  jpa:
+    hibernate:
+      # El esquema lo crea Databases/profile/01-init.sql; Hibernate solo lo valida.
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate.jdbc.time_zone: UTC
+
+  rabbitmq:
+    # amqp://usuario:clave@rabbitmq:5672
+    addresses: ${RABBITMQ_URL:amqp://guest:guest@localhost:5672}
+    listener:
+      simple:
+        # Un mensaje a la vez por cola: los contadores se actualizan en orden.
+        concurrency: 1
+        max-concurrency: 1
+        # Los fallos de proceso se reenvían a retry.events desde el código (sección 17). Solo si
+        # ese reenvío falla (broker caído) el mensaje se rechaza y RabbitMQ lo vuelve a entregar.
+        default-requeue-rejected: true

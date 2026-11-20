@@ -12,6 +12,11 @@ export function useGameTransport(create: () => GameTransport): GameSession {
   const transport = useRef<GameTransport | null>(null);
   // Cambiar el intento vuelve a ejecutar el efecto: cierra la conexión actual y abre una nueva.
   const [attempt, setAttempt] = useState(0);
+  // Versión del último `state`: cada jugada la envía como expectedVersion (sección 9).
+  const version = useRef<number | null>(null);
+  useEffect(() => {
+    version.current = view.state?.version ?? null;
+  }, [view.state]);
 
   useEffect(() => {
     dispatch({ type: 'connecting' });
@@ -34,7 +39,13 @@ export function useGameTransport(create: () => GameTransport): GameSession {
     transport.current.send(message);
   }, []);
 
-  const sendMove = useCallback((uci: string) => send({ type: 'move', uci }), [send]);
+  const sendMove = useCallback(
+    (uci: string) => {
+      if (version.current === null) return; // sin `state` no hay versión que enviar
+      send({ type: 'move', uci, expectedVersion: version.current });
+    },
+    [send],
+  );
 
   const resign = useCallback(
     (side?: Color) => send(side ? { type: 'resign', side } : { type: 'resign' }),

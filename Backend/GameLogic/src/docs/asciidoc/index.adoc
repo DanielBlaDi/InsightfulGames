@@ -1,7 +1,5 @@
 = Game Logic API
 
-This API follows the contract of the Prototipo 1 (sections 3.5, 3.8 and 4). It is only called by the Single Player component.
-
 Game Logic is the only source of truth of each match: it stores the position, the moves and the result, and validates every move against the stored position. The client only sends the move in UCI notation.
 
 The identifiers (the match id and the user id) are UUID v4 Strings. The dates are in ISO 8601 UTC. The colors are always "white" or "black".
@@ -80,13 +78,19 @@ include::{snippets}/obtainMissingMatch/response-fields.adoc[]
 This is an example output for the ability to consult all of the Matches of a user, the most recent first:
 
 .request
-include::{snippets}/obtainMatchesByUserId/http-request.adoc[]
+include::{snippets}/obtainMatchesByUserIdNoNextCursor/http-request.adoc[]
 
 .response
-include::{snippets}/obtainMatchesByUserId/http-response.adoc[]
+include::{snippets}/obtainMatchesByUserIdNoNextCursor/http-response.adoc[]
+
+.request
+include::{snippets}/obtainMatchesByUserIdWithNextCursor/http-request.adoc[]
+
+.response
+include::{snippets}/obtainMatchesByUserIdWithNextCursor/http-response.adoc[]
 
 .response-fields
-include::{snippets}/obtainMatchesByUserId/response-fields.adoc[]
+include::{snippets}/obtainMatchesByUserIdWithNextCursor/response-fields.adoc[]
 
 == POST | Perform a move in the Match if valid
 

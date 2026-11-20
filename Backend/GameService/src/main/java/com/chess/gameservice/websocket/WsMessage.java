@@ -4,31 +4,52 @@ import com.chess.gameservice.model.GameState;
 import com.fasterxml.jackson.annotation.JsonInclude;
 
 /**
- * Mensajes servidor -> cliente (contrato, sección 5). Los campos nulos no se serializan,
- * pero el GameState anidado conserva sus propios nulos (result: null, finishedAt: null...).
+ * Mensajes servidor -> cliente (contrato, 12.4.1). Cada tipo es un record propio para que la forma
+ * sea exacta: game_over lleva siempre result (null en expired y account_deleted) y state conserva
+ * los nulos del GameState anidado.
  */
-@JsonInclude(JsonInclude.Include.NON_NULL)
-public record WsMessage(String type, GameState state, String lastMove, String code, String message,
-                        String result, String endReason) {
+public sealed interface WsMessage {
 
-    public static WsMessage state(GameState state, String lastMove) {
-        return new WsMessage("state", state, lastMove, null, null, null, null);
+    String type();
+
+    /** { type: "state", state, lastMove? }. lastMove se omite al conectar y cuando no hubo jugada. */
+    record State(String type, GameState state,
+                 @JsonInclude(JsonInclude.Include.NON_NULL) String lastMove) implements WsMessage {
     }
 
-    public static WsMessage moveRejected(String code, String message) {
-        return new WsMessage("move_rejected", null, null, code, message, null, null);
+    /** { type: "move_rejected", code, message }: acción del cliente no aceptada. */
+    record MoveRejected(String type, String code, String message) implements WsMessage {
     }
 
-    public static WsMessage botThinking() {
-        return new WsMessage("bot_thinking", null, null, null, null, null, null);
+    /** { type: "bot_thinking" }. */
+    record BotThinking(String type) implements WsMessage {
     }
 
-    public static WsMessage gameOver(String result, String endReason) {
-        return new WsMessage("game_over", null, null, null, null, result, endReason);
+    /** { type: "game_over", result, endReason }. Va justo después del state final. */
+    record GameOver(String type, String result, String endReason) implements WsMessage {
     }
 
-    /** Extensión al contrato: errores que no son una jugada rechazada (Botcito caído, etc.). */
-    public static WsMessage error(String code, String message) {
-        return new WsMessage("error", null, null, code, message, null, null);
+    /** { type: "error", code, message }: fallo ajeno a la jugada que no cambia la partida. */
+    record ErrorMessage(String type, String code, String message) implements WsMessage {
+    }
+
+    static WsMessage state(GameState state, String lastMove) {
+        return new State("state", state, lastMove);
+    }
+
+    static WsMessage moveRejected(String code, String message) {
+        return new MoveRejected("move_rejected", code, message);
+    }
+
+    static WsMessage botThinking() {
+        return new BotThinking("bot_thinking");
+    }
+
+    static WsMessage gameOver(String result, String endReason) {
+        return new GameOver("game_over", result, endReason);
+    }
+
+    static WsMessage error(String code, String message) {
+        return new ErrorMessage("error", code, message);
     }
 }

@@ -1,0 +1,21 @@
+package chess.matches;
+
+import java.util.List;
+import java.util.Optional;
+
+import org.springframework.data.mongodb.repository.MongoRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface MatchRepository extends MongoRepository<Match, String>{
+    Optional<Match> findByGameId(String gameId);
+    Optional<Match> findByMatchId(String matchId);
+    Optional<Match> findByCreationKey(String creationKey);
+    List<Match> findByParticipantsUserId(String userId);
+    /** Las partidas de un usuario, la más reciente primero. */
+    List<Match> findByParticipantsUserIdOrderByCreatedAtDesc(String userId);
+    List<Match> findByStatus(String userId);
+
+    /** Outbox: partidas terminadas cuyo game.finished aún no confirmó el broker, las más antiguas primero. */
+    List<Match> findTop100ByFinishedEventPublishedFalseOrderByFinishedAtAsc();
+}

@@ -21,6 +21,7 @@ dist/
 # === Java ===
 *.class
 *.jar
+!gradle/wrapper/gradle-wrapper.jar
 *.war
 target/
 .gradle/
@@ -48,3 +49,4 @@ desktop.ini
 
 *.tmp
 *.bak
+cookies.txt

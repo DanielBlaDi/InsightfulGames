@@ -5,7 +5,7 @@ import { SCENARIO_FOR } from './scenarios';
 import type { MockScenario } from './scenarios';
 
 // Sustituto de POST /games para desarrollo. Solo se usa cuando se elige a propósito en el
-// arnés de /game.html: nunca como respaldo de una llamada real que haya fallado.
+// arnés de /dev/partida: nunca como respaldo de una llamada real que haya fallado.
 
 const CREATE_DELAY_MS = 700;
 
@@ -57,7 +57,7 @@ export async function mockCreateGame(
   }
 
   const base = request.mode === 'local' ? SCENARIO_FOR.local : SCENARIO_FOR[request.playerColor];
-  const scenario: MockScenario = request.mode === 'vs_bot' ? { ...base, botLevel: request.level } : base;
+  const scenario: MockScenario = request.mode === 'vs_bot' ? { ...base, botLevel: request.botLevel } : base;
   const gameId = `mock-${nextGame++}`;
   games.set(gameId, scenario);
   return initialState(scenario, gameId);
