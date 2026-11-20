@@ -16,7 +16,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withNoContent;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 
-/** Llamadas reales de RestClient contra un gateway simulado. */
+/** Llamadas reales de RestClient contra servicios simulados (sin gateway de por medio). */
 class AccountDeletionClientTest {
 
     private static final String USER = "11111111-1111-4111-8111-111111111111";

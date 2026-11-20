@@ -13,9 +13,10 @@ import org.springframework.web.client.RestClientException;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 
 /**
- * Pide a los servicios dependientes que borren los datos de un usuario, por el gateway interno
+ * Pide a los servicios dependientes que borren los datos de un usuario, llamándolos directamente
  * (contrato v9, sección 7). El orden es fijo: Game Logic, Tutor y Profile/Stats.
  */
 @Component
@@ -32,17 +33,32 @@ public class AccountDeletionClient {
 
     private static final Logger log = LoggerFactory.getLogger(AccountDeletionClient.class);
 
-    private final RestClient http;
+    /** Un cliente por servicio, indexado por {@link Dependency#name()}. */
+    private final Map<String, RestClient> clients;
 
     @Autowired
-    public AccountDeletionClient(@Value("${gateway.internal-url}") String gatewayUrl,
-                                 @Value("${gateway.timeout-seconds}") long timeoutSeconds) {
-        this(RestClient.builder().baseUrl(gatewayUrl).requestFactory(requestFactory(timeoutSeconds)));
+    public AccountDeletionClient(@Value("${services.game-logic-url}") String gameLogicUrl,
+                                 @Value("${services.tutor-url}") String tutorUrl,
+                                 @Value("${services.profile-url}") String profileUrl,
+                                 @Value("${services.timeout-seconds}") long timeoutSeconds) {
+        this.clients = Map.of(
+                DEPENDENCIES.get(0).name(), client(gameLogicUrl, timeoutSeconds),
+                DEPENDENCIES.get(1).name(), client(tutorUrl, timeoutSeconds),
+                DEPENDENCIES.get(2).name(), client(profileUrl, timeoutSeconds));
     }
 
-    /** Para pruebas: permite enlazar un servidor simulado al builder. */
+    /** Para pruebas: un solo builder (con servidor simulado) atiende a los tres servicios. */
     public AccountDeletionClient(RestClient.Builder builder) {
-        this.http = builder.build();
+        RestClient shared = builder.build();
+        this.clients = Map.of(
+                DEPENDENCIES.get(0).name(), shared,
+                DEPENDENCIES.get(1).name(), shared,
+                DEPENDENCIES.get(2).name(), shared);
+    }
+
+    private static RestClient client(String baseUrl, long timeoutSeconds) {
+        return RestClient.builder().baseUrl(baseUrl)
+                .requestFactory(requestFactory(timeoutSeconds)).build();
     }
 
     /**
@@ -51,7 +67,7 @@ public class AccountDeletionClient {
      */
     public boolean delete(Dependency dependency, String userId) {
         try {
-            HttpStatus status = HttpStatus.valueOf(http.delete()
+            HttpStatus status = HttpStatus.valueOf(clients.get(dependency.name()).delete()
                     .uri(dependency.pathTemplate(), userId)
                     .retrieve()
                     .onStatus(s -> true, (request, response) -> { })

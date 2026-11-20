@@ -23,6 +23,17 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from orchestration import upstream
+from orchestration.errors import (
+    NOT_FOUND_CODE,
+    GatewayError,
+    UpstreamTimeout,  # noqa: F401  (reexportados: los usan los tests y los flows)
+    UpstreamUnreachable,  # noqa: F401
+    is_contract_error,
+    payload_of,
+    translate_error,
+)
+
 # --------------------------------------------------------------------------- #
 # Configuración
 # --------------------------------------------------------------------------- #
@@ -58,15 +69,6 @@ UPSTREAMS: dict[str, str] = {
             "BOTCITO_ANALYSIS_URL", "http://botcito-analysis-component:8091"
         ),
     }.items()
-}
-
-# Código 404 según el servicio de origen (traducción de errores, 7.3)
-NOT_FOUND_CODE = {
-    "single-player": "GAME_NOT_FOUND",
-    "logic": "GAME_NOT_FOUND",
-    "multiplayer": "MATCH_NOT_FOUND",
-    "tutor": "ANALYSIS_NOT_FOUND",
-    "profile": "PROFILE_NOT_FOUND",
 }
 
 UUID_RE = re.compile(
@@ -116,22 +118,6 @@ app = FastAPI(title="Insightful Games - API Gateway web", lifespan=lifespan)
 # --------------------------------------------------------------------------- #
 # Errores (formato común, 4.1)
 # --------------------------------------------------------------------------- #
-
-
-class GatewayError(Exception):
-    def __init__(self, status: int, code: str, message: str):
-        super().__init__(message)
-        self.status, self.code, self.message = status, code, message
-
-
-class UpstreamUnreachable(GatewayError):
-    def __init__(self) -> None:
-        super().__init__(503, "SERVICES_UNAVAILABLE", "Servicio destino no disponible")
-
-
-class UpstreamTimeout(GatewayError):
-    def __init__(self) -> None:
-        super().__init__(503, "SERVICES_UNAVAILABLE", "El servicio destino no respondió a tiempo")
 
 
 def error_response(status: int, code: str, message: str) -> JSONResponse:
@@ -237,7 +223,6 @@ async def forward(
 ) -> httpx.Response:
     """Llama a {servicio}/internal/{service}{path}. X-User-Id solo se pone si
     se pasa user_id (el sub validado o, en el passthrough, el de quien llama)."""
-    url = f"{UPSTREAMS[service]}/internal/{service}{path}"
     headers = {"Accept": request.headers.get("accept") or "application/json"}
 
     body = None
@@ -247,39 +232,16 @@ async def forward(
             headers["Content-Type"] = request.headers.get("content-type") or "application/json"
     if request.headers.get("idempotency-key"):
         headers["Idempotency-Key"] = request.headers["idempotency-key"]
-    if user_id:
-        headers["X-User-Id"] = user_id
 
-    try:
-        response = await request.app.state.client.request(
-            method, url, headers=headers, params=params, content=body,
-            timeout=timeout or HTTP_TIMEOUT,
-        )
-    except httpx.TimeoutException:
-        logger.error("Timeout: %s %s/%s", method, service, path)
-        raise UpstreamTimeout()
-    except httpx.RequestError:
-        logger.error("Servicio inalcanzable: %s %s/%s", method, service, path)
-        raise UpstreamUnreachable()
-
-    logger.info("%s %s%s -> %s", method, service, path, response.status_code)
-    return response
-
-
-def _payload(response: httpx.Response) -> Any:
-    try:
-        return response.json()
-    except ValueError:
-        return None
-
-
-def _is_contract_error(payload: Any) -> bool:
-    return (
-        isinstance(payload, dict)
-        and isinstance(payload.get("error"), dict)
-        and bool(payload["error"].get("code"))
-        and bool(payload["error"].get("message"))
+    return await upstream.call(
+        request.app.state.client, UPSTREAMS[service], service, method, path,
+        user_id=user_id, params=params, content=body, headers=headers,
+        timeout=timeout or HTTP_TIMEOUT,
     )
+
+
+_payload = payload_of
+_is_contract_error = is_contract_error
 
 
 def relay(
@@ -308,17 +270,9 @@ def relay(
     if _is_contract_error(payload):
         return JSONResponse(status_code=status, content=payload, headers=extra)
 
-    table: dict[int, tuple[int, str, str]] = {
-        400: (400, "VALIDATION_ERROR", "Campos faltantes o con formato inválido"),
-        401: (401, unauthorized_code, "No autorizado"),
-        404: (404, NOT_FOUND_CODE.get(service, "NOT_FOUND"), "Recurso no encontrado"),
-        503: (503, "SERVICES_UNAVAILABLE", "Un servicio dependiente no responde"),
-        504: (503, "SERVICES_UNAVAILABLE", "Un servicio dependiente no respondió a tiempo"),
-    }
-    if conflict_code:
-        table[409] = (409, conflict_code, "Conflicto con el estado actual")
-    out_status, code, message = table.get(
-        status, (502, "UPSTREAM_ERROR", "El servicio devolvió un error")
+    out_status, code, message = translate_error(
+        status, service=service, conflict_code=conflict_code,
+        unauthorized_code=unauthorized_code, not_found_codes=NOT_FOUND_CODE,
     )
     return error_response(out_status, code, message, ) if not extra else JSONResponse(
         status_code=out_status,

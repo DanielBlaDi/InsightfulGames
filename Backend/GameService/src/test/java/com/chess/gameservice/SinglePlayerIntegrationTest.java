@@ -61,7 +61,9 @@ class SinglePlayerIntegrationTest {
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
-        registry.add("gateway.internal-url", gateway::url);
+        // Un único servidor falso atiende a Game Logic y a Botcito (rutas distintas).
+        registry.add("services.game-logic-url", gateway::url);
+        registry.add("services.botcito-url", gateway::url);
         // Sin broker en la prueba: el consumidor se invoca directamente.
         registry.add("spring.rabbitmq.listener.simple.auto-startup", () -> "false");
     }

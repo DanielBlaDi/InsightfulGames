@@ -12,7 +12,7 @@ import java.time.Duration;
 import java.util.List;
 
 /**
- * Cliente de Game Logic: /internal/logic/* por el gateway interno (contrato, 11.4 y 12.6).
+ * Cliente de Game Logic: /internal/logic/*, llamado directamente (contrato, 11.4 y 12.6).
  * No reenvía X-User-Id: es una llamada de servicio a servicio.
  */
 @Component
@@ -37,8 +37,8 @@ public class GameLogicClient {
 
     private final RestClient http;
 
-    public GameLogicClient(@Value("${gateway.internal-url}") String gatewayUrl) {
-        this.http = RestClients.create(gatewayUrl, Duration.ofSeconds(10));
+    public GameLogicClient(@Value("${services.game-logic-url}") String gameLogicUrl) {
+        this.http = RestClients.create(gameLogicUrl, Duration.ofSeconds(10));
     }
 
     public GameState createGame(CreateBody body) {

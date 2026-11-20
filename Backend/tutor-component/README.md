@@ -206,7 +206,7 @@ anónimo, la operación no hace nada.
 | Variable | Defecto | Uso |
 | :--- | :--- | :--- |
 | `PORT` | `8085` | Puerto HTTP |
-| `GATEWAY_INTERNAL_URL` | `http://api-gateway-component:8080` | Base para `GET /internal/logic/games/{id}` |
+| `GAME_LOGIC_URL` | `http://game-logic-component:8082` | Base para `GET /internal/logic/games/{id}` (llamada directa) |
 | `MONGO_ANALYSIS_URL` | `mongodb://localhost:27017` | URI completa de Mongo de análisis |
 | `MONGO_ANALYSIS_DATABASE` | `insightful_analysis` | Base de datos |
 | `RABBITMQ_URL` | `amqp://guest:guest@rabbitmq:5672/` | Broker |
@@ -383,7 +383,7 @@ Docker:
 ```bash
 docker build -t tutor-component:dev .
 docker run --rm -p 8085:8085 \
-  -e GATEWAY_INTERNAL_URL=http://host.docker.internal:8080 \
+  -e GAME_LOGIC_URL=http://host.docker.internal:8082 \
   -e MONGO_ANALYSIS_URL=mongodb://host.docker.internal:27017 \
   -e MONGO_ANALYSIS_DATABASE=insightful_analysis \
   -e RABBITMQ_URL=amqp://guest:guest@host.docker.internal:5672/ \
@@ -434,7 +434,7 @@ Estos archivos son compartidos y **no se modificaron** desde este componente.
       - "${TUTOR_PORT}"
     environment:
       PORT: "${TUTOR_PORT}"
-      GATEWAY_INTERNAL_URL: http://api-gateway-component:${API_GATEWAY_PORT}
+      GAME_LOGIC_URL: http://game-logic-component:8082
       MONGO_ANALYSIS_URL: "mongodb://${MONGO_ANALYSIS_USER}:${MONGO_ANALYSIS_PASSWORD}@mongo-analysis:${MONGO_ANALYSIS_PORT}/${MONGO_ANALYSIS_DATABASE}?authSource=${MONGO_ANALYSIS_DATABASE}"
       MONGO_ANALYSIS_DATABASE: "${MONGO_ANALYSIS_DATABASE}"
       RABBITMQ_URL: "amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:${RABBITMQ_PORT}/"

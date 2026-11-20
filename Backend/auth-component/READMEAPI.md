@@ -286,10 +286,10 @@ Borrado de cuenta (DELETE /internal/auth/account, cabecera X-User-Id):
 1. DELETE /internal/logic/users/{userId}
 2. DELETE /internal/tutor/users/{userId}
 3. DELETE /internal/profile/users/{userId}
-Las tres llamadas van por el gateway interno (GATEWAY_INTERNAL_URL). Cada una debe responder 204. Si una falla, Auth responde 503 SERVICES_UNAVAILABLE, no borra su fila y no llama a las siguientes; el usuario puede reintentar. Si las tres responden 204, se borra la fila de MySQL y se responde 204. Si la cuenta ya no existe, responde 204 sin llamar a nadie.
+Las tres llamadas son directas a cada servicio (GAME_LOGIC_URL, TUTOR_URL, PROFILE_URL), sin pasar por el gateway. Cada una debe responder 204. Si una falla, Auth responde 503 SERVICES_UNAVAILABLE, no borra su fila y no llama a las siguientes; el usuario puede reintentar. Si las tres responden 204, se borra la fila de MySQL y se responde 204. Si la cuenta ya no existe, responde 204 sin llamar a nadie.
 La cookie de sesión la pone y la borra el gateway web, no Auth.
 
-Variables nuevas: RABBITMQ_URL (amqp://usuario:clave@rabbitmq:5672), GATEWAY_INTERNAL_URL (http://api-gateway-component:8080), HTTP_TIMEOUT (segundos, 15 por defecto), OUTBOX_RELAY_INTERVAL_MS (opcional).
+Variables nuevas: RABBITMQ_URL (amqp://usuario:clave@rabbitmq:5672), GAME_LOGIC_URL (http://game-logic-component:8082), TUTOR_URL (http://tutor-component:8085), PROFILE_URL (http://profile-stats-component:8087), HTTP_TIMEOUT (segundos, 15 por defecto), OUTBOX_RELAY_INTERVAL_MS (opcional).
 
 Pruebas. mvn test (JDK 21). Usan H2 en modo MySQL con Databases/auth/01-init.sql y db/outbox.sql; RabbitMQ y los servicios del borrado se simulan. No necesitan Docker. La publicación real con confirmaciones (RabbitEventSender) no está probada contra un RabbitMQ real.
 

@@ -9,7 +9,7 @@ import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.web.client.RestClient;
 
-/** Cliente HTTP hacia el gateway interno: GATEWAY_INTERNAL_URL es la URL base. */
+/** Cliente HTTP directo hacia Game Logic: GAME_LOGIC_URL es la URL base. */
 @Configuration
 public class RestClientConfig{
 
@@ -18,7 +18,7 @@ public class RestClientConfig{
 
     @Bean
     public RestClient restClient(WorkerProperties properties){
-        return create(properties.gatewayInternalUrl());
+        return create(properties.gameLogicUrl());
     }
 
     static RestClient create(String baseUrl){

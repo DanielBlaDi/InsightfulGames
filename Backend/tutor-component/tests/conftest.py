@@ -57,7 +57,7 @@ class FakePublisher:
 def build_settings(**overrides) -> Settings:
     values = dict(
         port=8085,
-        gateway_internal_url="http://gateway.test",
+        game_logic_url="http://game-logic.test",
         mongo_analysis_url="mongodb://unused",
         mongo_analysis_database="tutor_test",
         rabbitmq_url="amqp://unused",

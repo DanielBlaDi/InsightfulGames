@@ -20,10 +20,10 @@ Por ello, despliega una sola réplica, como especifica el contrato.
 
 ## Ejecutar
 
-Requiere Go 1.24 y acceso al Gateway interno y a RabbitMQ:
+Requiere Go 1.24 y acceso a Game Logic y a RabbitMQ:
 
 ```powershell
-$env:GATEWAY_INTERNAL_URL = "http://localhost:8080"
+$env:GAME_LOGIC_URL = "http://localhost:8082"
 $env:RABBITMQ_URL = "amqp://guest:guest@localhost:5672/"
 go run ./cmd/multiplayer
 ```
@@ -34,7 +34,7 @@ Variables:
 |---|---|---|
 | `PORT` | `8084` | Puerto HTTP |
 | `LOG_LEVEL` | `INFO` | Nivel de logging (`DEBUG`, `INFO`, `WARN`, `ERROR`) |
-| `GATEWAY_INTERNAL_URL` | `http://api-gateway-component:8080` | Gateway web en modo interno |
+| `GAME_LOGIC_URL` | `http://game-logic-component:8082` | Game Logic, llamado directamente (sin pasar por el gateway) |
 | `RABBITMQ_URL` | requerida | Broker para consumir `multiplayer.game-finished` |
 | `RECONNECT_WINDOW_SECONDS` | `30` | Ventana (1–600 s) para volver cuando el turno corresponde al jugador desconectado |
 | `WS_ALLOWED_ORIGINS` | vacío | Lista separada por comas. Vacía delega la validación al Gateway |

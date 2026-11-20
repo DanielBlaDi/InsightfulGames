@@ -35,7 +35,7 @@ func main() {
 		return
 	}
 
-	gameClient := gamelogic.NewClient(cfg.GatewayInternalURL, cfg.RequestTimeout)
+	gameClient := gamelogic.NewClient(cfg.GameLogicURL, cfg.RequestTimeout)
 	hub := realtime.NewHub()
 	app := service.New(gameClient, hub, cfg.ReconnectWindow, logger)
 	handler := httpapi.New(app, hub, cfg.AllowedOrigins, logger)

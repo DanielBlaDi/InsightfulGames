@@ -10,6 +10,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY main.py .
+COPY orchestration orchestration
 
 RUN useradd -r -u 1001 app && chown -R app /app
 USER app

@@ -15,7 +15,7 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
 /**
- * Ciclo de cierre de partidas vencidas (contrato, 18.2 y 18.4), siempre por el gateway interno:
+ * Ciclo de cierre de partidas vencidas (contrato, 18.2 y 18.4), llamando directamente a Game Logic:
  * GET /internal/logic/games/expired?limit=N y, para cada partida, POST .../{id}/timeout (reloj
  * vencido) o POST .../{id}/expire (espera caducada), con { expectedVersion }.
  *
@@ -49,7 +49,7 @@ public class TimeoutService{
         FAILED,
         /** Elemento inválido o con reason desconocido. */
         SKIPPED,
-        /** Gateway inalcanzable: se corta el ciclo y se reintenta en el siguiente. */
+        /** Game Logic inalcanzable: se corta el ciclo y se reintenta en el siguiente. */
         UNREACHABLE
     }
 
@@ -91,7 +91,7 @@ public class TimeoutService{
                 GAMES, e.getStatusCode().value(), errorCode(e));
             return counts;
         }catch(ResourceAccessException e){
-            log.warn("Gateway interno no disponible al consultar partidas vencidas: {}", e.getMessage());
+            log.warn("Game Logic no disponible al consultar partidas vencidas: {}", e.getMessage());
             return counts;
         }
 
@@ -110,7 +110,7 @@ public class TimeoutService{
             health.beat();
             counts.merge(outcome, 1, Integer::sum);
             if(outcome == Outcome.UNREACHABLE){
-                break; // si el gateway no responde, las demás partidas fallarían igual
+                break; // si Game Logic no responde, las demás partidas fallarían igual
             }
         }
 
@@ -160,7 +160,7 @@ public class TimeoutService{
                 match.gameId(), action, status, code);
             return Outcome.FAILED;
         }catch(ResourceAccessException e){
-            log.warn("Gateway interno no disponible al cerrar la partida {}: {}", match.gameId(), e.getMessage());
+            log.warn("Game Logic no disponible al cerrar la partida {}: {}", match.gameId(), e.getMessage());
             return Outcome.UNREACHABLE;
         }
     }

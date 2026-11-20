@@ -133,7 +133,9 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:?}
       SPRING_JPA_HIBERNATE_DDL_AUTO: validate
       JWT_SECRET: ${JWT_SECRET:?}
-      GATEWAY_INTERNAL_URL: http://api-gateway-component:8080
+      GAME_LOGIC_URL: http://game-logic-component:8082
+      TUTOR_URL: http://tutor-component:8085
+      PROFILE_URL: http://profile-stats-component:8087
       RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:?}:${RABBITMQ_DEFAULT_PASS:?}@rabbitmq:5672
       HTTP_TIMEOUT: ${HTTP_TIMEOUT:?}
       OUTBOX_RELAY_INTERVAL_MS: ${OUTBOX_RELAY_INTERVAL_MS:?}
@@ -183,7 +185,8 @@ services:
       - "8083"
     environment:
       SERVER_PORT: "8083"
-      GATEWAY_INTERNAL_URL: http://api-gateway-component:8080
+      GAME_LOGIC_URL: http://game-logic-component:8082
+      BOTCITO_URL: http://botcito-component:8086
       RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:?}:${RABBITMQ_DEFAULT_PASS:?}@rabbitmq:5672
     depends_on:
       rabbitmq:
@@ -204,7 +207,7 @@ services:
     environment:
       SERVER_PORT: "8084"
       PORT: "8084"
-      GATEWAY_INTERNAL_URL: http://api-gateway-component:8080
+      GAME_LOGIC_URL: http://game-logic-component:8082
       RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:?}:${RABBITMQ_DEFAULT_PASS:?}@rabbitmq:5672
       RECONNECT_WINDOW_SECONDS: ${RECONNECT_WINDOW_SECONDS:?}
       LOG_LEVEL: ${LOG_LEVEL:?}
@@ -221,7 +224,7 @@ services:
       - "8085"
     environment:
       PORT: "8085"
-      GATEWAY_INTERNAL_URL: http://api-gateway-component:8080
+      GAME_LOGIC_URL: http://game-logic-component:8082
       MONGO_ANALYSIS_URL: mongodb://${MONGO_ANALYSIS_USER:?}:${MONGO_ANALYSIS_PASSWORD:?}@mongo-analysis:27017/${MONGO_ANALYSIS_DATABASE:?}?authSource=${MONGO_ANALYSIS_DATABASE:?}
       MONGO_ANALYSIS_DATABASE: ${MONGO_ANALYSIS_DATABASE:?}
       RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:?}:${RABBITMQ_DEFAULT_PASS:?}@rabbitmq:5672
@@ -313,7 +316,7 @@ services:
       - "8088"
     environment:
       PORT: "8088"
-      GATEWAY_INTERNAL_URL: http://api-gateway-component:8080
+      GAME_LOGIC_URL: http://game-logic-component:8082
       TIMEOUT_POLL_INTERVAL_SECONDS: ${TIMEOUT_POLL_INTERVAL_SECONDS:?}
       TIMEOUT_BATCH_LIMIT: ${TIMEOUT_BATCH_LIMIT:?}
       LOG_LEVEL: ${LOG_LEVEL:?}
@@ -324,7 +327,7 @@ services:
       retries: 5
       start_period: 10s
     depends_on:
-      api-gateway-component:
+      game-logic-component:
         condition: service_healthy
 
 
@@ -341,7 +344,8 @@ services:
       - "8089"
     environment:
       PORT: "8089"
-      GATEWAY_INTERNAL_URL: http://api-gateway-component:8080
+      GAME_LOGIC_URL: http://game-logic-component:8082
+      BOTCITO_ANALYSIS_URL: http://botcito-analysis-component:8091
       MONGO_ANALYSIS_URL: mongodb://${MONGO_ANALYSIS_USER:?}:${MONGO_ANALYSIS_PASSWORD:?}@mongo-analysis:27017/${MONGO_ANALYSIS_DATABASE:?}?authSource=${MONGO_ANALYSIS_DATABASE:?}
       MONGO_ANALYSIS_DATABASE: ${MONGO_ANALYSIS_DATABASE:?}
       RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:?}:${RABBITMQ_DEFAULT_PASS:?}@rabbitmq:5672

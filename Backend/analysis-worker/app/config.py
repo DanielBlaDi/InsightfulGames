@@ -61,7 +61,8 @@ class Settings:
     """
 
     port: int = 8089
-    gateway_internal_url: str = "http://api-gateway-component:8080"
+    game_logic_url: str = "http://game-logic-component:8082"
+    botcito_analysis_url: str = "http://botcito-analysis-component:8091"
     mongo_analysis_url: str = "mongodb://localhost:27017"
     mongo_analysis_database: str = "insightful_analysis"
     rabbitmq_url: str = "amqp://guest:guest@rabbitmq:5672/"
@@ -122,8 +123,11 @@ class Settings:
 
         return cls(
             port=port,
-            gateway_internal_url=_text_env(
-                "GATEWAY_INTERNAL_URL", "http://api-gateway-component:8080"
+            game_logic_url=_text_env(
+                "GAME_LOGIC_URL", "http://game-logic-component:8082"
+            ).rstrip("/"),
+            botcito_analysis_url=_text_env(
+                "BOTCITO_ANALYSIS_URL", "http://botcito-analysis-component:8091"
             ).rstrip("/"),
             mongo_analysis_url=_text_env(
                 "MONGO_ANALYSIS_URL", "mongodb://localhost:27017"

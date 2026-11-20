@@ -107,7 +107,7 @@ def create_app(
         current_game_logic = app.state.game_logic
         if current_game_logic is None:
             http_client = httpx.AsyncClient(
-                base_url=config.gateway_internal_url,
+                base_url=config.game_logic_url,
                 timeout=config.http_timeout,
             )
             current_game_logic = GameLogicClient(http_client)

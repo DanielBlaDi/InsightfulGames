@@ -30,7 +30,7 @@ class TimeoutServiceTest{
     void setUp() throws Exception{
         gateway = new FakeGateway();
         WorkerProperties properties = new WorkerProperties(gateway.url() + "/", 1, 25);
-        service = new TimeoutService(RestClientConfig.create(properties.gatewayInternalUrl()), properties,
+        service = new TimeoutService(RestClientConfig.create(properties.gameLogicUrl()), properties,
             new WorkerHealth(properties));
     }
 

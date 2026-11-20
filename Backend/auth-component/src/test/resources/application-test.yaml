@@ -17,6 +17,8 @@ outbox:
   scheduler:
     enabled: false
 
-gateway:
-  internal-url: http://localhost:1
+services:
+  game-logic-url: http://localhost:1
+  tutor-url: http://localhost:1
+  profile-url: http://localhost:1
   timeout-seconds: 1

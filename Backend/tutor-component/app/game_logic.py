@@ -1,4 +1,4 @@
-"""Lectura de partidas desde Game Logic por el gateway interno.
+"""Lectura de partidas directamente desde Game Logic (GAME_LOGIC_URL).
 
 El contrato (sección 11) dice que Game Logic guarda ``visibility`` y
 ``participants`` pero no decide quién puede ver la partida: esa validación la

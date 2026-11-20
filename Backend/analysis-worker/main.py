@@ -76,17 +76,22 @@ def create_app(
 
         current_game_logic = app.state.game_logic
         current_engine = app.state.engine
-        if current_game_logic is None or current_engine is None:
-            http_client = httpx.AsyncClient(
-                base_url=config.gateway_internal_url,
+        # Llamadas directas a cada servicio (sin pasar por el gateway)
+        if current_game_logic is None:
+            logic_http = httpx.AsyncClient(
+                base_url=config.game_logic_url,
                 timeout=config.http_timeout,
             )
-            app.state.http_client = http_client
-            owned.append(("http", http_client))
-            if current_game_logic is None:
-                current_game_logic = GameLogicClient(http_client)
-            if current_engine is None:
-                current_engine = EngineClient(http_client)
+            app.state.http_client = logic_http
+            owned.append(("http", logic_http))
+            current_game_logic = GameLogicClient(logic_http)
+        if current_engine is None:
+            engine_http = httpx.AsyncClient(
+                base_url=config.botcito_analysis_url,
+                timeout=config.http_timeout,
+            )
+            owned.append(("http", engine_http))
+            current_engine = EngineClient(engine_http)
 
         current_broker = app.state.broker
         if current_broker is None and start_background:

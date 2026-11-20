@@ -7,19 +7,20 @@ Coordina las partidas de un solo usuario: `local` (dos personas en la misma pant
 (contra el motor). Autoriza cada acción, mantiene la sesión WebSocket y gestiona el turno del bot.
 No tiene base propia: el estado vive en Game Logic, que es la única fuente de verdad.
 
-Toda comunicación con otros servicios pasa por el gateway interno:
+Las llamadas a otros servicios se hacen directamente, sin pasar por ningún gateway:
 
 | Destino | Ruta |
 |---|---|
-| Game Logic | `{GATEWAY_INTERNAL_URL}/internal/logic/*` |
-| Botcito-juego | `POST {GATEWAY_INTERNAL_URL}/internal/engine/best-move` con `{ fen, botLevel }` |
+| Game Logic | `{GAME_LOGIC_URL}/internal/logic/*` |
+| Botcito-juego | `POST {BOTCITO_URL}/internal/engine/best-move` con `{ fen, botLevel }` |
 
 ## Variables de entorno
 
 | Variable | Default | Uso |
 |---|---|---|
 | `SERVER_PORT` | `8083` | Puerto HTTP y WebSocket |
-| `GATEWAY_INTERNAL_URL` | `http://localhost:8080` | Gateway interno (Game Logic y Botcito) |
+| `GAME_LOGIC_URL` | `http://localhost:8082` | Game Logic |
+| `BOTCITO_URL` | `http://localhost:8086` | Botcito-juego |
 | `RABBITMQ_URL` | `amqp://guest:guest@localhost:5672` | Consumo de `game.finished` |
 
 ## Rutas REST
@@ -106,12 +107,12 @@ mvn test
 
 ## Prueba manual
 
-Con Game Logic en `:8082`, levanta el gateway interno falso y luego Single Player:
+Con Game Logic en `:8082`, levanta el Botcito falso y luego Single Player:
 
 ```bash
 pip install chess
 GAME_LOGIC_URL=http://localhost:8082 python tools/fake_botcito.py     # puerto 8000
-GATEWAY_INTERNAL_URL=http://localhost:8000 mvn spring-boot:run
+GAME_LOGIC_URL=http://localhost:8082 BOTCITO_URL=http://localhost:8000 mvn spring-boot:run
 ```
 
 ```bash

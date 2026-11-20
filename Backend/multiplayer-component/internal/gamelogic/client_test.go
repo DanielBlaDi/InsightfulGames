@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func TestGetByMatchUsesInternalGatewayRoute(t *testing.T) {
+func TestGetByMatchUsesInternalRoute(t *testing.T) {
 	const matchID = "22222222-2222-4222-8222-222222222222"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet || r.URL.Path != "/internal/logic/games/by-match/"+matchID {

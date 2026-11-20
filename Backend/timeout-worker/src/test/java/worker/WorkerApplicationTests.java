@@ -39,7 +39,7 @@ class WorkerApplicationTests{
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry){
         registry.add("PORT", () -> "0");
-        registry.add("GATEWAY_INTERNAL_URL", gateway::url);
+        registry.add("GAME_LOGIC_URL", gateway::url);
         registry.add("TIMEOUT_POLL_INTERVAL_SECONDS", () -> "1");
         registry.add("TIMEOUT_BATCH_LIMIT", () -> "100");
     }

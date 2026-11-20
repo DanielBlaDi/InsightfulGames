@@ -282,7 +282,8 @@ cuenta, la escritura no encuentra nada y el resultado se descarta.
 | :--- | :--- | :--- |
 | `PORT` | `8089` | Puerto HTTP |
 | `LOG_LEVEL` | `INFO` | Nivel de logs |
-| `GATEWAY_INTERNAL_URL` | `http://api-gateway-component:8080` | Base de las llamadas internas |
+| `GAME_LOGIC_URL` | `http://game-logic-component:8082` | Game Logic (`analysis-input`), llamado directamente |
+| `BOTCITO_ANALYSIS_URL` | `http://botcito-analysis-component:8091` | Botcito-análisis (`evaluate`), llamado directamente |
 | `RABBITMQ_URL` | `amqp://guest:guest@rabbitmq:5672/` | Conexión al broker |
 | `MONGO_ANALYSIS_URL` | `mongodb://localhost:27017` | Conexión a MongoDB de análisis |
 | `MONGO_ANALYSIS_DATABASE` | `insightful_analysis` | Base de análisis |

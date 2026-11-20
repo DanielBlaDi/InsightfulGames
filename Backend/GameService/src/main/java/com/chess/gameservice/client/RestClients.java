@@ -15,7 +15,7 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.function.Supplier;
 
-/** Utilidades compartidas por los clientes REST (Game Logic y Botcito, ambos por el gateway interno). */
+/** Utilidades compartidas por los clientes REST (Game Logic y Botcito, ambos llamados directamente). */
 final class RestClients {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();

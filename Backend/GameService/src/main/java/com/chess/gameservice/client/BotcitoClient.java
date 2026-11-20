@@ -10,7 +10,7 @@ import org.springframework.web.client.RestClient;
 import java.time.Duration;
 
 /**
- * Cliente de Botcito-juego: POST /internal/engine/best-move por el gateway interno (contrato, 14.4).
+ * Cliente de Botcito-juego: POST /internal/engine/best-move, llamado directamente (contrato, 14.4).
  * Los errores del catálogo (ENGINE_BUSY 503, ENGINE_TIMEOUT 504, SERVICES_UNAVAILABLE 503...)
  * pasan con su código real.
  */
@@ -24,8 +24,8 @@ public class BotcitoClient {
 
     private final RestClient http;
 
-    public BotcitoClient(@Value("${gateway.internal-url}") String gatewayUrl) {
-        this.http = RestClients.create(gatewayUrl, Duration.ofSeconds(15));
+    public BotcitoClient(@Value("${services.botcito-url}") String botcitoUrl) {
+        this.http = RestClients.create(botcitoUrl, Duration.ofSeconds(15));
     }
 
     public BestMove bestMove(String fen, int botLevel) {
