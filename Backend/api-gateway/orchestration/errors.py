@@ -25,6 +25,15 @@ class FlowError(GatewayError):
     """Error de un flow de orquestación. Se traduce igual que cualquier GatewayError."""
 
 
+def deletion_unavailable(name: str) -> FlowError:
+    """503 del borrado de cuenta: nombra el servicio que no respondió (el usuario puede reintentar)."""
+    return FlowError(
+        503,
+        "SERVICES_UNAVAILABLE",
+        f"No se pudo borrar la cuenta: {name} no respondió. Intenta de nuevo",
+    )
+
+
 # Código 404 según el servicio de origen (traducción de errores, 7.3)
 NOT_FOUND_CODE: dict[str, str] = {
     "single-player": "GAME_NOT_FOUND",

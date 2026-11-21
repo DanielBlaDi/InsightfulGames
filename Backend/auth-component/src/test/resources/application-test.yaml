@@ -16,9 +16,3 @@ JWT_SECRET: secreto-de-prueba-con-al-menos-32-bytes-0123456789
 outbox:
   scheduler:
     enabled: false
-
-services:
-  game-logic-url: http://localhost:1
-  tutor-url: http://localhost:1
-  profile-url: http://localhost:1
-  timeout-seconds: 1

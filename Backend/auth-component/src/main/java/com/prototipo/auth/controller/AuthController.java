@@ -4,11 +4,14 @@ import com.prototipo.auth.dto.LoginRequest;
 import com.prototipo.auth.dto.LoginResponse;
 import com.prototipo.auth.dto.RegisterRequest;
 import com.prototipo.auth.dto.RegisterResponse;
+import com.prototipo.auth.dto.UserResponse;
 import com.prototipo.auth.service.AuthService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -49,6 +52,13 @@ public class AuthController {
         );
     }
 
+    /** ¿Existe el usuario? 200 con el usuario o 404 USER_NOT_FOUND. Primer paso del borrado de cuenta. */
+    @GetMapping("/users/{userId}")
+    public ResponseEntity<UserResponse> buscarUsuario(@PathVariable String userId) {
+        return ResponseEntity.ok(authService.buscarUsuario(userId));
+    }
+
+    /** Borra solo la fila del usuario (el gateway ya borró Game Logic, Tutor y Profile/Stats). */
     @DeleteMapping("/account")
     public ResponseEntity<Void> eliminarCuenta(
             @RequestHeader(value = "X-User-Id", required = false)

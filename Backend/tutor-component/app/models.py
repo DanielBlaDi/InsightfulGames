@@ -16,12 +16,37 @@ from app.timeutils import to_iso
 AnalysisStatusValue = Literal["pending", "processing", "completed", "failed"]
 
 
+class GameSnapshot(BaseModel):
+    """Lo que el gateway leyó de Game Logic sobre la partida (el Tutor ya no la consulta).
+
+    El gateway lo reconstruye con campos validados y comprueba la visibilidad antes de enviarlo:
+    el Tutor solo decide si la partida se puede analizar.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    status: str | None = None
+    endReason: str | None = None
+    moveCount: int = Field(default=0, ge=0)
+    participantIds: list[str] = Field(default_factory=list, max_length=16)
+
+
+class EraseRequest(BaseModel):
+    """Cuerpo de POST /internal/tutor/users/{userId}/erase."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    # Partidas compartidas (shared) cuyos análisis se conservan. Todo lo demás se borra.
+    keepGameIds: list[str] = Field(default_factory=list, max_length=100000)
+
+
 class AnalysisRequest(BaseModel):
     """Cuerpo de POST /internal/tutor/analyses."""
 
     model_config = ConfigDict(extra="ignore")
 
     gameId: str = Field(min_length=1, max_length=64)
+    game: GameSnapshot
     language: str = Field(default="es", min_length=1, max_length=16)
     detailLevel: str = Field(default="standard", min_length=1, max_length=32)
     depth: int | None = Field(

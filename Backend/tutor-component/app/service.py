@@ -1,13 +1,15 @@
 """Lógica del Tutor (contrato, sección 16.4).
 
+El Tutor no llama a ningún servicio: el gateway lee la partida en Game Logic, comprueba la
+visibilidad (privada: solo participantes; shared: cualquiera) y entrega aquí lo necesario.
+
 Responsabilidades:
-- validar que la partida exista, esté terminada y sea analizable;
+- validar que la partida esté terminada y sea analizable (según el snapshot que envía el gateway);
 - crear el análisis una sola vez por (gameId, engineVersion, language,
   detailLevel, depth), publicar el evento y responder 202/200;
 - reactivar un fallo transitorio con una actualización atómica;
-- verificar la visibilidad en cada lectura;
 - entregar el informe y generar la explicación mock;
-- atender el borrado de cuenta de forma idempotente.
+- atender el borrado de cuenta de forma idempotente, con la decisión de qué conservar que toma el gateway.
 """
 
 from __future__ import annotations
@@ -19,8 +21,12 @@ from typing import Any
 from app.config import ANONYMOUS_USER_ID, Settings
 from app.errors import ApiError
 from app.explanation import build_explanation
-from app.game_logic import is_visible, participant_ids
-from app.models import AnalysisRequest, is_retryable, result_parts, status_payload
+from app.models import (
+    AnalysisRequest,
+    is_retryable,
+    result_parts,
+    status_payload,
+)
 from app.repository import AnalysisRepository
 from app.timeutils import to_iso, utcnow
 from app.validation import normalize_depth, normalize_text, normalize_uuid
@@ -33,12 +39,10 @@ class TutorService:
         self,
         settings: Settings,
         repository: AnalysisRepository,
-        game_logic: Any,
         publisher: Any,
     ):
         self._settings = settings
         self._repository = repository
-        self._game_logic = game_logic
         self._publisher = publisher
 
     # ------------------------------------------------------------------ POST
@@ -55,27 +59,24 @@ class TutorService:
         language = normalize_text(request.language, "language", 16)
         detail_level = normalize_text(request.detailLevel, "detailLevel", 32)
 
-        game = await self._game_logic.get_game(game_id)
-        if not is_visible(game, user_id):
-            # El contrato no distingue "no existe" de "no visible" (sección 16.4).
-            raise ApiError(
-                404,
-                "GAME_NOT_FOUND",
-                "La partida no existe o no es visible para el usuario.",
-            )
-        if game.get("status") != "finished":
+        # La existencia y la visibilidad de la partida las comprobó el gateway (sección 16.4).
+        game = request.game
+        if game.status != "finished":
             raise ApiError(
                 409,
                 "GAME_NOT_FINISHED",
                 "La partida debe estar terminada para pedir su análisis.",
             )
-        moves = game.get("moves")
-        if game.get("endReason") == "expired" or not isinstance(moves, list) or not moves:
+        if game.endReason == "expired" or game.moveCount < 1:
             raise ApiError(
                 409,
                 "GAME_NOT_ANALYZABLE",
                 "La partida expiró o no tiene jugadas; no hay nada que analizar.",
             )
+        # userId de cada participante, sin repetir (en local el creador juega ambos colores)
+        participant_ids = list(
+            dict.fromkeys(p for p in game.participantIds if isinstance(p, str) and p)
+        )
 
         engine_version = self._settings.engine_version
         existing = await self._repository.find_by_key(
@@ -96,7 +97,7 @@ class TutorService:
             "depth": depth,
             "status": "pending",
             "requestedBy": user_id,
-            "participantIds": participant_ids(game),
+            "participantIds": participant_ids,
             "error": None,
             "explanation": None,
             "createdAt": now,
@@ -169,12 +170,18 @@ class TutorService:
         )
 
     # --------------------------------------------------------------- GETs
-    async def get_analysis(self, analysis_id: str, user_id: str) -> dict[str, Any]:
-        document = await self._load_visible(analysis_id, user_id)
+    # La visibilidad la comprueba el gateway antes de llamar a estas rutas.
+    async def get_game_ref(self, analysis_id: str) -> dict[str, Any]:
+        """Partida a la que pertenece el análisis: el gateway la consulta para decidir la visibilidad."""
+        document = await self._load(analysis_id)
+        return {"gameId": document["gameId"]}
+
+    async def get_analysis(self, analysis_id: str) -> dict[str, Any]:
+        document = await self._load(analysis_id)
         return self._status(document)
 
-    async def get_result(self, analysis_id: str, user_id: str) -> dict[str, Any]:
-        document = await self._load_visible(analysis_id, user_id)
+    async def get_result(self, analysis_id: str) -> dict[str, Any]:
+        document = await self._load(analysis_id)
 
         status = document.get("status")
         if status != "completed":
@@ -222,9 +229,7 @@ class TutorService:
             "createdAt": to_iso(document.get("createdAt")),
         }
 
-    async def _load_visible(
-        self, analysis_id: str, user_id: str
-    ) -> dict[str, Any]:
+    async def _load(self, analysis_id: str) -> dict[str, Any]:
         document = await self._repository.get(analysis_id)
         if document is None:
             raise ApiError(
@@ -232,59 +237,34 @@ class TutorService:
                 "ANALYSIS_NOT_FOUND",
                 "El análisis no existe o no es visible para el usuario.",
             )
-
-        try:
-            game = await self._game_logic.get_game(document["gameId"])
-        except ApiError as exc:
-            if exc.code == "GAME_NOT_FOUND":
-                # La partida desapareció o dejó de ser visible: para el usuario
-                # el análisis tampoco existe (sección 16.4.2).
-                raise ApiError(
-                    404,
-                    "ANALYSIS_NOT_FOUND",
-                    "El análisis no existe o no es visible para el usuario.",
-                ) from exc
-            raise
-
-        if not is_visible(game, user_id):
-            raise ApiError(
-                404,
-                "ANALYSIS_NOT_FOUND",
-                "El análisis no existe o no es visible para el usuario.",
-            )
         return document
 
-    # -------------------------------------------------------------- DELETE
-    async def delete_user(self, user_id: str) -> None:
-        """Borrado de cuenta según la visibilidad actual (sección 16.4.4).
+    # -------------------------------------------------------------- Borrado de cuenta
+    async def game_ids_for_user(self, user_id: str) -> list[str]:
+        """Partidas con análisis en las que participó el usuario (primer paso del borrado)."""
+        normalized = normalize_uuid(user_id, "userId")
+        if normalized == ANONYMOUS_USER_ID:
+            return []
+        return await self._repository.game_ids_for_participant(normalized)
 
-        Primero se resuelve la visibilidad de todas las partidas y solo después
-        se muta. Si Game Logic no responde, la petición falla con 503 sin tocar
-        ningún análisis.
+    async def erase_user(self, user_id: str, keep_game_ids: list[str]) -> None:
+        """Borrado de cuenta (sección 16.4.4), idempotente.
+
+        El gateway decide qué se conserva: solo los análisis de las partidas shared que
+        enumera en ``keep_game_ids``. Todo análisis de una partida del usuario que NO esté en
+        esa lista se borra (fail-closed: private, inexistente o cualquier valor inesperado), y
+        luego se anonimizan participantIds y requestedBy en lo que queda.
         """
         normalized = normalize_uuid(user_id, "userId")
         if normalized == ANONYMOUS_USER_ID:
             return
 
+        keep = {normalize_uuid(game_id, "keepGameIds") for game_id in keep_game_ids}
         game_ids = await self._repository.game_ids_for_participant(normalized)
-        decisions: list[tuple[str, bool]] = []
-        for game_id in game_ids:
-            try:
-                game = await self._game_logic.get_game(game_id)
-            except ApiError as exc:
-                if exc.code == "GAME_NOT_FOUND":
-                    # Partida inexistente: se borran todos sus análisis.
-                    decisions.append((game_id, True))
-                    continue
-                raise
-
-            # Solo shared se conserva; private y cualquier valor inesperado se
-            # tratan como privados (fail-closed).
-            decisions.append((game_id, game.get("visibility") != "shared"))
 
         deleted = 0
-        for game_id, must_delete in decisions:
-            if must_delete:
+        for game_id in game_ids:
+            if game_id not in keep:
                 deleted += await self._repository.delete_by_game(game_id)
 
         anonymized_participants = await self._repository.anonymize_participant(

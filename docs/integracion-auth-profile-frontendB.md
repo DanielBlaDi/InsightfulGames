@@ -29,8 +29,7 @@ mocks y un navegador simulado.
    `POSTGRES_USER`, `POSTGRES_PASSWORD`, `RABBITMQ_URL=amqp://user:pass@rabbitmq:5672`.
    `depends_on` PostgreSQL y RabbitMQ con `service_healthy`. Bloque completo en
    `Backend/profile-stats-component/README.md`.
-4. **Auth**: añadir `RABBITMQ_URL`, `GAME_LOGIC_URL=http://game-logic-component:8082`,
-   `TUTOR_URL=http://tutor-component:8085`, `PROFILE_URL=http://profile-stats-component:8087` y
+4. **Auth**: añadir `RABBITMQ_URL` (Auth ya no llama a otros servicios: el gateway orquesta el borrado de cuenta) y
    `depends_on: rabbitmq (service_healthy)`. El usuario de MySQL necesita permiso `CREATE` en su
    base (lo tiene si es `MYSQL_USER`): Auth crea `outbox_events` al arrancar.
 5. **`.env.example`**: añadir `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`,

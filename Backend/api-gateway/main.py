@@ -23,7 +23,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from orchestration import upstream
+from orchestration import account, analyses, upstream
 from orchestration.errors import (
     NOT_FOUND_CODE,
     GatewayError,
@@ -339,13 +339,10 @@ async def logout():
 
 @app.delete("/auth/account")
 async def delete_account(request: Request, user_id: str = Depends(current_user)):
-    # La saga puede tardar hasta 45 s: 4 × HTTP_TIMEOUT
-    response = await forward(
-        request, "DELETE", "auth", "/account", user_id=user_id, timeout=4 * HTTP_TIMEOUT
-    )
-    result = relay(response, service="auth")
-    if response.status_code == 204:
-        _clear_session_cookie(result)
+    # El gateway orquesta la saga (Auth ya no llama a nadie): ver orchestration/account.py
+    await account.delete_account(request.app.state.client, UPSTREAMS, user_id, timeout=HTTP_TIMEOUT)
+    result = Response(status_code=204)
+    _clear_session_cookie(result)
     return result
 
 
@@ -441,14 +438,21 @@ async def match_visibility(match_id: str, request: Request, user_id: str = Depen
 
 @app.post("/tutor/analyses")
 async def create_analysis(request: Request, user_id: str = Depends(current_user)):
-    return await _public(request, "POST", "tutor", "/analyses", user_id)
+    # El gateway lee la partida en Game Logic y comprueba la visibilidad: el Tutor no llama a nadie
+    response = await analyses.create(
+        request.app.state.client, UPSTREAMS, user_id, await request.body(), timeout=HTTP_TIMEOUT
+    )
+    return relay(response, service="tutor")
 
 
 @app.get("/tutor/analyses/{analysis_id}")
 async def get_analysis(analysis_id: str, request: Request, user_id: str = Depends(current_user)):
     if not UUID_RE.match(analysis_id):
         return error_response(404, "ANALYSIS_NOT_FOUND", "El análisis no existe o no es visible")
-    return await _public(request, "GET", "tutor", f"/analyses/{analysis_id}", user_id)
+    response = await analyses.read(
+        request.app.state.client, UPSTREAMS, user_id, analysis_id, timeout=HTTP_TIMEOUT
+    )
+    return relay(response, service="tutor")
 
 
 @app.get("/tutor/analyses/{analysis_id}/result")
@@ -457,7 +461,11 @@ async def get_analysis_result(
 ):
     if not UUID_RE.match(analysis_id):
         return error_response(404, "ANALYSIS_NOT_FOUND", "El análisis no existe o no es visible")
-    return await _public(request, "GET", "tutor", f"/analyses/{analysis_id}/result", user_id)
+    response = await analyses.read(
+        request.app.state.client, UPSTREAMS, user_id, analysis_id,
+        suffix="/result", timeout=HTTP_TIMEOUT,
+    )
+    return relay(response, service="tutor")
 
 
 # --------------------------------------------------------------------------- #

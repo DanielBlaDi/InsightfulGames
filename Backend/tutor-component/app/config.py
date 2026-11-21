@@ -47,7 +47,6 @@ class Settings:
     """
 
     port: int = 8085
-    game_logic_url: str = "http://game-logic-component:8082"
     mongo_analysis_url: str = "mongodb://localhost:27017"
     mongo_analysis_database: str = "insightful_analysis"
     rabbitmq_url: str = "amqp://guest:guest@rabbitmq:5672/"
@@ -87,9 +86,6 @@ class Settings:
 
         return cls(
             port=port,
-            game_logic_url=_text_env(
-                "GAME_LOGIC_URL", "http://game-logic-component:8082"
-            ).rstrip("/"),
             mongo_analysis_url=_text_env(
                 "MONGO_ANALYSIS_URL", "mongodb://localhost:27017"
             ),

@@ -1,10 +1,10 @@
-"""Salud del servicio, índices y visibilidad fail-closed."""
+"""Salud del servicio, índices y errores de la base de datos."""
 
 from __future__ import annotations
 
 from pymongo.errors import ServerSelectionTimeoutError
 
-from tests.helpers import GAME_1, USER_A, make_game, post_analysis
+from tests.helpers import post_analysis
 
 
 async def test_health_ok(tutor):
@@ -43,8 +43,6 @@ async def test_health_falla_si_mongo_no_responde(tutor, monkeypatch):
 
 
 async def test_mongo_caido_devuelve_503_en_la_api(tutor, monkeypatch):
-    tutor.logic.add(make_game(GAME_1, user_ids=(USER_A,)))
-
     async def boom(*_args, **_kwargs):
         raise ServerSelectionTimeoutError("sin conexión a Mongo")
 
@@ -63,15 +61,7 @@ async def test_openapi_se_genera_sin_errores(tutor):
     paths = response.json()["paths"]
     assert "/internal/tutor/analyses" in paths
     assert "/internal/tutor/analyses/{analysis_id}/result" in paths
-    assert "/internal/tutor/users/{user_id}" in paths
+    assert "/internal/tutor/analyses/{analysis_id}/game-ref" in paths
+    assert "/internal/tutor/users/{user_id}/game-ids" in paths
+    assert "/internal/tutor/users/{user_id}/erase" in paths
 
-
-async def test_local_del_creador_es_visible_aunque_repita_user_id(tutor):
-    game = make_game(user_ids=(USER_A, USER_A), mode="local")
-    tutor.logic.add(game)
-
-    response = await post_analysis(tutor, user=USER_A)
-
-    assert response.status_code == 202
-    document = await tutor.repository.get(response.json()["analysisId"])
-    assert document["participantIds"] == [USER_A]

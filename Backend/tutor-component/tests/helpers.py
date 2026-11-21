@@ -89,32 +89,46 @@ def make_game(
     return game
 
 
+def snapshot(game: dict | None = None) -> dict:
+    """El snapshot que el gateway envía al Tutor, a partir de un GameState como el de make_game."""
+    game = make_game() if game is None else game
+    moves = game.get("moves")
+    ids: list[str] = []
+    for participant in game.get("participants") or []:
+        user_id = participant.get("userId")
+        if isinstance(user_id, str) and user_id and user_id not in ids:
+            ids.append(user_id)
+    return {
+        "status": game.get("status"),
+        "endReason": game.get("endReason"),
+        "moveCount": len(moves) if isinstance(moves, list) else 0,
+        "participantIds": ids,
+    }
+
+
 async def post_analysis(
     harness,
     *,
     user: str | None = USER_A,
     game_id: str = GAME_1,
+    game: dict | None = None,
     **payload,
 ) -> httpx.Response:
-    body = {"gameId": game_id, **payload}
+    """POST como lo hace el gateway. `game` es el GameState del que se arma el snapshot
+    (por omisión, una partida terminada y analizable de USER_A)."""
+    body = {"gameId": game_id, "game": snapshot(game), **payload}
     headers = {"X-User-Id": user} if user else {}
     return await harness.http.post(
         "/internal/tutor/analyses", json=body, headers=headers
     )
 
 
-async def get_status(harness, analysis_id: str, *, user: str | None = USER_A):
-    headers = {"X-User-Id": user} if user else {}
-    return await harness.http.get(
-        f"/internal/tutor/analyses/{analysis_id}", headers=headers
-    )
+async def get_status(harness, analysis_id: str):
+    return await harness.http.get(f"/internal/tutor/analyses/{analysis_id}")
 
 
-async def get_result(harness, analysis_id: str, *, user: str | None = USER_A):
-    headers = {"X-User-Id": user} if user else {}
-    return await harness.http.get(
-        f"/internal/tutor/analyses/{analysis_id}/result", headers=headers
-    )
+async def get_result(harness, analysis_id: str):
+    return await harness.http.get(f"/internal/tutor/analyses/{analysis_id}/result")
 
 
 async def mark_completed(

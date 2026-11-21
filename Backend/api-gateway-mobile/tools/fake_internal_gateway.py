@@ -1,10 +1,13 @@
-"""Gateway interno SIMULADO, solo para desarrollo de la app y del gateway móvil.
+"""Servicios SIMULADOS (Auth, Profile/Stats y Game Logic), solo para desarrollo de la app y del gateway móvil.
 
-Mientras el gateway web real no publique /internal/* y no existan Profile/Stats y
-Multiplayer, este servidor responde lo mismo que dirían según el contrato técnico definitivo.
+El gateway móvil llama directamente a cada servicio. Este servidor atiende las rutas /internal/* de los
+tres con datos simulados, para trabajar sin levantar los servicios reales.
 
-Uso (puerto 8080 = el que usa GATEWAY_INTERNAL_URL):
+Uso (un solo puerto atiende a los tres servicios):
     JWT_SECRET=<el mismo del gateway móvil> uvicorn fake_internal_gateway:app --port 8080
+    AUTH_URL=http://localhost:8080 PROFILE_URL=http://localhost:8080 GAME_LOGIC_URL=http://localhost:8080 \\
+        uvicorn main:app --port 8090
+Para mezclar real y simulado, apunta solo algunas de esas URLs a este servidor.
 
 Variables opcionales:
     MOCK_FAIL=stats,recentGames   -> esas secciones de /home responden 503 (para ver 'No disponible')
@@ -18,14 +21,14 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 import jwt
-from fastapi import FastAPI, Header, Query
+from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse
 
 JWT_SECRET = os.environ["JWT_SECRET"]
 FAIL = {s.strip() for s in os.getenv("MOCK_FAIL", "").split(",") if s.strip()}
 N_GAMES = int(os.getenv("MOCK_GAMES", "45"))
 
-app = FastAPI(title="Gateway interno simulado")
+app = FastAPI(title="Servicios simulados (Auth, Profile/Stats, Game Logic)")
 USERS: dict[str, dict] = {}
 
 
@@ -195,25 +198,27 @@ def list_games(userId: str, limit: int = Query(20, ge=1, le=20), cursor: str | N
     return {"items": page, "nextCursor": next_cursor}
 
 
-def _find(user_id: str, key: str, value: str):
-    return next((g for g in games_for(user_id) if g[key] == value), None)
+def _find_any(key: str, value: str):
+    """Game Logic no conoce al usuario que consulta: se busca entre las partidas de los usuarios
+    registrados en el simulador. Devuelve (userId, resumen) o (None, None)."""
+    for user in USERS.values():
+        g = next((g for g in games_for(user["userId"]) if g[key] == value), None)
+        if g:
+            return user["userId"], g
+    return None, None
 
 
-@app.get("/internal/single-player/games/{game_id}")
-def single_player_game(game_id: str, x_user_id: str | None = Header(default=None)):
-    if not x_user_id:
-        return err(401, "UNAUTHORIZED", "Falta X-User-Id: el gateway debe ponerlo")
-    g = _find(x_user_id, "gameId", game_id)
-    if not g or g["mode"] == "multiplayer":
-        return err(404, "GAME_NOT_FOUND", "La partida no existe o no es visible")
-    return game_state(g, x_user_id)
-
-
-@app.get("/internal/multiplayer/matches/{match_id}")
-def multiplayer_match(match_id: str, x_user_id: str | None = Header(default=None)):
-    if not x_user_id:
-        return err(401, "UNAUTHORIZED", "Falta X-User-Id: el gateway debe ponerlo")
-    g = _find(x_user_id, "matchId", match_id)
+@app.get("/internal/logic/games/by-match/{match_id}")
+def logic_game_by_match(match_id: str):
+    user_id, g = _find_any("matchId", match_id)
     if not g:
-        return err(404, "MATCH_NOT_FOUND", "La partida no existe o no es visible")
-    return game_state(g, x_user_id)
+        return err(404, "GAME_NOT_FOUND", "La partida no existe")
+    return game_state(g, user_id)
+
+
+@app.get("/internal/logic/games/{game_id}")
+def logic_game(game_id: str):
+    user_id, g = _find_any("gameId", game_id)
+    if not g:
+        return err(404, "GAME_NOT_FOUND", "La partida no existe")
+    return game_state(g, user_id)

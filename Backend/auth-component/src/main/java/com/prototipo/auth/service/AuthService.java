@@ -1,7 +1,5 @@
 package com.prototipo.auth.service;
 
-import com.prototipo.auth.deletion.AccountDeletionClient;
-import com.prototipo.auth.deletion.AccountDeletionClient.Dependency;
 import com.prototipo.auth.dto.LoginRequest;
 import com.prototipo.auth.dto.LoginResponse;
 import com.prototipo.auth.dto.RegisterRequest;
@@ -26,7 +24,6 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final ApplicationEventPublisher events;
-    private final AccountDeletionClient deletionClient;
     private final UserRegisteredOutbox outbox;
 
     public AuthService(
@@ -34,13 +31,11 @@ public class AuthService {
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
             ApplicationEventPublisher events,
-            AccountDeletionClient deletionClient,
             UserRegisteredOutbox outbox) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.events = events;
-        this.deletionClient = deletionClient;
         this.outbox = outbox;
     }
 
@@ -92,27 +87,25 @@ public class AuthService {
         );
     }
 
+    /** El usuario, o 404 USER_NOT_FOUND. Lo usa el gateway para saber si hay algo que borrar. */
+    @Transactional(readOnly = true)
+    public UserResponse buscarUsuario(String userId) {
+        return userRepository.findById(userId)
+                .map(u -> new UserResponse(u.getUserId(), u.getUsername()))
+                .orElseThrow(ApiException::userNotFound);
+    }
+
     /**
-     * Borrado coordinado (sección 7): Game Logic, Tutor y Profile/Stats, en ese orden. La fila de
-     * MySQL se borra solo si los tres respondieron 204; si uno falla, no se borra nada aquí y el
-     * usuario puede reintentar, porque las tres rutas son idempotentes. Sin transacción: no se
-     * mantiene abierta una conexión a MySQL mientras se espera a otros servicios.
+     * Borra solo la fila de MySQL (sección 7). Auth ya no llama a otros servicios: el gateway
+     * orquesta el borrado de Game Logic, Tutor y Profile/Stats y, al final, llama a esta ruta.
+     * Es idempotente: si la cuenta ya no existe, no hace nada.
      */
     public void eliminarCuenta(String userId) {
         if (userId == null || userId.isBlank()) {
             throw ApiException.validation("Falta la cabecera X-User-Id");
         }
-        // La fila desaparece solo al final de un borrado completo: si ya no está, no queda nada por hacer.
-        if (!userRepository.existsById(userId)) {
-            return;
+        if (userRepository.existsById(userId)) {
+            userRepository.deleteById(userId);
         }
-
-        for (Dependency dependencia : AccountDeletionClient.DEPENDENCIES) {
-            if (!deletionClient.delete(dependencia, userId)) {
-                throw ApiException.servicesUnavailable(dependencia.name());
-            }
-        }
-
-        userRepository.deleteById(userId);
     }
 }
