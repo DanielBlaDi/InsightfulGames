@@ -4,7 +4,7 @@ El gateway móvil llama directamente a cada servicio. Este servidor atiende las 
 tres con datos simulados, para trabajar sin levantar los servicios reales.
 
 Uso (un solo puerto atiende a los tres servicios):
-    JWT_SECRET=<el mismo del gateway móvil> uvicorn fake_internal_gateway:app --port 8080
+    JWT_SECRET=<el mismo del gateway móvil> uvicorn fake_services:app --port 8080
     AUTH_URL=http://localhost:8080 PROFILE_URL=http://localhost:8080 GAME_LOGIC_URL=http://localhost:8080 \\
         uvicorn main:app --port 8090
 Para mezclar real y simulado, apunta solo algunas de esas URLs a este servidor.

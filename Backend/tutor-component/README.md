@@ -234,7 +234,7 @@ anónimo, la operación no hace nada. `keepGameIds` con un UUID inválido →
 | `ANALYSIS_DEPTH_MAX` | `18` | Tope; por encima → `VALIDATION_ERROR` |
 | `ANALYSIS_MAX_REACTIVATIONS` | `3` | Reactivaciones por análisis; `0` las desactiva; debe ser `>= 0` |
 | `LLM_PROVIDER` | `mock` | En esta entrega solo existe `mock` |
-| `HTTP_TIMEOUT` | `15` | Timeout de las llamadas al gateway interno |
+| `HTTP_TIMEOUT` | `15` | Sin uso: el Tutor ya no hace llamadas HTTP salientes |
 | `LOG_LEVEL` | `INFO` | Nivel de log |
 
 `RABBITMQ_TIMEOUT` (5 s por defecto) es un ajuste interno del publicador, no una

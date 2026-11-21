@@ -4,7 +4,7 @@
 
 Recorre lo mismo que la app: registro, login, perfil, estadísticas, inicio, historial paginado y detalle.
 Qué es real y qué es simulado lo deciden AUTH_URL, PROFILE_URL y GAME_LOGIC_URL del gateway móvil
-(los servicios simulados están en tools/fake_internal_gateway.py).
+(los servicios simulados están en tools/fake_services.py).
 
 Si defines LOGIC_URL (Game Logic real, p. ej. http://localhost:8082) la prueba crea partidas de ese usuario
 directamente en Game Logic, porque un usuario recién registrado no tiene historial.

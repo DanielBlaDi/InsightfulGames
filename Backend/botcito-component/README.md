@@ -18,7 +18,7 @@ cada uno con su propio pool de motores Stockfish.
 - Rol: `ENGINE_ROLE=game`
 - Puerto: `8086`
 - Endpoint: `POST /internal/engine/best-move`
-- Consumidor: Single Player, mediante el gateway interno.
+- Consumidor: el gateway web, que orquesta el turno del bot en las partidas contra la máquina.
 - Objetivo: calcular una jugada según el nivel de dificultad.
 
 Solicitud:
@@ -49,7 +49,7 @@ Respuesta de ejemplo:
 - Rol: `ENGINE_ROLE=analysis`
 - Puerto: `8091`
 - Endpoint: `POST /internal/engine-analysis/evaluate`
-- Consumidor: Analysis Worker, mediante el gateway interno.
+- Consumidor: Analysis Worker, con llamada directa (`BOTCITO_ANALYSIS_URL`).
 - Objetivo: evaluar una posición a la profundidad solicitada.
 
 Solicitud:
@@ -103,7 +103,7 @@ En estos casos, `bestMove` es `null`.
 Ambos servicios ofrecen `GET /health`.
 
 Los endpoints `/internal/*` están destinados a la comunicación
-entre servicios mediante el gateway interno, no a exposición pública.
+dentro de la red de Docker (gateway web y Analysis Worker), no a exposición pública.
 
 Las rutas antiguas `/engine/best-move` y `/best-move` se conservan
 temporalmente por compatibilidad hasta completar la migración
@@ -178,7 +178,7 @@ sin eliminar el código ni las imágenes Docker.
 
 Esta configuración corresponde al entorno independiente de desarrollo.
 La integración en el Docker Compose principal del proyecto y las
-comunicaciones mediante el gateway interno requieren validaciones adicionales.
+llamadas desde el gateway web y el Analysis Worker requieren validaciones adicionales.
 
 ## Contrato de compatibilidad (temporal)
 

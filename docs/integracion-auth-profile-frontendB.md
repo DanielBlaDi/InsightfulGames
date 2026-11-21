@@ -55,8 +55,8 @@ mocks y un navegador simulado.
    `DELETE /internal/auth/account` y, si responde 204, borrar la cookie.
 5. **Auth por rutas internas**: llamar a `/internal/auth/register` y `/internal/auth/login`
    (Auth mantiene `/auth/*` como alias mientras tanto).
-6. **Passthrough `/internal/*`** (sección 4): sin él, el borrado de cuenta de Auth no llega a Game
-   Logic, Tutor ni Profile/Stats y siempre responde 503.
+6. ~~**Passthrough `/internal/*`**~~ (sección 4): ya no aplica. El borrado de cuenta lo orquesta el
+   gateway (saga Auth → Game Logic → Tutor → Profile/Stats → Auth) y el passthrough se eliminó.
 
 ## 4. Frontend A (Vike, cookies y `/estadisticas`)
 

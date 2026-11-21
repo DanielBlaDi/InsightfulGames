@@ -52,7 +52,7 @@ no usa características exclusivas de 3.14.
 2. Reclama el documento de forma atómica con `$$NOW`. Si no puede, otro proceso
    lo tiene: hace `ack` sin trabajo.
 3. Arranca la renovación del lease cada `ANALYSIS_STALE_MINUTES / 3`.
-4. Pide `GET /internal/logic/games/{id}/analysis-input` por el gateway interno.
+4. Pide `GET /internal/logic/games/{id}/analysis-input` directo a Game Logic (`GAME_LOGIC_URL`).
 5. Reconstruye las `N+1` posiciones con `python-chess` a partir de
    `initialFen` y las jugadas UCI.
 6. Evalúa cada posición con

@@ -17,11 +17,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * Gateway interno falso: atiende /internal/logic/* como un Game Logic mínimo (sin reglas de
- * ajedrez, pero con version, participants y expectedVersion) y /internal/engine/best-move como
- * Botcito-juego. Registra cada petición para comprobar rutas y cuerpos.
+ * Game Logic falso: atiende /internal/logic/* como un Game Logic mínimo (sin reglas de ajedrez,
+ * pero con version, participants y expectedVersion). Cualquier otra ruta da 404. Registra cada
+ * petición para comprobar rutas y cuerpos (el hub solo debe llamar a Game Logic, nunca al gateway).
  */
-final class FakeInternalGateway implements AutoCloseable {
+final class FakeGameLogic implements AutoCloseable {
 
     record Request(String method, String path, JsonNode body) {
     }
@@ -31,14 +31,12 @@ final class FakeInternalGateway implements AutoCloseable {
     final List<Request> requests = new CopyOnWriteArrayList<>();
     final Map<String, ObjectNode> games = new ConcurrentHashMap<>();
 
-    /** null: responde una jugada. Si no, código de error que devuelve Botcito (ENGINE_BUSY, ...). */
-    volatile String engineError;
     /** true: Game Logic responde 500 a todo. */
     volatile boolean logicBroken;
 
     private final HttpServer server;
 
-    FakeInternalGateway() throws IOException {
+    FakeGameLogic() throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", this::handle);
         server.start();
@@ -68,14 +66,10 @@ final class FakeInternalGateway implements AutoCloseable {
 
         // Un servicio no reenvía X-User-Id a otro (contrato, 4.4)
         if (ex.getRequestHeaders().containsKey("X-User-Id")) {
-            error(ex, 400, "VALIDATION_ERROR", "X-User-Id no debe llegar a Game Logic ni a Botcito");
+            error(ex, 400, "VALIDATION_ERROR", "X-User-Id no debe llegar a Game Logic");
             return;
         }
 
-        if (path.equals("/internal/engine/best-move") && method.equals("POST")) {
-            engine(ex, body);
-            return;
-        }
         if (!path.startsWith("/internal/logic/games")) {
             error(ex, 404, "NOT_FOUND", "Ruta inexistente");
             return;
@@ -202,23 +196,6 @@ final class FakeInternalGateway implements AutoCloseable {
 
     private static void bump(ObjectNode game) {
         game.put("version", game.get("version").asInt() + 1);
-    }
-
-    private void engine(HttpExchange ex, JsonNode body) throws IOException {
-        String failure = engineError;
-        if (failure != null) {
-            int status = failure.equals("ENGINE_TIMEOUT") ? 504 : 503;
-            error(ex, status, failure, "Botcito: " + failure);
-            return;
-        }
-        if (body == null || !body.path("botLevel").isInt() || !body.path("fen").isTextual()) {
-            error(ex, 400, "VALIDATION_ERROR", "Se espera { fen, botLevel }");
-            return;
-        }
-        ObjectNode move = MAPPER.createObjectNode();
-        move.put("uci", "e7e5").put("san", "e5");
-        move.putObject("evaluation").put("type", "cp").put("value", 0).put("perspective", "side_to_move");
-        json(ex, 200, move);
     }
 
     private static void error(HttpExchange ex, int status, String code, String message) throws IOException {

@@ -270,7 +270,7 @@ Los contratos y archivos de configuración descritos documentan la implementaci�
 La validación de JWT y el control de acceso a las rutas de negocio corresponden al Gateway.
 10. Cambios del Prototipo 2 (contrato v9)
 
-Rutas. Las rutas pasan a /internal/auth/register, /internal/auth/login y DELETE /internal/auth/account, y solo se llaman a través del gateway (sección 7). Las rutas /auth/* se mantienen como alias mientras el gateway actual siga usándolas; se pueden quitar cuando el gateway web llame a /internal/auth/*.
+Rutas. Las rutas pasan a /internal/auth/register, /internal/auth/login y DELETE /internal/auth/account, y solo las llaman los gateways web y móvil, directamente (sección 7). Auth no llama a ningún otro servicio. Las rutas /auth/* se mantienen como alias mientras el gateway actual siga usándolas; se pueden quitar cuando el gateway web llame a /internal/auth/*.
 
 Errores. Todas las respuestas de error usan el formato común: { "error": { "code": "...", "message": "..." } }. Códigos: VALIDATION_ERROR (400), INVALID_CREDENTIALS (401), USERNAME_TAKEN (409), SERVICES_UNAVAILABLE (503).
 

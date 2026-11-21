@@ -12,10 +12,10 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
 /**
- * Gateway interno falso. Responde GET /internal/logic/games/expired con la lista configurada y
+ * Game Logic falso. Responde GET /internal/logic/games/expired con la lista configurada y
  * cada POST .../{id}/{timeout|expire} con la respuesta configurada para esa ruta (200 por defecto).
  */
-final class FakeGateway implements AutoCloseable{
+final class FakeGameLogic implements AutoCloseable{
 
     record Request(String method, String path, String query, String contentType, String body){}
 
@@ -27,7 +27,7 @@ final class FakeGateway implements AutoCloseable{
 
     private final HttpServer server;
 
-    FakeGateway() throws IOException{
+    FakeGameLogic() throws IOException{
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", this::handle);
         server.start();

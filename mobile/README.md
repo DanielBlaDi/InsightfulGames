@@ -11,11 +11,11 @@ Alcance: perfil, estadísticas, historial y detalle. No juega partidas en vivo, 
    - Dispositivo físico: `http://<IP-del-PC>:8090/` (mismo Wi-Fi, firewall abierto).
    - Siempre con `/` al final y **sin** `/api`. La app habla con el gateway móvil, no con el web.
 3. **Backend real: todavía NO validado.** Esta app se probó solo contra simuladores. Para llegar a los servicios reales
-   falta el passthrough `/internal/*` del gateway web (GW-04); además Game Logic aún no entrega la lista en el formato del
-   contrato (GL-04), Single Player no tiene rutas internas (SP-05) y Multiplayer no existe. Este README se actualizará con lo
+   el gateway móvil ya llama directo a Auth, Profile/Stats y Game Logic (no depende del gateway web), pero falta
+   comprobarlo de punta a punta desde la app. Este README se actualizará con lo
    que se compruebe en emulador (MOB-01).
 4. Sin backend, o con parte real: `Backend/api-gateway-mobile/README.md` explica cómo correr el gateway móvil contra
-   un gateway interno **simulado** o **mixto** (servicios reales donde existen, simulados donde no). Con el simulado,
+   servicios **simulados** o **mixtos** (servicios reales donde existen, simulados donde no). Con el simulado,
    registrarse desde la app crea el usuario en la simulación.
 
 ## Pantallas (navegación inferior)

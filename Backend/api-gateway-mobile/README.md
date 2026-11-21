@@ -68,14 +68,14 @@ pytest -q     # las e2e se omiten si no defines MOBILE_GATEWAY_URL
 ## Probar con servicios reales y/o simulados
 
 Como cada servicio tiene su propia URL, se mezcla real y simulado apuntando cada variable donde corresponda.
-`tools/fake_internal_gateway.py` simula Auth, Profile/Stats y Game Logic en un solo puerto.
+`tools/fake_services.py` simula Auth, Profile/Stats y Game Logic en un solo puerto.
 
 ```bash
 cd Backend/api-gateway-mobile
 export JWT_SECRET=<el mismo de tu .env, 32 bytes o más>
 
 # Todo simulado
-uvicorn --app-dir tools fake_internal_gateway:app --port 8080
+uvicorn --app-dir tools fake_services:app --port 8080
 AUTH_URL=http://localhost:8080 PROFILE_URL=http://localhost:8080 GAME_LOGIC_URL=http://localhost:8080 \
   uvicorn main:app --port 8090
 

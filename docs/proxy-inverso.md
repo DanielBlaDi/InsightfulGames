@@ -15,7 +15,7 @@ Un único contenedor, `reverse-proxy`, es el **único servicio que publica puert
 
 Reglas del proxy, además del enrutamiento:
 
-- `/api/internal/*` (web) y `/internal/*` (móvil) responden 404 en el borde, incluidas variantes como `/API/Internal`, `/api//internal` o `/api/%69nternal`.
+- `/api/internal/*` (web) y `/internal/*` (móvil) responden 404 en el borde, incluidas variantes como `/API/Internal`, `/api//internal` o `/api/%69nternal`. Los gateways ya no exponen ninguna ruta `/internal` (el passthrough se eliminó en la Fase 9 del rediseño), así que este bloqueo es defensa en profundidad.
 - Se descarta `X-User-Id` del cliente; solo lo pone el gateway tras validar el JWT.
 - `Cookie`, `Set-Cookie`, `Origin` e `Idempotency-Key` pasan intactos (la sesión web y la validación de `Origin` del WebSocket siguen en el gateway).
 - `client_max_body_size 1m`, `server_tokens off` y límite de 10 peticiones/s por IP (ráfaga 20) en login y registro.
@@ -25,7 +25,7 @@ El servidor Express del frontend conserva su propio proxy `/api` (contrato 5.4.1
 
 ## Para el informe (sección Seguridad)
 
-**Escenario 2.** Un atacante en Internet intenta alcanzar directamente los servicios internos (gateways, Auth, Game Logic) o rutas `/internal/*` para saltarse la validación de sesión, o inyectar `X-User-Id` para suplantar a un usuario. Entorno: sistema en operación normal, expuesto a Internet. Respuesta: el único punto accesible es el proxy, que bloquea `/internal/*`, descarta `X-User-Id` y limita la frecuencia de login. Medida: 0 puertos de servicios internos publicados; 100 % de peticiones a `/internal/*` terminadas con 404 en el proxy.
+**Escenario 2.** Un atacante en Internet intenta alcanzar directamente los servicios internos (gateways, Auth, Game Logic) o rutas `/internal/*` para saltarse la validación de sesión, o inyectar `X-User-Id` para suplantar a un usuario. Entorno: sistema en operación normal, expuesto a Internet. Respuesta: el único punto accesible es el proxy, que bloquea `/internal/*` (y detrás, ningún gateway expone esas rutas), descarta `X-User-Id` y limita la frecuencia de login. Medida: 0 puertos de servicios internos publicados; 100 % de peticiones a `/internal/*` terminadas con 404 en el proxy.
 
 **Tácticas aplicadas:** limitar exposición (un solo punto de entrada, topología oculta) y limitar acceso (filtrado de rutas y cabeceras en el borde).
 

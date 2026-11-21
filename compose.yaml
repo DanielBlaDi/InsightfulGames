@@ -91,7 +91,6 @@ services:
       TUTOR_URL: http://tutor-component:8085
       BOTCITO_URL: http://botcito-component:8086
       PROFILE_URL: http://profile-stats-component:8087
-      BOTCITO_ANALYSIS_URL: http://botcito-analysis-component:8091
       JWT_SECRET: ${JWT_SECRET:?}
       JWT_ALGORITHM: ${JWT_ALGORITHM:?}
       HTTP_TIMEOUT: ${HTTP_TIMEOUT:?}
@@ -115,7 +114,6 @@ services:
       - tutor-component
       - game-logic-component
       - botcito-component
-      - botcito-analysis-component
 
 
 # logica ------------------------------------------

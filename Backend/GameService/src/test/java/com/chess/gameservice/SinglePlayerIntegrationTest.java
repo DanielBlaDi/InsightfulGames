@@ -52,11 +52,11 @@ class SinglePlayerIntegrationTest {
     static final String USER = "7d1f9d5e-3c2b-4f0e-9a41-0b5f6d7a8c90";
     static final String OTHER = "11111111-2222-4333-8444-555555555555";
 
-    static final FakeInternalGateway gateway;
+    static final FakeGameLogic logic;
 
     static {
         try {
-            gateway = new FakeInternalGateway();
+            logic = new FakeGameLogic();
         } catch (IOException e) {
             throw new IllegalStateException(e);
         }
@@ -64,14 +64,14 @@ class SinglePlayerIntegrationTest {
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
-        registry.add("services.game-logic-url", gateway::url);
+        registry.add("services.game-logic-url", logic::url);
         // Sin broker en la prueba: el consumidor se invoca directamente.
         registry.add("spring.rabbitmq.listener.simple.auto-startup", () -> "false");
     }
 
     @AfterAll
     static void stopGateway() {
-        gateway.close();
+        logic.close();
     }
 
     @LocalServerPort
@@ -85,9 +85,8 @@ class SinglePlayerIntegrationTest {
 
     @BeforeEach
     void reset() {
-        gateway.requests.clear();
-        gateway.engineError = null;
-        gateway.logicBroken = false;
+        logic.requests.clear();
+        logic.logicBroken = false;
     }
 
     // ------------------------------------------------------------ publish (gateway -> hub)
@@ -112,7 +111,7 @@ class SinglePlayerIntegrationTest {
         String id = createLocal();
         try (Socket socket = connect(id, USER)) {
             socket.next(); // state inicial
-            int before = gateway.requests.size();
+            int before = logic.requests.size();
 
             Response response = request("POST", publishPath(id), null,
                     publishBody(stateAt(id, 1, "in_progress", null, null), "e2e4", null));
@@ -122,7 +121,7 @@ class SinglePlayerIntegrationTest {
             assertEquals("state", moved.get("type").asText());
             assertEquals("e2e4", moved.get("lastMove").asText());
             assertEquals(1, moved.at("/state/version").asInt());
-            assertEquals(before, gateway.requests.size(), "publish no debe llamar a Game Logic ni a Botcito");
+            assertEquals(before, logic.requests.size(), "publish no debe llamar a Game Logic ni a Botcito");
         }
     }
 
@@ -197,13 +196,13 @@ class SinglePlayerIntegrationTest {
     @Test
     void publishWithoutOpenSessionsIsANoOp() throws Exception {
         String id = createLocal();
-        int before = gateway.requests.size();
+        int before = logic.requests.size();
 
         Response response = request("POST", publishPath(id), null,
                 publishBody(stateAt(id, 1, "in_progress", null, null), "e2e4", null));
 
         assertEquals(204, response.status());
-        assertEquals(before, gateway.requests.size());
+        assertEquals(before, logic.requests.size());
     }
 
     @Test
@@ -238,7 +237,7 @@ class SinglePlayerIntegrationTest {
             assertFalse(first.has("lastMove"));
             assertEquals(0, first.at("/state/version").asInt());
             assertEquals(2, first.at("/state/participants").size());
-            int before = gateway.requests.size();
+            int before = logic.requests.size();
 
             // Las jugadas y la rendición las atiende el gateway: si un mensaje llega aquí, se ignora
             socket.send("{\"type\":\"move\",\"uci\":\"e2e4\",\"expectedVersion\":0}");
@@ -246,8 +245,8 @@ class SinglePlayerIntegrationTest {
             socket.send("no es json");
 
             assertNull(socket.messages.poll(400, TimeUnit.MILLISECONDS), "el hub no responde a los frames");
-            assertEquals(before, gateway.requests.size(), "el hub no opera en Game Logic ni en Botcito");
-            assertEquals("in_progress", gateway.games.get(id).get("status").asText());
+            assertEquals(before, logic.requests.size(), "el hub no opera en Game Logic ni en Botcito");
+            assertEquals("in_progress", logic.games.get(id).get("status").asText());
         }
     }
 
@@ -266,7 +265,7 @@ class SinglePlayerIntegrationTest {
         String id = createLocal();
         try (Socket socket = connect(id, USER)) {
             socket.next();
-            gateway.finish(gateway.games.get(id), null, "account_deleted");
+            logic.finish(logic.games.get(id), null, "account_deleted");
 
             listener.onGameFinished(event(id, "local"));
 
@@ -308,7 +307,7 @@ class SinglePlayerIntegrationTest {
             list.addObject().put("userId", p[0]).put("color", p[1]);
         }
         HttpResponse<String> response = http.send(
-                HttpRequest.newBuilder(URI.create(gateway.url() + "/internal/logic/games"))
+                HttpRequest.newBuilder(URI.create(logic.url() + "/internal/logic/games"))
                         .header("Content-Type", "application/json")
                         .POST(HttpRequest.BodyPublishers.ofString(body.toString())).build(),
                 HttpResponse.BodyHandlers.ofString());
@@ -326,7 +325,7 @@ class SinglePlayerIntegrationTest {
 
     /** GameState de la partida (la del Game Logic falso) con la version y el estado indicados. */
     private ObjectNode stateAt(String gameId, int version, String status, String result, String endReason) {
-        ObjectNode state = gateway.games.get(gameId).deepCopy();
+        ObjectNode state = logic.games.get(gameId).deepCopy();
         state.put("version", version);
         state.put("status", status);
         if (result == null) {

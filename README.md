@@ -175,10 +175,10 @@ docker compose up --build -d
 
 ## Mobile app (Android)
 
-The Android app lives in `mobile/` and talks only to the **mobile gateway** (`Backend/api-gateway-mobile/`, port `MOBILE_GATEWAY_PORT`, 8090 by default), which in turn talks to the web gateway's internal routes (`/internal/*`). It shows profile, statistics, game history and game details; it does not play live games.
+The Android app lives in `mobile/` and talks only to the **mobile gateway** (`Backend/api-gateway-mobile/`, port `MOBILE_GATEWAY_PORT`, 8090 by default), which calls Auth, Profile/Stats and Game Logic directly (it does not go through the web gateway). It shows profile, statistics, game history and game details; it does not play live games.
 
 ```
-Android app ──▶ api-gateway-mobile :8090 ──▶ api-gateway-component :8080 /internal/* ──▶ Auth · Game Logic · Single Player · (Profile/Stats · Multiplayer)
+Android app ──▶ reverse-proxy :8090 ──▶ api-gateway-mobile ──▶ Auth · Profile/Stats · Game Logic · Tutor (account deletion)
 ```
 
 1. `cp .env.example .env` and fill in the values (`MOBILE_GATEWAY_PORT=8090`).

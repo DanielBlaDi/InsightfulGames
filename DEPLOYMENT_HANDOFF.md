@@ -33,7 +33,7 @@ Cambios de `compose.yaml` que conviene revisar:
 - Todo el código de `Backend/`, `Frontend/` y `mobile/`, incluidos sus Dockerfiles.
 - `Databases/auth/01-init.sql`, `Databases/profile/01-init.sql`, `Databases/mongo/init-mongo.sh`, `Databases/.gitkeep`.
 - `Frontend/.env.example`.
-- `Backend/docker-compose.dev.yml`, `Backend/api-gateway/docker-compose.yml` y `Backend/botcito-component/compose.yaml`. El plan retira los dos primeros en INF-15. No se tocaron para limitar este paquete.
+- `Backend/docker-compose.dev.yml` y `Backend/botcito-component/compose.yaml`. El plan retira el primero en INF-15. No se tocaron para limitar este paquete. (`Backend/api-gateway/docker-compose.yml` se eliminó en la Fase 9 del rediseño de gateways.)
 
 ## 4. Scripts de `/Databases`
 

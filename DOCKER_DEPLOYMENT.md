@@ -262,7 +262,6 @@ Cambiarla en `.env` no la cambia dentro de una base ya inicializada: la aplicaci
 | Tutor en `unhealthy` | Mongo de análisis no acepta credenciales, o `init-mongo.sh` no corrió | Revisar `docker compose logs mongo-analysis` y la sección 8.1 |
 | `api-gateway-component` no arranca | Espera a todos sus servicios | `docker compose ps` indica cuál falla |
 | Healthcheck Java falla con `bash: not found` | La imagen no trae `bash` | Hay que cambiar la comprobación. Se validará en el primer arranque |
-| Gateway móvil responde 404 en `/auth/login` | Falta el passthrough (GW-04) | Es esperado hoy |
 | Perfil no aparece tras registrar | Cola sin consumidor o broker caído | Revisar logs de Auth y Profile/Stats. El evento queda en `outbox_events` |
 | Puerto 8090 ocupado | Otro proceso lo usa | Cambiar `MOBILE_GATEWAY_PORT` |
 

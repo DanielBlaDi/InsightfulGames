@@ -3,8 +3,9 @@
 - Valida la sesión: cookie `session` primero, Bearer después (HS256, exige exp y sub).
 - Pone X-User-Id a partir del sub; nunca usa el que envía el cliente.
 - Emite y borra la cookie de sesión.
-- Rutas públicas (7.4.1), passthrough /internal/* (7.4.2) y dos WebSocket
-  (validan Origin y sesión, en ese orden).
+- Rutas públicas (7.4.1) y dos WebSocket (validan Origin y sesión, en ese orden).
+- Orquesta los flujos de usuario (orchestration/). No expone ninguna ruta /internal:
+  ningún servicio llama al gateway.
 """
 
 import asyncio
@@ -57,7 +58,7 @@ SESSION_COOKIE = "session"
 SESSION_MAX_AGE = 3600
 MAX_PAGE_SIZE = 20
 
-# nombre en /internal/<nombre>/*  ->  URL base del servicio
+# nombre lógico del servicio  ->  URL base (se llama a {url}/internal/{nombre}/...)
 UPSTREAMS: dict[str, str] = {
     name: url.rstrip("/")
     for name, url in {
@@ -68,9 +69,6 @@ UPSTREAMS: dict[str, str] = {
         "tutor": os.getenv("TUTOR_URL", "http://tutor-component:8085"),
         "engine": os.getenv("BOTCITO_URL", "http://botcito-component:8086"),
         "profile": os.getenv("PROFILE_URL", "http://profile-stats-component:8087"),
-        "engine-analysis": os.getenv(
-            "BOTCITO_ANALYSIS_URL", "http://botcito-analysis-component:8091"
-        ),
     }.items()
 }
 
@@ -229,7 +227,7 @@ async def forward(
     timeout: float | None = None,
 ) -> httpx.Response:
     """Llama a {servicio}/internal/{service}{path}. X-User-Id solo se pone si
-    se pasa user_id (el sub validado o, en el passthrough, el de quien llama)."""
+    se pasa user_id (siempre el sub validado del JWT)."""
     headers = {"Accept": request.headers.get("accept") or "application/json"}
 
     body = None
@@ -508,37 +506,6 @@ async def profile_me(request: Request, user_id: str = Depends(current_user)):
 @app.get("/stats/me")
 async def stats_me(request: Request, user_id: str = Depends(current_user)):
     return await _public(request, "GET", "profile", f"/users/{user_id}/stats")
-
-
-# --------------------------------------------------------------------------- #
-# Passthrough interno: /internal/<servicio>/*  (7.4.2)
-# --------------------------------------------------------------------------- #
-# No valida JWT ni traduce errores: los servicios (Auth, Multiplayer, workers)
-# dependen de los códigos originales. Conserva método, cuerpo, query y X-User-Id.
-# Solo es seguro si el puerto 8080 no se publica y Vike responde 404 a /api/internal/*.
-
-
-@app.api_route("/internal/{service}/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
-async def internal_passthrough(service: str, path: str, request: Request):
-    if service not in UPSTREAMS or ".." in path.split("/"):
-        return error_response(404, "NOT_FOUND", "Ruta inexistente")
-    response = await forward(
-        request,
-        request.method,
-        service,
-        "/" + path,
-        user_id=request.headers.get("x-user-id"),
-        params=list(request.query_params.multi_items()),
-    )
-    extra = {}
-    if response.headers.get("idempotency-replayed"):
-        extra["Idempotency-Replayed"] = response.headers["idempotency-replayed"]
-    return Response(
-        content=response.content,
-        status_code=response.status_code,
-        media_type=response.headers.get("content-type"),
-        headers=extra,
-    )
 
 
 # --------------------------------------------------------------------------- #

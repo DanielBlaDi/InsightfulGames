@@ -67,12 +67,15 @@ Insightful Games follows a microservice, container-oriented architecture with de
 ### Component Overview
 
 - **Frontend (`Frontend/`)**: React + SSR web presentation component exposing the user interface.
-- **API Gateway (`Backend/api-gateway/`)**: Entry point for all HTTP requests from clients. Handles JWT validation, injects internal headers (`X-User-Id`), and routes requests to downstream services.
+- **API Gateway (`Backend/api-gateway/`)**: Entry point for all HTTP and WebSocket requests from the web client. Handles JWT validation, injects `X-User-Id`, and **orchestrates** user flows (`orchestration/`): account-deletion saga, tutor analyses, games vs bot, multiplayer moves/draws. It intercepts mutating WS frames, calls GameLogic/Botcito, then `publish`es to the single-player/multiplayer hubs. It exposes no `/internal` routes.
+- **Mobile Gateway (`Backend/api-gateway-mobile/`)**: BFF for the Android app. Calls Auth, Profile/Stats, GameLogic and Tutor directly with its own flows (`GET /home`, `DELETE /auth/account`).
+- **Layering rule**: dependencies only go down (client → nginx → gateways → services). No service ever calls a gateway; workers, RabbitMQ consumers and the multiplayer reconnection timer call GameLogic/Botcito directly. See `docs/rediseno-gateways-orquestadores.pdf`.
 - **Auth Service (`Backend/auth-component/`)**: Java / Spring Boot service managing user credentials, authentication, JWT tokens, and account deletion. Persists user accounts in MySQL (`mysql-db`).
 - **Game Logic (`Backend/GameLogic/`)**: Core chess game state manager. Stores game states, player participation, move histories, FEN positions, and game visibility (`private` vs `shared`) in MongoDB (`mongo-db`).
-- **Single Player Service (`Backend/GameService/`)**: Manages single-player sessions and interacts with Botcito engine services.
+- **Single Player Service (`Backend/GameService/`)**: WebSocket hub for games vs bot: holds sessions and broadcasts what the gateway publishes; its `game.finished` consumer reads GameLogic directly.
+- **Multiplayer (`Backend/multiplayer-component/`, Go)**: WebSocket hub for multiplayer: sessions, presence, reconnection timer (abandons via GameLogic directly) and `publish`.
 - **Botcito Component (`Backend/botcito-component/`)**: Chess engine wrapper for position evaluations and move suggestions.
-- **Tutor Component (`Backend/tutor-component/`)**: FastAPI service responsible for accepting analysis requests, validating game states against Game Logic, persisting analysis metadata in MongoDB (`mongo-analysis`), generating deterministic move explanations, handling account anonymization, and publishing `tutor.analysis.requested` events to RabbitMQ.
+- **Tutor Component (`Backend/tutor-component/`)**: FastAPI service responsible for accepting analysis requests (with a game snapshot supplied by the gateway; it makes no outbound HTTP calls), persisting analysis metadata in MongoDB (`mongo-analysis`), generating deterministic move explanations, handling account anonymization, and publishing `tutor.analysis.requested` events to RabbitMQ.
 - **Analysis Worker (`Backend/analysis-worker/`)**: Python 3.12 background process consuming `tutor.analysis.requested` events from RabbitMQ. Evaluates game positions against Botcito-analysis, calculates centipawn losses (`cpLoss`) and move classifications (`best`, `good`, `inaccuracy`, `mistake`, `blunder`), updates analysis results in MongoDB via atomic leases, and handles polling fallback for stale jobs.
 
 ### Data Storage & Messaging
