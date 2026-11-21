@@ -1,7 +1,6 @@
 package com.chess.gameservice.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -26,10 +25,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.springframework.http.HttpStatus;
 
-import com.chess.gameservice.client.BotcitoClient;
 import com.chess.gameservice.client.GameLogicClient;
 import com.chess.gameservice.error.ApiException;
-import com.chess.gameservice.model.BestMove;
 import com.chess.gameservice.model.GameState;
 import com.chess.gameservice.model.MoveEntry;
 import com.chess.gameservice.model.Participant;
@@ -37,7 +34,11 @@ import com.chess.gameservice.model.PublishRequest;
 import com.chess.gameservice.websocket.GameChannels;
 import com.chess.gameservice.websocket.WsMessage;
 
-/** Pruebas del servicio con Game Logic, Botcito y los canales simulados (sin red). */
+/**
+ * Pruebas del hub con Game Logic y los canales simulados (sin red). El juego (jugadas, bot, rendición,
+ * visibilidad) lo orquesta el gateway; aquí solo se prueban el aviso publish, el estado inicial por
+ * WebSocket y game.finished.
+ */
 class SinglePlayerServiceTest {
 
     static final String USER = "7d1f9d5e-3c2b-4f0e-9a41-0b5f6d7a8c90";
@@ -45,16 +46,14 @@ class SinglePlayerServiceTest {
     static final String ID = "3f2b1c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d";
 
     private GameLogicClient logic;
-    private BotcitoClient bot;
     private GameChannels channels;
     private SinglePlayerService service;
 
     @BeforeEach
     void setUp() {
         logic = mock(GameLogicClient.class);
-        bot = mock(BotcitoClient.class);
         channels = mock(GameChannels.class);
-        service = new SinglePlayerService(logic, bot, channels);
+        service = new SinglePlayerService(logic, channels);
     }
 
     // ------------------------------------------------------------ fixtures
@@ -97,130 +96,13 @@ class SinglePlayerServiceTest {
         return types;
     }
 
-    // ------------------------------------------------------------ jugadas
-
-    @Test
-    void humanMoveForwardsExpectedVersionAndBotMovesWithTheNewVersion() {
-        GameState start = vsBot("white", "white", 3, null);
-        GameState afterHuman = vsBot("white", "black", 4, "e2e4");
-        GameState afterBot = vsBot("white", "white", 5, "e7e5");
-        when(logic.getGame(ID)).thenReturn(start);
-        when(logic.move(ID, "e2e4", 3)).thenReturn(afterHuman);
-        when(bot.bestMove(afterHuman.fen(), 5)).thenReturn(new BestMove("e7e5", "e5", null));
-        when(logic.move(ID, "e7e5", 4)).thenReturn(afterBot);
-
-        service.handleMove(USER, ID, "e2e4", 3);
-
-        assertEquals(List.of("state", "bot_thinking", "state"), types(broadcasts()));
-        assertEquals(new WsMessage.State("state", afterBot, "e7e5"), broadcasts().get(2));
-    }
-
-    @Test
-    void moveWithoutExpectedVersionOrUciIsAValidationError() {
-        assertEquals("VALIDATION_ERROR",
-                assertThrows(ApiException.class, () -> service.handleMove(USER, ID, "e2e4", null)).code());
-        assertEquals("VALIDATION_ERROR",
-                assertThrows(ApiException.class, () -> service.handleMove(USER, ID, " ", 0)).code());
-        verifyNoInteractions(logic);
-    }
-
-    @Test
-    void versionConflictSendsTheCurrentStateBeforeRejecting() {
-        GameState current = local("black", 8);
-        when(logic.getGame(ID)).thenReturn(current);
-        when(logic.move(ID, "e2e4", 7))
-                .thenThrow(new ApiException(HttpStatus.CONFLICT, "VERSION_CONFLICT", "Versión distinta"));
-
-        ApiException e = assertThrows(ApiException.class, () -> service.handleMove(USER, ID, "e2e4", 7));
-
-        assertEquals("VERSION_CONFLICT", e.code());
-        assertEquals(List.of(new WsMessage.State("state", current, null)), broadcasts());
-    }
-
-    @Test
-    void clockExpiredSendsTheFinalStateAndGameOver() {
-        GameState before = local("white", 2);
-        GameState timedOut = finished(before, "black", "timeout");
-        when(logic.getGame(ID)).thenReturn(before, timedOut);
-        when(logic.move(ID, "e2e4", 2))
-                .thenThrow(new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "CLOCK_EXPIRED", "Reloj vencido"));
-
-        ApiException e = assertThrows(ApiException.class, () -> service.handleMove(USER, ID, "e2e4", 2));
-
-        assertEquals("CLOCK_EXPIRED", e.code());
-        assertEquals(List.of(WsMessage.state(timedOut, null), WsMessage.gameOver("black", "timeout")), broadcasts());
-    }
-
-    @Test
-    void movingWhenItIsTheBotsTurnIsRejected() {
-        when(logic.getGame(ID)).thenReturn(vsBot("white", "black", 1, "e2e4"));
-
-        ApiException e = assertThrows(ApiException.class, () -> service.handleMove(USER, ID, "e7e5", 1));
-
-        assertEquals("NOT_YOUR_TURN", e.code());
-        assertEquals(HttpStatus.UNPROCESSABLE_ENTITY, e.status());
-        verify(logic, never()).move(anyString(), anyString(), anyInt());
-    }
-
-    @Test
-    void movingOnAFinishedGameIsRejected() {
-        when(logic.getGame(ID)).thenReturn(finished(local("white", 4), "black", "checkmate"));
-
-        ApiException e = assertThrows(ApiException.class, () -> service.handleMove(USER, ID, "e2e4", 5));
-
-        assertEquals("GAME_FINISHED", e.code());
-        verify(logic, never()).move(anyString(), anyString(), anyInt());
-    }
-
-    @Test
-    void localGameAcceptsMovesFromEitherSideWithoutBot() {
-        when(logic.getGame(ID)).thenReturn(local("black", 1));
-        when(logic.move(ID, "e7e5", 1)).thenReturn(local("white", 2));
-
-        service.handleMove(USER, ID, "e7e5", 1);
-
-        verifyNoInteractions(bot);
-        assertEquals(List.of("state"), types(broadcasts()));
-    }
-
-    @Test
-    void mateSendsStateAndThenGameOver() {
-        GameState mated = finished(local("black", 3), "black", "checkmate");
-        when(logic.getGame(ID)).thenReturn(local("black", 3));
-        when(logic.move(ID, "d8h4", 3)).thenReturn(mated);
-
-        service.handleMove(USER, ID, "d8h4", 3);
-
-        InOrder order = inOrder(channels);
-        order.verify(channels).broadcast(ID, WsMessage.state(mated, null));
-        order.verify(channels).broadcast(ID, WsMessage.gameOver("black", "checkmate"));
-    }
-
-    @Test
-    void botFailureAfterHumanMoveKeepsTheHumanMoveAndSendsTheRealError() {
-        when(logic.getGame(ID)).thenReturn(vsBot("white", "white", 0, null));
-        when(logic.move(ID, "e2e4", 0)).thenReturn(vsBot("white", "black", 1, "e2e4"));
-        when(bot.bestMove(anyString(), anyInt()))
-                .thenThrow(new ApiException(HttpStatus.GATEWAY_TIMEOUT, "ENGINE_TIMEOUT", "Stockfish no respondió"));
-
-        service.handleMove(USER, ID, "e2e4", 0); // no lanza: la jugada humana ya está guardada
-
-        assertEquals(List.of("state", "bot_thinking", "error"), types(broadcasts()));
-        WsMessage.ErrorMessage error = (WsMessage.ErrorMessage) broadcasts().get(2);
-        assertEquals("ENGINE_TIMEOUT", error.code());
-    }
-
-    // ------------------------------------------------------------ participantes
+    // ------------------------------------------------------------ participantes (WebSocket)
 
     @Test
     void nonParticipantsAndMultiplayerGamesAreNotFound() {
         when(logic.getGame(ID)).thenReturn(local("white", 0));
         assertEquals("GAME_NOT_FOUND",
                 assertThrows(ApiException.class, () -> service.getParticipantGame(OTHER_USER, ID)).code());
-        assertEquals("GAME_NOT_FOUND",
-                assertThrows(ApiException.class, () -> service.handleMove(OTHER_USER, ID, "e2e4", 0)).code());
-        assertEquals("GAME_NOT_FOUND",
-                assertThrows(ApiException.class, () -> service.resign(OTHER_USER, ID, "white")).code());
 
         GameState multiplayer = game("multiplayer", List.of(new Participant(USER, "white")), "white",
                 "in_progress", 0, "private", List.of(), null, null);
@@ -230,7 +112,7 @@ class SinglePlayerServiceTest {
     }
 
     @Test
-    void sharedGamesAreNotPlayableByNonParticipants() {
+    void sharedGamesAreNotAccessibleByNonParticipants() {
         GameState shared = game("local", local("white", 0).participants(), "white", "in_progress", 0,
                 "shared", List.of(), null, null);
         when(logic.getGame(ID)).thenReturn(shared);
@@ -243,70 +125,6 @@ class SinglePlayerServiceTest {
     void ownerIsAParticipantInBothModes() {
         when(logic.getGame(ID)).thenReturn(vsBot("black", "black", 1, "e2e4"));
         assertTrue(SinglePlayerService.isParticipant(service.getParticipantGame(USER, ID), USER));
-        assertEquals("black", SinglePlayerService.humanColor(vsBot("black", "white", 0, null)));
-        assertNull(SinglePlayerService.humanColor(local("white", 0)));
-    }
-
-    @Test
-    void resumeDoesNothingWhenItIsTheHumansTurn() {
-        service.resumeBotIfNeeded(vsBot("white", "white", 0, null));
-        service.resumeBotIfNeeded(local("black", 1));
-        verifyNoInteractions(logic, bot);
-    }
-
-    // ------------------------------------------------------------ rendición
-
-    @Test
-    void resignInBotGameUsesTheHumansColor() {
-        GameState start = vsBot("black", "black", 1, "e2e4");
-        when(logic.getGame(ID)).thenReturn(start);
-        when(logic.resign(ID, "black")).thenReturn(finished(start, "white", "surrender"));
-
-        service.resign(USER, ID, "white"); // el side enviado se ignora en vs_bot
-
-        verify(logic).resign(ID, "black");
-        assertEquals(List.of("state", "game_over"), types(broadcasts()));
-    }
-
-    @Test
-    void resignInLocalGameNeedsTheSide() {
-        GameState start = local("white", 0);
-        when(logic.getGame(ID)).thenReturn(start);
-        when(logic.resign(ID, "white")).thenReturn(finished(start, "black", "surrender"));
-
-        assertEquals("VALIDATION_ERROR", assertThrows(ApiException.class, () -> service.resign(USER, ID, null)).code());
-        service.resign(USER, ID, "white");
-        verify(logic).resign(ID, "white");
-    }
-
-    // ------------------------------------------------------------ game.finished
-
-    @Test
-    void finishedEventRereadsTheGameAndSendsStateAndGameOver() {
-        GameState deleted = finished(local("white", 2), null, "account_deleted");
-        when(channels.hasOpenSessions(ID)).thenReturn(true);
-        when(logic.getGame(ID)).thenReturn(deleted);
-
-        service.notifyFinished(ID);
-
-        assertEquals(List.of(WsMessage.state(deleted, null), WsMessage.gameOver(null, "account_deleted")), broadcasts());
-    }
-
-    @Test
-    void finishedEventWithoutOpenSessionsDoesNothing() {
-        when(channels.hasOpenSessions(ID)).thenReturn(false);
-        service.notifyFinished(ID);
-        verifyNoInteractions(logic);
-    }
-
-    @Test
-    void finishedEventPropagatesUnavailableButIgnoresMissingGames() {
-        when(channels.hasOpenSessions(ID)).thenReturn(true);
-        when(logic.getGame(ID)).thenThrow(ApiException.gameNotFound(), ApiException.unavailable("caído"));
-        service.notifyFinished(ID); // 404: sin excepción, no se reintenta
-
-        assertThrows(ApiException.class, () -> service.notifyFinished(ID));
-        verify(channels, never()).broadcast(eq(ID), any());
     }
 
     // ------------------------------------------------------------ publish (gateway)
@@ -327,7 +145,7 @@ class SinglePlayerServiceTest {
         service.applyPublish(ID, publishOf(state, "e2e4", null));
 
         assertEquals(List.of(WsMessage.state(state, "e2e4")), broadcasts());
-        verifyNoInteractions(logic, bot);
+        verifyNoInteractions(logic);
     }
 
     @Test
@@ -399,6 +217,36 @@ class SinglePlayerServiceTest {
             assertEquals(HttpStatus.BAD_REQUEST, e.status());
         }
         assertThrows(ApiException.class, () -> service.applyPublish(ID, null));
+        verify(channels, never()).broadcast(eq(ID), any());
+    }
+
+    // ------------------------------------------------------------ game.finished
+
+    @Test
+    void finishedEventRereadsTheGameAndSendsStateAndGameOver() {
+        GameState deleted = finished(local("white", 2), null, "account_deleted");
+        when(channels.hasOpenSessions(ID)).thenReturn(true);
+        when(logic.getGame(ID)).thenReturn(deleted);
+
+        service.notifyFinished(ID);
+
+        assertEquals(List.of(WsMessage.state(deleted, null), WsMessage.gameOver(null, "account_deleted")), broadcasts());
+    }
+
+    @Test
+    void finishedEventWithoutOpenSessionsDoesNothing() {
+        when(channels.hasOpenSessions(ID)).thenReturn(false);
+        service.notifyFinished(ID);
+        verifyNoInteractions(logic);
+    }
+
+    @Test
+    void finishedEventPropagatesUnavailableButIgnoresMissingGames() {
+        when(channels.hasOpenSessions(ID)).thenReturn(true);
+        when(logic.getGame(ID)).thenThrow(ApiException.gameNotFound(), ApiException.unavailable("caído"));
+        service.notifyFinished(ID); // 404: sin excepción, no se reintenta
+
+        assertThrows(ApiException.class, () -> service.notifyFinished(ID));
         verify(channels, never()).broadcast(eq(ID), any());
     }
 }

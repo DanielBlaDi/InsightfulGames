@@ -9,6 +9,7 @@
 
 import asyncio
 import inspect
+import json
 import logging
 import os
 import re
@@ -23,8 +24,9 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from orchestration import account, analyses, single_player, upstream
-from orchestration.context import Ctx, GameLocks
+from orchestration import account, analyses, single_player, upstream, ws_session
+from orchestration.context import BackgroundTasks, Ctx, GameLocks
+from orchestration.errors import FlowError
 from orchestration.errors import (
     NOT_FOUND_CODE,
     GatewayError,
@@ -108,10 +110,13 @@ async def lifespan(app: FastAPI):
     _validate_config()
     app.state.client = httpx.AsyncClient(timeout=HTTP_TIMEOUT, follow_redirects=False)
     app.state.locks = GameLocks()
+    app.state.tasks = BackgroundTasks()
     logger.info("Gateway web listo; orígenes WebSocket: %s", sorted(WS_ALLOWED_ORIGINS))
     try:
         yield
     finally:
+        # Una jugada ya aceptada por Game Logic debe publicarse aunque el cliente se haya ido
+        await app.state.tasks.drain(timeout=2 * HTTP_TIMEOUT)
         await app.state.client.aclose()
 
 
@@ -293,12 +298,16 @@ async def _public(
     )
 
 
-def _ctx(request: Request) -> Ctx:
-    """Contexto de los flows con estado (juego en vivo)."""
-    state = request.app.state
+def _ctx(conn: Request | WebSocket) -> Ctx:
+    """Contexto de los flows con estado (juego en vivo), para una petición REST o un WebSocket."""
+    state = conn.app.state
     if getattr(state, "locks", None) is None:  # p. ej. tests que sustituyen app.state.client
         state.locks = GameLocks()
-    return Ctx(client=state.client, upstreams=UPSTREAMS, locks=state.locks, timeout=HTTP_TIMEOUT)
+    if getattr(state, "tasks", None) is None:
+        state.tasks = BackgroundTasks()
+    return Ctx(
+        client=state.client, upstreams=UPSTREAMS, locks=state.locks, timeout=HTTP_TIMEOUT, tasks=state.tasks
+    )
 
 
 def _not_found(code: str) -> JSONResponse:
@@ -583,11 +592,42 @@ async def _proxy_websocket(
         await _safe_close(client_ws, 4404, "Partida inexistente o ajena")
         return
 
+    # Single Player: el gateway orquesta las acciones del cliente (jugadas, rendición, turno del bot);
+    # el hub solo mantiene la sesión. Primero se comprueba aquí que el usuario participe.
+    ctx = _ctx(client_ws)
+    live: dict[str, Any] | None = None
+    if service == "single-player":
+        try:
+            live = await single_player.participant_game(ctx, user_id, resource_id)
+        except FlowError as exc:
+            await _safe_close(
+                client_ws, 4404 if exc.status == 404 else 1011,
+                "Partida inexistente o ajena" if exc.status == 404 else "Servicio no disponible",
+            )
+            return
+        except GatewayError:
+            await _safe_close(client_ws, 1011, "Servicio no disponible")
+            return
+
     upstream_url = _ws_url(
         UPSTREAMS[service], f"/internal/{service}/ws/{resource}/{resource_id}"
     )
     logger.info("WebSocket %s/%s", service, resource_id)
 
+    # Un solo escritor a la vez hacia el cliente: lo que llega del hub y las respuestas del gateway
+    send_lock = asyncio.Lock()
+
+    async def send_text(text: str) -> None:
+        async with send_lock:
+            await client_ws.send_text(text)
+
+    async def send_json(payload: dict[str, Any]) -> None:
+        try:
+            await send_text(json.dumps(payload))
+        except Exception:  # noqa: BLE001  (el cliente ya se fue)
+            logger.info("No se pudo enviar %s: el cliente se desconectó", payload.get("type"))
+
+    queue = None
     try:
         async with websockets.connect(
             upstream_url,
@@ -597,16 +637,27 @@ async def _proxy_websocket(
             **{_WS_HEADERS_KW: {"X-User-Id": user_id}},
         ) as upstream:
 
+            if live is not None:
+                queue, _ = ws_session.start_frame_worker(ctx, user_id, resource_id, send_json)
+                # Si le toca al bot (p. ej. Botcito estaba caído), se retoma en segundo plano
+                if single_player.is_bot_turn(live):
+                    ctx.tasks.spawn(single_player.resume_bot_if_needed(ctx, live))
+
             async def client_to_upstream():
                 while True:
-                    await upstream.send(await client_ws.receive_text())
+                    text = await client_ws.receive_text()
+                    if queue is not None:
+                        queue.put_nowait(text)  # lo atiende el gateway, no el hub
+                    else:
+                        await upstream.send(text)
 
             async def upstream_to_client():
                 async for message in upstream:
                     if isinstance(message, str):
-                        await client_ws.send_text(message)
+                        await send_text(message)
                     else:
-                        await client_ws.send_bytes(message)
+                        async with send_lock:
+                            await client_ws.send_bytes(message)
 
             tasks = [
                 asyncio.create_task(client_to_upstream()),
@@ -635,6 +686,11 @@ async def _proxy_websocket(
             await _safe_close(client_ws, 4404, "Partida inexistente o ajena")
         else:
             await _safe_close(client_ws, 1011, "Servicio no disponible")
+
+    finally:
+        if queue is not None:
+            # El trabajador termina lo que ya aceptó (una jugada en Game Logic no se deja a medias)
+            queue.put_nowait(None)
 
 
 @app.websocket("/ws/games/{game_id}")

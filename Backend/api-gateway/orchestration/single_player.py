@@ -145,11 +145,15 @@ async def _single_player_game(ctx: Ctx, game_id: str) -> dict[str, Any]:
     return state
 
 
-async def _participant_game(ctx: Ctx, user_id: str, game_id: str) -> dict[str, Any]:
+async def participant_game(ctx: Ctx, user_id: str, game_id: str) -> dict[str, Any]:
+    """Partida local o vs_bot en la que el usuario participa (acciones y WebSocket); si no, 404."""
     state = await _single_player_game(ctx, game_id)
     if not is_participant(state, user_id):
         raise FlowError(404, "GAME_NOT_FOUND", NOT_FOUND)
     return state
+
+
+_participant_game = participant_game
 
 
 async def get_game(ctx: Ctx, user_id: str, game_id: str) -> dict[str, Any]:
@@ -238,13 +242,16 @@ async def try_bot_turn(ctx: Ctx, state: dict[str, Any]) -> dict[str, Any]:
 
 
 async def resign(ctx: Ctx, user_id: str, game_id: str, raw_body: bytes) -> dict[str, Any]:
-    """side solo hace falta en modo local; en vs_bot se usa el color del humano."""
+    """Rendición por REST: side solo hace falta en modo local; en vs_bot se usa el color del humano."""
     requested = None
     if raw_body and raw_body.strip():
         requested = _json_object(raw_body).get("side")
+    return await resign_side(ctx, user_id, game_id, requested)
 
+
+async def resign_side(ctx: Ctx, user_id: str, game_id: str, requested: Any) -> dict[str, Any]:
     async with ctx.locks.get(game_id):
-        state = await _participant_game(ctx, user_id, game_id)
+        state = await participant_game(ctx, user_id, game_id)
         if state.get("mode") == VS_BOT:
             side = human_color(state)
         else:
@@ -274,3 +281,60 @@ async def change_visibility(ctx: Ctx, user_id: str, game_id: str, raw_body: byte
         # (sin game_over: aunque la partida esté terminada, no cambió su resultado).
         await publish_state(ctx, nxt, game_over=False)
         return nxt
+
+
+# --------------------------------------------------------------- jugadas (frames WebSocket)
+
+
+async def resync(ctx: Ctx, game_id: str) -> None:
+    """Reenvía el estado actual a las sesiones abiertas; si no se puede leer, no hace nada."""
+    try:
+        state = await logic.fetch_game(ctx.client, ctx.upstreams, game_id, timeout=ctx.timeout)
+    except GatewayError as exc:
+        logger.warning("No se pudo releer la partida %s: %s", game_id, exc.message)
+        return
+    await publish_state(ctx, state)
+
+
+async def handle_move(ctx: Ctx, user_id: str, game_id: str, uci: Any, expected_version: Any) -> None:
+    """Jugada del humano (frame `move`). Todo lo que cambia se publica a los clientes conectados; si es
+    el turno del bot, se le pide su jugada a continuación. Lanza FlowError si la jugada no se acepta."""
+    if not isinstance(uci, str) or not uci.strip():
+        raise _validation("Falta el campo uci")
+    if not _is_int(expected_version):
+        raise _validation("Falta el campo expectedVersion")
+
+    async with ctx.locks.get(game_id):
+        state = await participant_game(ctx, user_id, game_id)
+        if is_finished(state):
+            raise FlowError(422, "GAME_FINISHED", "La partida ya terminó")
+        if state.get("mode") == VS_BOT and state.get("turn") != human_color(state):
+            raise FlowError(422, "NOT_YOUR_TURN", "No es tu turno")
+
+        try:
+            nxt = await logic.move(ctx.client, ctx.upstreams, game_id, uci, expected_version, timeout=ctx.timeout)
+        except FlowError as exc:
+            # El cliente tenía un estado viejo, o el reloj venció y la partida terminó: se le envía el
+            # state actual (y game_over si terminó) antes del move_rejected
+            if exc.code in ("VERSION_CONFLICT", "CLOCK_EXPIRED"):
+                await resync(ctx, game_id)
+            raise
+        await publish_state(ctx, nxt, last_uci(nxt))
+
+        if is_bot_turn(nxt):
+            await try_bot_turn(ctx, nxt)
+
+
+async def resume_bot_if_needed(ctx: Ctx, state: dict[str, Any]) -> None:
+    """Si al conectarse un cliente le toca mover al bot (p. ej. Botcito estaba caído cuando se creó la
+    partida o tras la jugada humana), se retoma su turno. Pensado para correr en segundo plano."""
+    if not is_bot_turn(state):
+        return
+    game_id = state["gameId"]
+    async with ctx.locks.get(game_id):
+        try:
+            fresh = await logic.fetch_game(ctx.client, ctx.upstreams, game_id, timeout=ctx.timeout)
+            if is_bot_turn(fresh):
+                await bot_turn(ctx, fresh)
+        except GatewayError as exc:
+            await publish(ctx, game_id, signal={"type": "error", "code": exc.code, "message": exc.message})

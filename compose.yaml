@@ -185,7 +185,6 @@ services:
     environment:
       SERVER_PORT: "8083"
       GAME_LOGIC_URL: http://game-logic-component:8082
-      BOTCITO_URL: http://botcito-component:8086
       RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:?}:${RABBITMQ_DEFAULT_PASS:?}@rabbitmq:5672
     depends_on:
       rabbitmq:

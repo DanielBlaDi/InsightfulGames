@@ -19,9 +19,7 @@ services:
     build: ./GameService
     environment:
       GAME_LOGIC_URL: http://game-logic-component:8082
-      # El modo vs_bot llama a {BOTCITO_URL}/internal/engine/best-move.
-      # Aquí apunta al Botcito falso que corre en tu máquina (GameService/tools/fake_botcito.py, puerto 8000).
-      BOTCITO_URL: http://host.docker.internal:8000
+      # Single Player ya no llama a Botcito: el turno del bot lo orquesta el gateway web (BOTCITO_URL allí).
     extra_hosts:
       - "host.docker.internal:host-gateway" # necesario en Linux; en Windows y Mac ya existe
     depends_on:

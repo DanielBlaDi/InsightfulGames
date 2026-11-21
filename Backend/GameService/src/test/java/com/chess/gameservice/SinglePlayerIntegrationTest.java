@@ -42,9 +42,9 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /**
- * Single Player como hub (publish del gateway y WebSocket) contra un Game Logic y un Botcito-juego
- * falsos. Comprueba el aviso publish (orden, guarda de versión, señales), los frames WebSocket,
- * expectedVersion, participantes, códigos de error y la notificación de game.finished.
+ * Single Player como hub (publish del gateway y WebSocket) contra un Game Logic
+ * falso. Comprueba el aviso publish (orden, guarda de versión, señales), el estado inicial por WebSocket,
+ * que el hub no opera por su cuenta, el cierre de no participantes y la notificación de game.finished.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class SinglePlayerIntegrationTest {
@@ -64,9 +64,7 @@ class SinglePlayerIntegrationTest {
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
-        // Un único servidor falso atiende a Game Logic y a Botcito (rutas distintas).
         registry.add("services.game-logic-url", gateway::url);
-        registry.add("services.botcito-url", gateway::url);
         // Sin broker en la prueba: el consumidor se invoca directamente.
         registry.add("spring.rabbitmq.listener.simple.auto-startup", () -> "false");
     }
@@ -232,7 +230,7 @@ class SinglePlayerIntegrationTest {
     // ------------------------------------------------------------ WebSocket
 
     @Test
-    void localGameIsPlayedOverWebSocketWithExpectedVersion() throws Exception {
+    void connectingSendsTheInitialStateAndTheHubDoesNotPlayForTheClient() throws Exception {
         String id = createLocal();
         try (Socket socket = connect(id, USER)) {
             JsonNode first = socket.next();
@@ -240,78 +238,16 @@ class SinglePlayerIntegrationTest {
             assertFalse(first.has("lastMove"));
             assertEquals(0, first.at("/state/version").asInt());
             assertEquals(2, first.at("/state/participants").size());
+            int before = gateway.requests.size();
 
+            // Las jugadas y la rendición las atiende el gateway: si un mensaje llega aquí, se ignora
             socket.send("{\"type\":\"move\",\"uci\":\"e2e4\",\"expectedVersion\":0}");
-            JsonNode moved = socket.next();
-            assertEquals("state", moved.get("type").asText());
-            assertEquals("e2e4", moved.get("lastMove").asText());
-            assertEquals(1, moved.at("/state/version").asInt());
-            assertEquals("white", moved.at("/state/moves/0/color").asText());
+            socket.send("{\"type\":\"resign\",\"side\":\"white\"}");
+            socket.send("no es json");
 
-            JsonNode forwarded = gateway.requestsTo("/moves").get(0).body();
-            assertEquals("e2e4", forwarded.get("uci").asText());
-            assertEquals(0, forwarded.get("expectedVersion").asInt());
-
-            // Misma versión otra vez: llega el state vigente y luego move_rejected
-            socket.send("{\"type\":\"move\",\"uci\":\"e7e5\",\"expectedVersion\":0}");
-            JsonNode resynced = socket.next();
-            assertEquals("state", resynced.get("type").asText());
-            assertEquals(1, resynced.at("/state/version").asInt());
-            JsonNode rejected = socket.next();
-            assertEquals("move_rejected", rejected.get("type").asText());
-            assertEquals("VERSION_CONFLICT", rejected.get("code").asText());
-
-            socket.send("{\"type\":\"move\",\"uci\":\"e7e5\"}");
-            JsonNode missing = socket.next();
-            assertEquals("move_rejected", missing.get("type").asText());
-            assertEquals("VALIDATION_ERROR", missing.get("code").asText());
-        }
-    }
-
-    @Test
-    void mateSendsStateThenGameOver() throws Exception {
-        String id = createLocal();
-        try (Socket socket = connect(id, USER)) {
-            socket.next();
-            socket.send("{\"type\":\"move\",\"uci\":\"d8h4\",\"expectedVersion\":0}");
-            JsonNode state = socket.next();
-            assertEquals("finished", state.at("/state/status").asText());
-            JsonNode over = socket.next();
-            assertEquals("game_over", over.get("type").asText());
-            assertEquals("white", over.get("result").asText());
-            assertEquals("checkmate", over.get("endReason").asText());
-        }
-    }
-
-    @Test
-    void botErrorsArriveWithTheirRealCodeAndTheHumanMoveIsKept() throws Exception {
-        String id = createInLogic("vs_bot", 3, List.<String[]>of(new String[]{USER, "white"}));
-        gateway.engineError = "ENGINE_BUSY";
-
-        try (Socket socket = connect(id, USER)) {
-            socket.next();
-            socket.send("{\"type\":\"move\",\"uci\":\"e2e4\",\"expectedVersion\":0}");
-            assertEquals("state", socket.next().get("type").asText());
-            assertEquals("bot_thinking", socket.next().get("type").asText());
-            JsonNode error = socket.next();
-            assertEquals("error", error.get("type").asText());
-            assertEquals("ENGINE_BUSY", error.get("code").asText());
-
-            // Es turno del bot: el humano no puede mover
-            socket.send("{\"type\":\"move\",\"uci\":\"d2d4\",\"expectedVersion\":1}");
-            JsonNode rejected = socket.next();
-            assertEquals("move_rejected", rejected.get("type").asText());
-            assertEquals("NOT_YOUR_TURN", rejected.get("code").asText());
-        }
-
-        // Al reconectar con Botcito disponible se retoma el turno del bot
-        gateway.engineError = null;
-        try (Socket socket = connect(id, USER)) {
-            assertEquals(1, socket.next().at("/state/version").asInt());
-            assertEquals("bot_thinking", socket.next().get("type").asText());
-            JsonNode afterBot = socket.next();
-            assertEquals("e7e5", afterBot.get("lastMove").asText());
-            assertEquals(2, afterBot.at("/state/version").asInt());
+            assertNull(socket.messages.poll(400, TimeUnit.MILLISECONDS), "el hub no responde a los frames");
+            assertEquals(before, gateway.requests.size(), "el hub no opera en Game Logic ni en Botcito");
+            assertEquals("in_progress", gateway.games.get(id).get("status").asText());
         }
     }
 
