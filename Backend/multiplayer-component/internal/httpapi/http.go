@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"log/slog"
 	"net/http"
 	"time"
@@ -39,11 +38,9 @@ func New(app *service.Service, hub *realtime.Hub, allowedOrigins map[string]stru
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", api.health)
-	mux.HandleFunc("POST /internal/multiplayer/matches", api.create)
-	mux.HandleFunc("POST /internal/multiplayer/matches/{id}/join", api.join)
-	mux.HandleFunc("GET /internal/multiplayer/matches/{id}", api.get)
-	mux.HandleFunc("POST /internal/multiplayer/matches/{id}/resign", api.resign)
-	mux.HandleFunc("PATCH /internal/multiplayer/matches/{id}/visibility", api.visibility)
+	// Crear, unirse, leer, rendirse y cambiar la visibilidad las orquesta el gateway contra Game Logic;
+	// aquí solo llega el aviso para los clientes conectados.
+	mux.HandleFunc("POST /internal/multiplayer/matches/{id}/publish", api.publish)
 	mux.HandleFunc("GET /internal/multiplayer/ws/matches/{id}", api.websocket)
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusNotFound, "NOT_FOUND", "Route was not found")
@@ -55,67 +52,19 @@ func (a *API) health(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
-func (a *API) create(w http.ResponseWriter, r *http.Request) {
-	var request domain.CreateMatchRequest
-	if err := decodeJSON(w, r, &request); err != nil {
+// publish: el gateway ya operó en Game Logic y avisa. El hub actualiza la sesión y envía a los clientes.
+func (a *API) publish(w http.ResponseWriter, r *http.Request) {
+	var request service.PublishRequest
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<20))
+	if err := decoder.Decode(&request); err != nil {
 		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "Invalid JSON request body")
 		return
 	}
-	result, err := a.service.Create(r.Context(), r.Header.Get("X-User-Id"), r.Header.Get("Idempotency-Key"), request)
-	if err != nil {
+	if err := a.service.ApplyPublish(r.PathValue("id"), request); err != nil {
 		writeServiceError(w, err)
 		return
 	}
-	if result.Replayed {
-		w.Header().Set("Idempotency-Replayed", "true")
-	}
-	writeJSON(w, http.StatusCreated, map[string]any{
-		"matchId": result.MatchID, "status": result.Status, "createdAt": result.CreatedAt,
-	})
-}
-
-func (a *API) join(w http.ResponseWriter, r *http.Request) {
-	state, err := a.service.Join(r.Context(), r.PathValue("id"), r.Header.Get("X-User-Id"))
-	if err != nil {
-		writeServiceError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, state.Raw)
-}
-
-func (a *API) get(w http.ResponseWriter, r *http.Request) {
-	state, err := a.service.Get(r.Context(), r.PathValue("id"), r.Header.Get("X-User-Id"))
-	if err != nil {
-		writeServiceError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, state.Raw)
-}
-
-func (a *API) resign(w http.ResponseWriter, r *http.Request) {
-	state, err := a.service.Resign(r.Context(), r.PathValue("id"), r.Header.Get("X-User-Id"))
-	if err != nil {
-		writeServiceError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, state.Raw)
-}
-
-func (a *API) visibility(w http.ResponseWriter, r *http.Request) {
-	var request struct {
-		Visibility      string `json:"visibility"`
-		ExpectedVersion *int64 `json:"expectedVersion"`
-	}
-	if err := decodeJSON(w, r, &request); err != nil || request.ExpectedVersion == nil {
-		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "visibility and expectedVersion are required")
-		return
-	}
-	state, err := a.service.SetVisibility(r.Context(), r.PathValue("id"), r.Header.Get("X-User-Id"), request.Visibility, *request.ExpectedVersion)
-	if err != nil {
-		writeServiceError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, state.Raw)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (a *API) websocket(w http.ResponseWriter, r *http.Request) {
@@ -221,23 +170,6 @@ func (a *API) originAllowed(r *http.Request) bool {
 	}
 	_, allowed := a.allowedOrigins[origin]
 	return allowed
-}
-
-func decodeJSON(w http.ResponseWriter, r *http.Request, destination any) error {
-	defer r.Body.Close()
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(destination); err != nil {
-		return err
-	}
-	var extra any
-	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
-		if err == nil {
-			return errors.New("multiple JSON values")
-		}
-		return err
-	}
-	return nil
 }
 
 func writeServiceError(w http.ResponseWriter, err error) {

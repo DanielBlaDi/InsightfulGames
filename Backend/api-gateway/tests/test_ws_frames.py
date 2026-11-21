@@ -461,13 +461,14 @@ def test_game_logic_down_at_connect_is_closed_with_1011(live):
     assert e.value.code == 1011
 
 
-def test_multiplayer_websocket_is_still_a_plain_proxy(live, monkeypatch):
+def test_multiplayer_forwards_only_the_ping_to_the_hub(live, monkeypatch):
     client, world, hub = live
     monkeypatch.setitem(main.UPSTREAMS, "multiplayer", hub.url)
     mid = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
     with client.websocket_connect(f"/ws/matches/{mid}", headers={"origin": "http://localhost"}) as ws:
         assert ws.receive_json()["type"] == "state"
-        ws.send_text(frame(type="move", uci="e2e4"))
+        ws.send_text(frame(type="ping"))
         assert wait_for(lambda: hub.received)
-    assert hub.received == [frame(type="move", uci="e2e4")]  # multiplayer reenvía los frames tal cual
-    assert world.calls == []
+        ws.send_text(frame(type="hacer_trampa"))
+        assert ws.receive_json() == ws_session.error("VALIDATION_ERROR", "Unknown message type")
+    assert hub.received == [frame(type="ping")]  # el ping llega al hub; las demás acciones las atiende el gateway

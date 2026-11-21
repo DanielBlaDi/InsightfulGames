@@ -40,7 +40,7 @@ func TestClientReturnsContractError(t *testing.T) {
 	defer server.Close()
 
 	client := NewClient(server.URL, time.Second)
-	_, err := client.Join(context.Background(), "33333333-3333-4333-8333-333333333333", "22222222-2222-4222-8222-222222222222")
+	_, err := client.Abandon(context.Background(), "33333333-3333-4333-8333-333333333333", "white")
 	apiError, ok := err.(*APIError)
 	if !ok {
 		t.Fatalf("error = %T %v, want *APIError", err, err)

@@ -24,7 +24,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from orchestration import account, analyses, single_player, upstream, ws_session
+from orchestration import account, analyses, multiplayer, single_player, upstream, ws_session
 from orchestration.context import BackgroundTasks, Ctx, GameLocks
 from orchestration.errors import FlowError
 from orchestration.errors import (
@@ -422,35 +422,40 @@ async def game_visibility(game_id: str, request: Request, user_id: str = Depends
 
 @app.post("/matches")
 async def create_match(request: Request, user_id: str = Depends(current_user)):
-    return await _public(request, "POST", "multiplayer", "/matches", user_id)
+    invitation, replayed = await multiplayer.create(
+        _ctx(request), user_id, request.headers.get("idempotency-key", ""), await request.body()
+    )
+    headers = {"Idempotency-Replayed": "true"} if replayed else None
+    return JSONResponse(status_code=201, content=invitation, headers=headers)
 
 
 @app.post("/matches/{match_id}/join")
 async def join_match(match_id: str, request: Request, user_id: str = Depends(current_user)):
     if not UUID_RE.match(match_id):
         return _not_found("MATCH_NOT_FOUND")
-    return await _public(request, "POST", "multiplayer", f"/matches/{match_id}/join", user_id)
+    return JSONResponse(content=await multiplayer.join(_ctx(request), user_id, match_id))
 
 
 @app.get("/matches/{match_id}")
 async def get_match(match_id: str, request: Request, user_id: str = Depends(current_user)):
     if not UUID_RE.match(match_id):
         return _not_found("MATCH_NOT_FOUND")
-    return await _public(request, "GET", "multiplayer", f"/matches/{match_id}", user_id)
+    return JSONResponse(content=await multiplayer.get(_ctx(request), user_id, match_id))
 
 
 @app.post("/matches/{match_id}/resign")
 async def resign_match(match_id: str, request: Request, user_id: str = Depends(current_user)):
     if not UUID_RE.match(match_id):
         return _not_found("MATCH_NOT_FOUND")
-    return await _public(request, "POST", "multiplayer", f"/matches/{match_id}/resign", user_id)
+    return JSONResponse(content=await multiplayer.resign(_ctx(request), user_id, match_id))
 
 
 @app.patch("/matches/{match_id}/visibility")
 async def match_visibility(match_id: str, request: Request, user_id: str = Depends(current_user)):
     if not UUID_RE.match(match_id):
         return _not_found("MATCH_NOT_FOUND")
-    return await _public(request, "PATCH", "multiplayer", f"/matches/{match_id}/visibility", user_id)
+    state = await multiplayer.change_visibility(_ctx(request), user_id, match_id, await request.body())
+    return JSONResponse(content=state)
 
 
 # --------------------------------------------------------------------------- #
@@ -642,14 +647,17 @@ async def _proxy_websocket(
                 # Si le toca al bot (p. ej. Botcito estaba caído), se retoma en segundo plano
                 if single_player.is_bot_turn(live):
                     ctx.tasks.spawn(single_player.resume_bot_if_needed(ctx, live))
+            elif service == "multiplayer":
+                # Jugadas, rendición y tablas las atiende el gateway; solo el ping llega al hub
+                queue, _ = ws_session.start_frame_worker(ctx, user_id, resource_id, send_json, match=True)
 
             async def client_to_upstream():
                 while True:
                     text = await client_ws.receive_text()
-                    if queue is not None:
-                        queue.put_nowait(text)  # lo atiende el gateway, no el hub
+                    if queue is None or (service == "multiplayer" and ws_session.is_ping(text)):
+                        await upstream.send(text)  # el hub atiende el ping (y, sin cola, todo el tráfico)
                     else:
-                        await upstream.send(text)
+                        queue.put_nowait(text)  # lo atiende el gateway, no el hub
 
             async def upstream_to_client():
                 async for message in upstream:
