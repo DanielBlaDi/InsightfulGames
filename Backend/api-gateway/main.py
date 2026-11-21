@@ -23,7 +23,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from orchestration import account, analyses, upstream
+from orchestration import account, analyses, single_player, upstream
+from orchestration.context import Ctx, GameLocks
 from orchestration.errors import (
     NOT_FOUND_CODE,
     GatewayError,
@@ -106,6 +107,7 @@ def _validate_config() -> None:
 async def lifespan(app: FastAPI):
     _validate_config()
     app.state.client = httpx.AsyncClient(timeout=HTTP_TIMEOUT, follow_redirects=False)
+    app.state.locks = GameLocks()
     logger.info("Gateway web listo; orígenes WebSocket: %s", sorted(WS_ALLOWED_ORIGINS))
     try:
         yield
@@ -291,6 +293,14 @@ async def _public(
     )
 
 
+def _ctx(request: Request) -> Ctx:
+    """Contexto de los flows con estado (juego en vivo)."""
+    state = request.app.state
+    if getattr(state, "locks", None) is None:  # p. ej. tests que sustituyen app.state.client
+        state.locks = GameLocks()
+    return Ctx(client=state.client, upstreams=UPSTREAMS, locks=state.locks, timeout=HTTP_TIMEOUT)
+
+
 def _not_found(code: str) -> JSONResponse:
     return error_response(404, code, "La partida no existe o no es visible")
 
@@ -353,7 +363,8 @@ async def delete_account(request: Request, user_id: str = Depends(current_user))
 
 @app.post("/games")
 async def create_game(request: Request, user_id: str = Depends(current_user)):
-    return await _public(request, "POST", "single-player", "/games", user_id)
+    state = await single_player.create(_ctx(request), user_id, await request.body())
+    return JSONResponse(status_code=201, content=state)
 
 
 @app.get("/games")
@@ -376,21 +387,23 @@ async def list_games(
 async def get_game(game_id: str, request: Request, user_id: str = Depends(current_user)):
     if not UUID_RE.match(game_id):
         return _not_found("GAME_NOT_FOUND")
-    return await _public(request, "GET", "single-player", f"/games/{game_id}", user_id)
+    return JSONResponse(content=await single_player.get_game(_ctx(request), user_id, game_id))
 
 
 @app.post("/games/{game_id}/resign")
 async def resign_game(game_id: str, request: Request, user_id: str = Depends(current_user)):
     if not UUID_RE.match(game_id):
         return _not_found("GAME_NOT_FOUND")
-    return await _public(request, "POST", "single-player", f"/games/{game_id}/resign", user_id)
+    state = await single_player.resign(_ctx(request), user_id, game_id, await request.body())
+    return JSONResponse(content=state)
 
 
 @app.patch("/games/{game_id}/visibility")
 async def game_visibility(game_id: str, request: Request, user_id: str = Depends(current_user)):
     if not UUID_RE.match(game_id):
         return _not_found("GAME_NOT_FOUND")
-    return await _public(request, "PATCH", "single-player", f"/games/{game_id}/visibility", user_id)
+    state = await single_player.change_visibility(_ctx(request), user_id, game_id, await request.body())
+    return JSONResponse(content=state)
 
 
 # --------------------------------------------------------------------------- #

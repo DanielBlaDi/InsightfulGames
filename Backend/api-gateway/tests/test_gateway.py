@@ -17,6 +17,9 @@ def handler(req: httpx.Request) -> httpx.Response:
     if req.url.path == "/internal/auth/login":
         return httpx.Response(200, json={"accessToken": TOKEN, "expiresIn": 3600,
                                          "user": {"userId": UID, "username": "ana"}})
+    if req.url.path == f"/internal/logic/games/{GID}":
+        return httpx.Response(200, json={"gameId": GID, "mode": "local", "visibility": "private",
+                                         "participants": [{"userId": UID, "color": "white"}]})
     return httpx.Response(200, json={"ok": True})
 
 
@@ -41,8 +44,8 @@ def test_requires_session(client):
 
 def test_cookie_and_bearer_work_and_client_user_id_is_ignored(client):
     r = client.get(f"/games/{GID}", headers={"Authorization": f"Bearer {TOKEN}", "X-User-Id": "evil"})
-    assert r.status_code == 200
-    assert calls[-1].headers["x-user-id"] == UID
+    assert r.status_code == 200  # la visibilidad la decide el sub del JWT, no la cabecera del cliente
+    assert all("x-user-id" not in c.headers for c in calls)  # Game Logic no recibe X-User-Id
     client.cookies.set("session", TOKEN)
     assert client.get("/stats/me").status_code == 200
     assert calls[-1].url.path == f"/internal/profile/users/{UID}/stats"

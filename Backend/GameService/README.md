@@ -4,10 +4,17 @@ Java 21 + Spring Boot 3.3.5 (Maven). Puerto `8083`. Nombre en Compose: `single-p
 La carpeta conserva el nombre histórico `GameService`.
 
 Coordina las partidas de un solo usuario: `local` (dos personas en la misma pantalla) y `vs_bot`
-(contra el motor). Autoriza cada acción, mantiene la sesión WebSocket y gestiona el turno del bot.
-No tiene base propia: el estado vive en Game Logic, que es la única fuente de verdad.
+(contra el motor). Es un **hub de sesiones**: mantiene las conexiones WebSocket y envía a los clientes
+lo que cambia. No tiene base propia: el estado vive en Game Logic, que es la única fuente de verdad.
 
-Las llamadas a otros servicios se hacen directamente, sin pasar por ningún gateway:
+**Las operaciones REST (crear, leer, rendirse, cambiar la visibilidad) las orquesta el gateway web**
+(`Backend/api-gateway`, módulo `orchestration/single_player.py`): llama a Game Logic y a Botcito y, tras
+cada cambio, avisa a este hub con `POST /internal/single-player/games/{id}/publish`. Este servicio ya no
+expone esas rutas REST. Los frames WebSocket (jugadas y rendición) siguen llegando aquí y se moverán
+también al gateway en una fase posterior.
+
+Mientras los frames WebSocket y el consumidor de `game.finished` sigan en este servicio, llama
+directamente (sin gateway) a:
 
 | Destino | Ruta |
 |---|---|
@@ -23,28 +30,27 @@ Las llamadas a otros servicios se hacen directamente, sin pasar por ningún gate
 | `BOTCITO_URL` | `http://localhost:8086` | Botcito-juego |
 | `RABBITMQ_URL` | `amqp://guest:guest@localhost:5672` | Consumo de `game.finished` |
 
-## Rutas REST
-
-Todas reciben `X-User-Id`, que pone el gateway. Sin esa cabecera responden `401 UNAUTHORIZED`.
+## Rutas
 
 | Ruta | Cuerpo | Respuesta | Quién |
 |---|---|---|---|
-| `POST /internal/single-player/games` | `{ mode, botLevel, playerColor, timeControl, visibility }` | `201 GameState` | Usuario autenticado |
-| `GET /internal/single-player/games/{id}` | — | `200 GameState` | Participante, o cualquiera si es `shared` |
-| `POST /internal/single-player/games/{id}/resign` | `{ side }` solo en local | `200 GameState` | Participante |
-| `PATCH /internal/single-player/games/{id}/visibility` | `{ visibility, expectedVersion }` | `200 GameState` | Participante |
+| `POST /internal/single-player/games/{id}/publish` | `{ state?, lastMove?, gameOver?, signal? }` | `204` | El gateway |
 | `GET /health` | — | `200 { "status": "ok" }` | — |
 
-Reglas de creación:
+`publish` envía a los clientes conectados a esa partida, sin consultar a nadie:
 
-- `mode`: `local` o `vs_bot`.
-- `botLevel` (1 a 20) y `playerColor` (`white` o `black`): obligatorios solo en `vs_bot`; en local se ignoran.
-- `timeControl`: `null` o `{ "minutes": 10 }`.
-- `visibility`: `private` (por defecto) o `shared`.
-- El cuerpo que recibe Game Logic lo arma este servicio: en local, dos participantes con el mismo
-  `userId` (uno por color); en vs_bot, uno solo, el humano.
-- Si el humano juega con negras, el bot abre antes de responder. Si el bot falla, la partida se devuelve igual.
+- `state`: GameState vigente (con `version`, obligatoria y del mismo `gameId` que la ruta). Se envía como
+  `{ type: "state" }` y, si la partida terminó, `game_over` justo después. `gameOver: false` omite el
+  `game_over` (el gateway lo usa al cambiar la visibilidad de una partida terminada).
+- `lastMove`: última jugada (uci), se omite si no hubo jugada.
+- `signal`: aviso sin cambio de estado. `{ type: "bot_thinking" }` o `{ type: "error", code, message }`.
+- **Guarda de orden:** un `state` con `version` menor que la última enviada a esa partida se ignora (un
+  aviso atrasado no hace retroceder al cliente); la misma versión se acepta (reenvío del estado vigente).
+  Sin sesiones abiertas no hace nada. `400 VALIDATION_ERROR` si falta `state` y `signal`, si el `gameId`
+  no coincide, si falta `version` o si el `signal` es inválido.
 
+Las reglas de creación (modo, `botLevel`, `playerColor`, `timeControl`, `visibility`, participantes por
+modo) y de visibilidad de la partida (participante, o `shared` para leer) las aplica ahora el gateway.
 Una partida multijugador, o una en la que el usuario no participa, responde `404 GAME_NOT_FOUND`.
 
 ## WebSocket
@@ -100,8 +106,8 @@ mvn test
 
 | Clase | Qué cubre |
 |---|---|
-| `SinglePlayerServiceTest` | Cuerpo de creación por modo, participantes, turno, bot, `expectedVersion`, rendición, visibilidad y `game.finished`, con dependencias simuladas |
-| `SinglePlayerIntegrationTest` | El servicio real, REST y WebSocket, contra un gateway interno falso que hace de Game Logic y Botcito. Verifica rutas, cuerpos, versiones, errores, cierres y la notificación de fin |
+| `SinglePlayerServiceTest` | `publish` (orden, guarda de versión, señales, validación), turno, bot, `expectedVersion`, rendición y `game.finished` por WebSocket, con dependencias simuladas |
+| `SinglePlayerIntegrationTest` | El servicio real (`publish` y WebSocket) contra un Game Logic y un Botcito falsos. Verifica que las rutas REST ya no existen, `publish` sin consultar a nadie, la guarda de versión, versiones, errores, cierres y la notificación de fin |
 | `GameStateContractTest` | El GameState del contrato pasa sin perder campos, y los mensajes tienen la forma exacta |
 | `GameFinishedListenerTest` | Filtro por modo, DLQ y reintentos |
 
@@ -115,10 +121,13 @@ GAME_LOGIC_URL=http://localhost:8082 python tools/fake_botcito.py     # puerto 8
 GAME_LOGIC_URL=http://localhost:8082 BOTCITO_URL=http://localhost:8000 mvn spring-boot:run
 ```
 
+Las partidas se crean ahora por el gateway web (`POST /games`); aquí se puede crear una directamente en
+Game Logic y conectarse por WebSocket:
+
 ```bash
 U=7d1f9d5e-3c2b-4f0e-9a41-0b5f6d7a8c90
-curl -s -X POST localhost:8083/internal/single-player/games -H "X-User-Id: $U" \
-     -H 'Content-Type: application/json' -d '{"mode":"local"}'
+curl -s -X POST localhost:8082/internal/logic/games -H 'Content-Type: application/json' \
+     -d "{\"mode\":\"local\",\"visibility\":\"private\",\"timeControl\":null,\"botLevel\":null,\"participants\":[{\"userId\":\"$U\",\"color\":\"white\"},{\"userId\":\"$U\",\"color\":\"black\"}]}"
 
 # npm i -g wscat
 wscat -c "ws://localhost:8083/internal/single-player/ws/games/<gameId>" -H "X-User-Id: $U"
@@ -126,7 +135,8 @@ wscat -c "ws://localhost:8083/internal/single-player/ws/games/<gameId>" -H "X-Us
 > {"type":"move","uci":"e7e5","expectedVersion":1}
 > {"type":"move","uci":"g2g4","expectedVersion":2}
 > {"type":"move","uci":"d8h4","expectedVersion":3}   # llega state y luego game_over
-```
 
-Contra el bot: `-d '{"mode":"vs_bot","botLevel":5,"playerColor":"black"}'`. La respuesta ya trae la
-primera jugada del bot.
+# Aviso del gateway (lo que llega al wscat de arriba)
+curl -i -X POST localhost:8083/internal/single-player/games/<gameId>/publish \
+     -H 'Content-Type: application/json' -d '{"signal":{"type":"bot_thinking"}}'
+```

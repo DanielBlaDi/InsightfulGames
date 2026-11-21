@@ -21,6 +21,8 @@ public class GameChannels {
 
     private final ObjectMapper mapper;
     private final ConcurrentHashMap<String, Set<WebSocketSession>> sessions = new ConcurrentHashMap<>();
+    /** Última version enviada por partida, solo mientras haya sesiones abiertas (no crece sin límite). */
+    private final ConcurrentHashMap<String, Integer> versions = new ConcurrentHashMap<>();
 
     public GameChannels(ObjectMapper mapper) {
         this.mapper = mapper;
@@ -36,8 +38,36 @@ public class GameChannels {
             set.remove(session);
             if (set.isEmpty()) {
                 sessions.remove(gameId, set);
+                versions.remove(gameId);
             }
         }
+    }
+
+    /**
+     * Guarda de orden: registra {@code version} como la última enviada y devuelve true, salvo que ya se
+     * haya enviado una posterior (un publish atrasado no debe hacer retroceder al cliente). Una misma
+     * versión se acepta: reenviar el state vigente (resync) es válido. Sin sesiones abiertas no hay nada
+     * que ordenar y devuelve false.
+     */
+    public boolean tryAdvance(String gameId, int version) {
+        if (!hasOpenSessions(gameId)) {
+            versions.remove(gameId);
+            return false;
+        }
+        boolean[] accepted = {false};
+        versions.compute(gameId, (id, last) -> {
+            if (last != null && version < last) {
+                return last;
+            }
+            accepted[0] = true;
+            return version;
+        });
+        return accepted[0];
+    }
+
+    /** La partida terminó: se olvida su última versión. */
+    public void forget(String gameId) {
+        versions.remove(gameId);
     }
 
     /** true si hay al menos una sesión abierta en la partida. */

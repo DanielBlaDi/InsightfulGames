@@ -2,14 +2,12 @@ package com.chess.gameservice.service;
 
 import com.chess.gameservice.client.BotcitoClient;
 import com.chess.gameservice.client.GameLogicClient;
-import com.chess.gameservice.client.GameLogicClient.CreateBody;
 import com.chess.gameservice.error.ApiException;
 import com.chess.gameservice.model.BestMove;
-import com.chess.gameservice.model.CreateGameRequest;
 import com.chess.gameservice.model.GameState;
 import com.chess.gameservice.model.MoveEntry;
 import com.chess.gameservice.model.Participant;
-import com.chess.gameservice.model.TimeControl;
+import com.chess.gameservice.model.PublishRequest;
 import com.chess.gameservice.websocket.GameChannels;
 import com.chess.gameservice.websocket.WsMessage;
 import org.slf4j.Logger;
@@ -23,9 +21,11 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Casos de uso de Single Player (contrato, sección 12). No guarda el estado de las partidas:
- * Game Logic es la única fuente de verdad. Aquí se decide quién participa y de quién es el turno
- * (a partir de participants), se pide la jugada al bot y se avisa a los clientes conectados.
+ * Hub de sesiones de Single Player (contrato, sección 12). No guarda el estado de las partidas: Game
+ * Logic es la única fuente de verdad. Las operaciones REST (crear, leer, rendirse, cambiar la
+ * visibilidad) las orquesta el gateway, que avisa aquí con {@link #applyPublish}. Mientras los frames
+ * WebSocket sigan llegando a este servicio (se moverán al gateway), también decide de quién es el turno
+ * y pide la jugada al bot.
  */
 @Service
 public class SinglePlayerService {
@@ -34,8 +34,6 @@ public class SinglePlayerService {
 
     public static final String LOCAL = "local";
     public static final String VS_BOT = "vs_bot";
-    private static final String PRIVATE = "private";
-    private static final String SHARED = "shared";
 
     private final GameLogicClient logic;
     private final BotcitoClient bot;
@@ -51,63 +49,57 @@ public class SinglePlayerService {
         this.channels = channels;
     }
 
-    // ---------------------------------------------------------------- REST
+    // ------------------------------------------------------------ publish (gateway)
 
     /**
-     * Arma el cuerpo de Game Logic según el modo: en local dos participantes con el mismo userId,
-     * uno por color; en vs_bot uno solo, el humano. Si el bot abre y falla, la partida se devuelve igual.
+     * El gateway operó en Game Logic y avisa aquí. Se envía a los clientes conectados sin consultar a
+     * nadie. Un state con una version menor que la última enviada se ignora: un aviso atrasado no debe
+     * hacer retroceder al cliente (el expectedVersion de Game Logic sigue siendo la guarda real).
      */
-    public GameState createGame(String userId, CreateGameRequest request) {
-        if (request == null) {
-            throw ApiException.validation("Falta el cuerpo de la petición");
+    public void applyPublish(String gameId, PublishRequest request) {
+        if (request == null || (request.state() == null && request.signal() == null)) {
+            throw ApiException.validation("Falta state o signal");
         }
-        String mode = request.mode();
-        Integer botLevel = null;
-        List<Participant> participants;
 
-        if (VS_BOT.equals(mode)) {
-            botLevel = request.botLevel();
-            if (botLevel == null || botLevel < 1 || botLevel > 20) {
-                throw ApiException.validation("botLevel debe ser un entero de 1 a 20");
+        GameState state = request.state();
+        if (state != null) {
+            if (!gameId.equals(state.gameId())) {
+                throw ApiException.validation("state.gameId no coincide con la partida de la ruta");
             }
-            String color = request.playerColor();
-            if (!isColor(color)) {
-                throw ApiException.validation("playerColor debe ser \"white\" o \"black\"");
-            }
-            participants = List.of(new Participant(userId, color));
-        } else if (LOCAL.equals(mode)) {
-            participants = List.of(new Participant(userId, "white"), new Participant(userId, "black"));
-        } else {
-            throw ApiException.validation("mode debe ser \"local\" o \"vs_bot\"");
-        }
-
-        TimeControl timeControl = request.timeControl();
-        if (timeControl != null && !Integer.valueOf(TimeControl.ALLOWED_MINUTES).equals(timeControl.minutes())) {
-            throw ApiException.validation("timeControl debe ser null o { \"minutes\": 10 }");
-        }
-        String visibility = request.visibility() == null ? PRIVATE : request.visibility();
-        if (!isVisibility(visibility)) {
-            throw ApiException.validation("visibility debe ser \"private\" o \"shared\"");
-        }
-
-        GameState state = logic.createGame(new CreateBody(mode, timeControl, visibility, botLevel, participants));
-
-        // Si el jugador eligió negras, el bot abre la partida antes de responder.
-        if (isBotTurn(state)) {
-            synchronized (lockFor(state.gameId())) {
-                state = tryBotTurn(state);
+            if (state.version() == null) {
+                throw ApiException.validation("state.version es obligatorio");
             }
         }
-        return state;
-    }
-
-    /** Lectura REST: participante o partida shared. */
-    public GameState getGame(String userId, String gameId) {
-        GameState state = singlePlayerGame(gameId);
-        if (!isParticipant(state, userId) && !SHARED.equals(state.visibility())) {
-            throw ApiException.gameNotFound();
+        PublishRequest.Signal signal = request.signal();
+        if (signal != null) {
+            if (!"bot_thinking".equals(signal.type()) && !"error".equals(signal.type())) {
+                throw ApiException.validation("signal.type debe ser bot_thinking o error");
+            }
+            if ("error".equals(signal.type()) && (isBlank(signal.code()) || isBlank(signal.message()))) {
+                throw ApiException.validation("signal de tipo error necesita code y message");
+            }
         }
-        return state;
+
+        if (state != null) {
+            if (!channels.tryAdvance(gameId, state.version())) {
+                log.debug("publish de la partida {} ignorado: sin sesiones o version {} atrasada", gameId, state.version());
+                return;
+            }
+            boolean announceGameOver = request.gameOver() == null || request.gameOver();
+            channels.broadcast(gameId, WsMessage.state(state, request.lastMove()));
+            if (isFinished(state)) {
+                if (announceGameOver) {
+                    channels.broadcast(gameId, WsMessage.gameOver(state.result(), state.endReason()));
+                }
+                channels.forget(gameId);
+                locks.remove(gameId);
+            }
+        }
+        if (signal != null) {
+            channels.broadcast(gameId, "bot_thinking".equals(signal.type())
+                    ? WsMessage.botThinking()
+                    : WsMessage.error(signal.code(), signal.message()));
+        }
     }
 
     /** Partida en la que el usuario participa (acciones y WebSocket); si no, GAME_NOT_FOUND. */
@@ -136,23 +128,6 @@ public class SinglePlayerService {
 
             GameState next = logic.resign(gameId, side);
             publish(next, null);
-            return next;
-        }
-    }
-
-    /** Cambia la visibilidad. Una versión vieja responde 409 VERSION_CONFLICT desde Game Logic. */
-    public GameState changeVisibility(String userId, String gameId, String visibility, Integer expectedVersion) {
-        if (!isVisibility(visibility)) {
-            throw ApiException.validation("visibility debe ser \"private\" o \"shared\"");
-        }
-        if (expectedVersion == null) {
-            throw ApiException.validation("Falta el campo expectedVersion");
-        }
-        synchronized (lockFor(gameId)) {
-            getParticipantGame(userId, gameId);
-            GameState next = logic.changeVisibility(gameId, visibility, expectedVersion);
-            // La versión subió: las sesiones abiertas necesitan el state nuevo para seguir jugando.
-            channels.broadcast(gameId, WsMessage.state(next, null));
             return next;
         }
     }
@@ -270,9 +245,13 @@ public class SinglePlayerService {
 
     /** Envía el state completo y, si la partida terminó, game_over justo después. */
     private void publish(GameState state, String lastMove) {
+        if (state.version() != null) {
+            channels.tryAdvance(state.gameId(), state.version()); // mantiene al día la guarda de orden
+        }
         channels.broadcast(state.gameId(), WsMessage.state(state, lastMove));
         if (isFinished(state)) {
             channels.broadcast(state.gameId(), WsMessage.gameOver(state.result(), state.endReason()));
+            channels.forget(state.gameId());
             locks.remove(state.gameId());
         }
     }
@@ -321,8 +300,8 @@ public class SinglePlayerService {
         return "white".equals(value) || "black".equals(value);
     }
 
-    private static boolean isVisibility(String value) {
-        return PRIVATE.equals(value) || SHARED.equals(value);
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     private static boolean isBotGame(GameState state) {

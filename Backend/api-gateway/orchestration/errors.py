@@ -25,6 +25,34 @@ class FlowError(GatewayError):
     """Error de un flow de orquestación. Se traduce igual que cualquier GatewayError."""
 
 
+# Errores 5xx del catálogo que pasan con su código y estado reales (contrato, 4.5)
+CATALOG_5XX: dict[str, int] = {
+    "SERVICES_UNAVAILABLE": 503,
+    "ENGINE_BUSY": 503,
+    "ENGINE_TIMEOUT": 504,
+}
+
+
+def upstream_flow_error(response: httpx.Response, name: str) -> FlowError:
+    """Convierte una respuesta de error de Game Logic o Botcito en un FlowError.
+
+    Los 4xx conservan estado y código (ya vienen con la forma del contrato). Los 5xx conservan
+    ENGINE_BUSY (503), ENGINE_TIMEOUT (504) y SERVICES_UNAVAILABLE (503); cualquier otro 5xx pasa a
+    503 SERVICES_UNAVAILABLE.
+    """
+    payload = payload_of(response)
+    code = message = None
+    if is_contract_error(payload):
+        code, message = payload["error"]["code"], payload["error"]["message"]
+
+    status = response.status_code
+    if status >= 500 or status < 400:
+        if code in CATALOG_5XX:
+            return FlowError(CATALOG_5XX[code], code, message or f"{name} no está disponible")
+        return FlowError(503, "SERVICES_UNAVAILABLE", f"{name} respondió con error {status}")
+    return FlowError(status, code or "UPSTREAM_ERROR", message or f"{name} respondió {status}")
+
+
 def deletion_unavailable(name: str) -> FlowError:
     """503 del borrado de cuenta: nombra el servicio que no respondió (el usuario puede reintentar)."""
     return FlowError(
