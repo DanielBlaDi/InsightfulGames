@@ -111,7 +111,7 @@ public class MatchController{
             throw RequestNotValidException.notValid("El parámetro limit debe ser un valor entre 1 y 20 inclusivos");
         }
 
-        List<GameSummary> matchList = repository.findByParticipantsUserIdOrderByCreatedAtDesc(userId).stream().map(assembler::toSummary).toList();
+        List<GameSummary> matchList = repository.findByParticipantsUserIdOrderByCreatedAtDesc(userId).stream().map(match -> assembler.toSummary(match, userId)).toList();
 
         GamesPage result;
         int decodedCursor;

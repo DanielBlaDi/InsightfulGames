@@ -50,6 +50,9 @@ fun Throwable.userMessage(): String {
         "PROFILE_NOT_FOUND" -> "No disponible en este momento."
         "NETWORK" -> "Sin conexión con el servidor. Revisa tu red."
         "GAME_NOT_FOUND", "MATCH_NOT_FOUND" -> "La partida no existe o ya no es visible."
+        "VERSION_CONFLICT" -> "La partida cambió mientras jugabas; se actualizó el tablero."
+        "GAME_FINISHED" -> "La partida ya terminó."
+        "CLOCK_EXPIRED" -> "Se acabó el tiempo."
         else -> message ?: "Ocurrió un error inesperado."
     }
 }

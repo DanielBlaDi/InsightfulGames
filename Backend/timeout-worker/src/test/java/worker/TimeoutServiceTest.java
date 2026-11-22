@@ -16,27 +16,27 @@ import org.junit.jupiter.api.Test;
 
 import worker.TimeoutService.Outcome;
 
-/** Ciclo de cierre contra un gateway interno falso, con un RestClient real. */
+/** Ciclo de cierre contra un Game Logic falso, con un RestClient real. */
 class TimeoutServiceTest{
 
     static final String A = "aaaaaaaa-0000-4000-8000-000000000001";
     static final String B = "bbbbbbbb-0000-4000-8000-000000000002";
     static final String C = "cccccccc-0000-4000-8000-000000000003";
 
-    private FakeGateway gateway;
+    private FakeGameLogic logic;
     private TimeoutService service;
 
     @BeforeEach
     void setUp() throws Exception{
-        gateway = new FakeGateway();
-        WorkerProperties properties = new WorkerProperties(gateway.url() + "/", 1, 25);
-        service = new TimeoutService(RestClientConfig.create(properties.gatewayInternalUrl()), properties,
+        logic = new FakeGameLogic();
+        WorkerProperties properties = new WorkerProperties(logic.url() + "/", 1, 25);
+        service = new TimeoutService(RestClientConfig.create(properties.gameLogicUrl()), properties,
             new WorkerHealth(properties));
     }
 
     @AfterEach
     void tearDown(){
-        gateway.close();
+        logic.close();
     }
 
     private static String item(String id, int version, String reason){
@@ -44,26 +44,26 @@ class TimeoutServiceTest{
     }
 
     @Test
-    void queriesExpiredGamesWithTheConfiguredLimitThroughTheGateway(){
+    void queriesExpiredGamesWithTheConfiguredLimitFromGameLogic(){
         service.runCycle();
 
-        FakeGateway.Request get = gateway.requests.get(0);
+        FakeGameLogic.Request get = logic.requests.get(0);
         assertEquals("GET", get.method());
         assertEquals("/internal/logic/games/expired", get.path());
         assertEquals("limit=25", get.query());
-        assertTrue(gateway.posts().isEmpty());
+        assertTrue(logic.posts().isEmpty());
     }
 
     @Test
     void clockGamesAreTimedOutAndWaitingGamesExpiredWithExpectedVersion(){
         // Vocabulario del contrato (clock, waiting) y el que hoy devuelve Game Logic (timeout, expired)
-        gateway.expired = new FakeGateway.Reply(200, "[" + item(A, 7, "clock") + "," + item(B, 3, "waiting") + ","
+        logic.expired = new FakeGameLogic.Reply(200, "[" + item(A, 7, "clock") + "," + item(B, 3, "waiting") + ","
             + item(C, 9, "timeout") + "," + item("dddddddd-0000-4000-8000-000000000004", 1, "expired") + "]");
 
         Map<Outcome, Integer> result = service.runCycle();
 
         assertEquals(Map.of(Outcome.CLOSED, 4), result);
-        List<FakeGateway.Request> posts = gateway.posts();
+        List<FakeGameLogic.Request> posts = logic.posts();
         assertEquals("/internal/logic/games/" + A + "/timeout", posts.get(0).path());
         assertEquals("{\"expectedVersion\":7}", posts.get(0).body().replace(" ", ""));
         assertTrue(posts.get(0).contentType().startsWith("application/json"));
@@ -75,53 +75,53 @@ class TimeoutServiceTest{
 
     @Test
     void expectedErrorsAreIgnoredAndOthersDoNotStopTheBatch(){
-        gateway.expired = new FakeGateway.Reply(200, "[" + item(A, 1, "clock") + "," + item(B, 2, "waiting") + ","
+        logic.expired = new FakeGameLogic.Reply(200, "[" + item(A, 1, "clock") + "," + item(B, 2, "waiting") + ","
             + item(C, 3, "clock") + "," + item("dddddddd-0000-4000-8000-000000000004", 4, "clock") + ","
             + item("eeeeeeee-0000-4000-8000-000000000005", 5, "waiting") + "]");
-        gateway.replyTo("/internal/logic/games/" + A + "/timeout", 409, "VERSION_CONFLICT");
-        gateway.replyTo("/internal/logic/games/" + B + "/expire", 422, "WAITING_NOT_EXPIRED");
-        gateway.replyTo("/internal/logic/games/" + C + "/timeout", 503, "SERVICES_UNAVAILABLE");
-        gateway.replyTo("/internal/logic/games/dddddddd-0000-4000-8000-000000000004/timeout", 404, "GAME_NOT_FOUND");
+        logic.replyTo("/internal/logic/games/" + A + "/timeout", 409, "VERSION_CONFLICT");
+        logic.replyTo("/internal/logic/games/" + B + "/expire", 422, "WAITING_NOT_EXPIRED");
+        logic.replyTo("/internal/logic/games/" + C + "/timeout", 503, "SERVICES_UNAVAILABLE");
+        logic.replyTo("/internal/logic/games/dddddddd-0000-4000-8000-000000000004/timeout", 404, "GAME_NOT_FOUND");
 
         Map<Outcome, Integer> result = service.runCycle();
 
         assertEquals(Map.of(Outcome.IGNORED, 2, Outcome.FAILED, 1, Outcome.REJECTED, 1, Outcome.CLOSED, 1), result);
-        assertEquals(5, gateway.posts().size());
+        assertEquals(5, logic.posts().size());
     }
 
     @Test
     void allContractIgnoredCodesAreIgnored(){
         for(String code : TimeoutService.IGNORED_CODES){
-            gateway.replyTo("/internal/logic/games/" + A + "/timeout", code.equals("VERSION_CONFLICT") ? 409 : 422, code);
+            logic.replyTo("/internal/logic/games/" + A + "/timeout", code.equals("VERSION_CONFLICT") ? 409 : 422, code);
             assertEquals(Outcome.IGNORED, service.process(new ExpiredQueryResponse(A, 1, "clock")), code);
         }
     }
 
     @Test
     void invalidItemsAndUnknownReasonsAreSkipped(){
-        gateway.expired = new FakeGateway.Reply(200, "[{\"gameId\":null,\"version\":1,\"reason\":\"clock\"},"
+        logic.expired = new FakeGameLogic.Reply(200, "[{\"gameId\":null,\"version\":1,\"reason\":\"clock\"},"
             + "{\"gameId\":\"" + A + "\",\"version\":null,\"reason\":\"clock\"}," + item(B, 1, "draw") + ","
             + item(C, 2, "clock") + "]");
 
         Map<Outcome, Integer> result = service.runCycle();
 
         assertEquals(Map.of(Outcome.SKIPPED, 3, Outcome.CLOSED, 1), result);
-        assertEquals(1, gateway.posts().size());
+        assertEquals(1, logic.posts().size());
     }
 
     @Test
     void failingQueryEndsTheCycleWithoutPosts(){
-        gateway.expired = new FakeGateway.Reply(503, "{\"error\":{\"code\":\"SERVICES_UNAVAILABLE\",\"message\":\"m\"}}");
+        logic.expired = new FakeGameLogic.Reply(503, "{\"error\":{\"code\":\"SERVICES_UNAVAILABLE\",\"message\":\"m\"}}");
         assertEquals(Map.of(), service.runCycle());
 
-        gateway.expired = new FakeGateway.Reply(400, "{\"error\":{\"code\":\"VALIDATION_ERROR\",\"message\":\"m\"}}");
+        logic.expired = new FakeGameLogic.Reply(400, "{\"error\":{\"code\":\"VALIDATION_ERROR\",\"message\":\"m\"}}");
         assertEquals(Map.of(), service.runCycle());
-        assertTrue(gateway.posts().isEmpty());
+        assertTrue(logic.posts().isEmpty());
     }
 
     @Test
-    void unreachableGatewayDoesNotThrow(){
-        gateway.close();
+    void unreachableGameLogicDoesNotThrow(){
+        logic.close();
         assertEquals(Map.of(), service.runCycle());
         service.periodicallyTimeoutAndExpireMatches(); // el método programado tampoco lanza
     }

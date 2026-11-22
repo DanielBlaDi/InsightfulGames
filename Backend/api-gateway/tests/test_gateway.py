@@ -17,6 +17,9 @@ def handler(req: httpx.Request) -> httpx.Response:
     if req.url.path == "/internal/auth/login":
         return httpx.Response(200, json={"accessToken": TOKEN, "expiresIn": 3600,
                                          "user": {"userId": UID, "username": "ana"}})
+    if req.url.path == f"/internal/logic/games/{GID}":
+        return httpx.Response(200, json={"gameId": GID, "mode": "local", "visibility": "private",
+                                         "participants": [{"userId": UID, "color": "white"}]})
     return httpx.Response(200, json={"ok": True})
 
 
@@ -41,8 +44,8 @@ def test_requires_session(client):
 
 def test_cookie_and_bearer_work_and_client_user_id_is_ignored(client):
     r = client.get(f"/games/{GID}", headers={"Authorization": f"Bearer {TOKEN}", "X-User-Id": "evil"})
-    assert r.status_code == 200
-    assert calls[-1].headers["x-user-id"] == UID
+    assert r.status_code == 200  # la visibilidad la decide el sub del JWT, no la cabecera del cliente
+    assert all("x-user-id" not in c.headers for c in calls)  # Game Logic no recibe X-User-Id
     client.cookies.set("session", TOKEN)
     assert client.get("/stats/me").status_code == 200
     assert calls[-1].url.path == f"/internal/profile/users/{UID}/stats"
@@ -61,15 +64,15 @@ def test_games_list_uses_sub_not_client_userid(client):
     assert q["userId"] == UID and q["limit"] == "20"
 
 
-def test_passthrough_keeps_method_query_and_user_id(client):
-    client.delete("/internal/logic/users/abc?x=1", headers={"X-User-Id": UID})
-    req = calls[-1]
-    assert req.method == "DELETE" and req.url.path == "/internal/logic/users/abc"
-    assert req.url.params["x"] == "1" and req.headers["x-user-id"] == UID
-
-
-def test_unknown_internal_service_is_404(client):
-    assert client.get("/internal/nada/x").status_code == 404
+@pytest.mark.parametrize("method", ["GET", "POST", "PUT", "PATCH", "DELETE"])
+@pytest.mark.parametrize(
+    "path", ["/internal/auth/login", "/internal/logic/users/abc?x=1", "/internal/nada/x", "/internal"]
+)
+def test_no_internal_routes_and_nothing_reaches_services(client, method, path):
+    # El passthrough se eliminó (Fase 9): el gateway no expone /internal/* y
+    # un X-User-Id inyectado no llega a ningún servicio.
+    r = client.request(method, path, headers={"X-User-Id": UID})
+    assert r.status_code in (404, 405) and not calls
 
 
 @pytest.mark.parametrize("origin", ["http://evil.com", "https://localhost", "http://localhost:81", "null"])

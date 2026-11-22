@@ -9,7 +9,8 @@ from app.config import Settings
 ENV_NAMES = (
     "PORT",
     "LOG_LEVEL",
-    "GATEWAY_INTERNAL_URL",
+    "GAME_LOGIC_URL",
+    "BOTCITO_ANALYSIS_URL",
     "RABBITMQ_URL",
     "MONGO_ANALYSIS_URL",
     "MONGO_ANALYSIS_DATABASE",
@@ -36,7 +37,8 @@ def test_contract_defaults(clean_env):
     settings = Settings.from_env()
 
     assert settings.port == 8089
-    assert settings.gateway_internal_url == "http://api-gateway-component:8080"
+    assert settings.game_logic_url == "http://game-logic-component:8082"
+    assert settings.botcito_analysis_url == "http://botcito-analysis-component:8091"
     assert settings.mongo_analysis_database == "insightful_analysis"
     assert settings.rabbitmq_url == "amqp://guest:guest@rabbitmq:5672/"
     assert settings.analysis_depth_max == 18
@@ -54,7 +56,8 @@ def test_contract_defaults(clean_env):
 def test_environment_overrides(clean_env):
     clean_env.setenv("PORT", "9000")
     clean_env.setenv("LOG_LEVEL", "debug")
-    clean_env.setenv("GATEWAY_INTERNAL_URL", "http://gateway.test/")
+    clean_env.setenv("GAME_LOGIC_URL", "http://game-logic.test/")
+    clean_env.setenv("BOTCITO_ANALYSIS_URL", "http://botcito-analysis.test/")
     clean_env.setenv("MONGO_ANALYSIS_URL", "mongodb://mongo.test:27017")
     clean_env.setenv("MONGO_ANALYSIS_DATABASE", "analysis_test")
     clean_env.setenv("RABBITMQ_URL", "amqp://guest:guest@rabbit.test:5672/")
@@ -72,7 +75,8 @@ def test_environment_overrides(clean_env):
 
     assert settings.port == 9000
     assert settings.log_level == "DEBUG"
-    assert settings.gateway_internal_url == "http://gateway.test"
+    assert settings.game_logic_url == "http://game-logic.test"
+    assert settings.botcito_analysis_url == "http://botcito-analysis.test"
     assert settings.mongo_analysis_url == "mongodb://mongo.test:27017"
     assert settings.mongo_analysis_database == "analysis_test"
     assert settings.rabbitmq_url == "amqp://guest:guest@rabbit.test:5672/"

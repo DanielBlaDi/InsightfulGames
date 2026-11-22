@@ -17,11 +17,11 @@ from tests.helpers import (
     make_game,
     mark_failed,
     post_analysis,
+    snapshot,
 )
 
 
 async def test_crea_analisis_pending_y_publica_evento(tutor):
-    tutor.logic.add(make_game())
 
     response = await post_analysis(tutor)
 
@@ -61,7 +61,6 @@ async def test_crea_analisis_pending_y_publica_evento(tutor):
 
 
 async def test_segunda_peticion_igual_devuelve_200_sin_republicar(tutor):
-    tutor.logic.add(make_game())
 
     first = await post_analysis(tutor)
     second = await post_analysis(tutor)
@@ -74,7 +73,6 @@ async def test_segunda_peticion_igual_devuelve_200_sin_republicar(tutor):
 
 
 async def test_depth_por_defecto_y_explicita_forman_claves_distintas(tutor):
-    tutor.logic.add(make_game())
 
     default = await post_analysis(tutor)
     sharper = await post_analysis(tutor, depth=18)
@@ -93,7 +91,6 @@ async def test_depth_por_defecto_y_explicita_forman_claves_distintas(tutor):
 
 
 async def test_language_y_detail_level_forman_parte_de_la_clave(tutor):
-    tutor.logic.add(make_game())
 
     first = await post_analysis(tutor, language="es", detailLevel="standard")
     english = await post_analysis(tutor, language="en")
@@ -108,7 +105,6 @@ async def test_language_y_detail_level_forman_parte_de_la_clave(tutor):
 
 
 async def test_duplicado_simultaneo_devuelve_el_existente(tutor, monkeypatch):
-    tutor.logic.add(make_game())
     first = await post_analysis(tutor)
 
     original = tutor.repository.find_by_key
@@ -134,7 +130,6 @@ async def test_duplicado_simultaneo_devuelve_el_existente(tutor, monkeypatch):
 
 @pytest.mark.parametrize("depth", [0, 19, 100, -1])
 async def test_depth_fuera_de_rango_es_validation_error(tutor, depth):
-    tutor.logic.add(make_game())
 
     response = await post_analysis(tutor, depth=depth)
 
@@ -143,7 +138,6 @@ async def test_depth_fuera_de_rango_es_validation_error(tutor, depth):
 
 
 async def test_depth_no_entero_es_validation_error(tutor):
-    tutor.logic.add(make_game())
 
     response = await post_analysis(tutor, depth="quince")
 
@@ -159,7 +153,6 @@ async def test_game_id_invalido_es_validation_error(tutor):
 
 
 async def test_sin_x_user_id_es_unauthorized(tutor):
-    tutor.logic.add(make_game())
 
     response = await post_analysis(tutor, user=None)
 
@@ -168,11 +161,10 @@ async def test_sin_x_user_id_es_unauthorized(tutor):
 
 
 async def test_x_user_id_invalido_es_unauthorized(tutor):
-    tutor.logic.add(make_game())
 
     response = await tutor.http.post(
         "/internal/tutor/analyses",
-        json={"gameId": GAME_1},
+        json={"gameId": GAME_1, "game": snapshot()},
         headers={"X-User-Id": "invalido"},
     )
 
@@ -180,18 +172,10 @@ async def test_x_user_id_invalido_es_unauthorized(tutor):
     assert response.json()["error"]["code"] == "UNAUTHORIZED"
 
 
-async def test_partida_inexistente_es_game_not_found(tutor):
-    response = await post_analysis(tutor)
-
-    assert response.status_code == 404
-    assert response.json()["error"]["code"] == "GAME_NOT_FOUND"
-    assert await tutor.repository.collection.count_documents({}) == 0
 
 
 async def test_partida_en_curso_es_game_not_finished(tutor):
-    tutor.logic.add(make_game(status="in_progress"))
-
-    response = await post_analysis(tutor)
+    response = await post_analysis(tutor, game=make_game(status="in_progress"))
 
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "GAME_NOT_FINISHED"
@@ -199,9 +183,7 @@ async def test_partida_en_curso_es_game_not_finished(tutor):
 
 
 async def test_partida_expirada_es_game_not_analyzable(tutor):
-    tutor.logic.add(make_game(end_reason="expired"))
-
-    response = await post_analysis(tutor)
+    response = await post_analysis(tutor, game=make_game(end_reason="expired"))
 
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "GAME_NOT_ANALYZABLE"
@@ -209,9 +191,7 @@ async def test_partida_expirada_es_game_not_analyzable(tutor):
 
 
 async def test_partida_sin_jugadas_es_game_not_analyzable(tutor):
-    tutor.logic.add(make_game(moves=[]))
-
-    response = await post_analysis(tutor)
+    response = await post_analysis(tutor, game=make_game(moves=[]))
 
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "GAME_NOT_ANALYZABLE"
@@ -219,60 +199,51 @@ async def test_partida_sin_jugadas_es_game_not_analyzable(tutor):
     assert tutor.publisher.published == []
 
 
-async def test_partida_privada_de_otro_usuario_no_es_visible(tutor):
-    tutor.logic.add(make_game(user_ids=(USER_A, USER_B)))
-
-    response = await post_analysis(tutor, user=USER_B)
-    another = await post_analysis(tutor, user="cccccccc-cccc-4ccc-8ccc-cccccccccccc")
-
-    assert response.status_code == 202
-    assert another.status_code == 404
-    assert another.json()["error"]["code"] == "GAME_NOT_FOUND"
 
 
-async def test_partida_shared_la_puede_pedir_cualquiera(tutor):
-    tutor.logic.add(make_game(visibility="shared", user_ids=(USER_A,)))
-
-    response = await post_analysis(tutor, user=USER_B)
-
-    assert response.status_code == 202
-    document = await tutor.repository.get(response.json()["analysisId"])
-    assert "visibility" not in document
-    assert document["participantIds"] == [USER_A]
 
 
-async def test_game_state_sin_visibility_no_es_visible_ni_usa_user_id(tutor):
-    game = {
-        "gameId": GAME_1,
-        "userId": USER_A,
-        "createdBy": USER_A,
-        "mode": "local",
-        "status": "finished",
-        "participants": [{"userId": USER_A, "color": "white"}],
-        "moves": [{"ply": 1, "color": "white", "san": "e4", "uci": "e2e4"}],
-        "result": "white",
-        "endReason": "checkmate",
-    }
-    tutor.logic.add(game)
 
-    response = await post_analysis(tutor, user=USER_A)
 
-    assert response.status_code == 404
-    assert response.json()["error"]["code"] == "GAME_NOT_FOUND"
+
+
+async def test_sin_snapshot_de_la_partida_es_validation_error(tutor):
+    response = await tutor.http.post(
+        "/internal/tutor/analyses",
+        json={"gameId": GAME_1},
+        headers={"X-User-Id": USER_A},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
     assert await tutor.repository.collection.count_documents({}) == 0
 
 
-async def test_game_logic_caido_devuelve_503(tutor):
-    tutor.logic.down = True
+async def test_participant_ids_salen_del_snapshot_sin_repetir(tutor):
+    # En una partida local el creador juega ambos colores: aparece dos veces en participants
+    game = make_game(user_ids=(USER_A, USER_A), mode="local")
 
-    response = await post_analysis(tutor)
+    response = await post_analysis(tutor, game=game)
 
-    assert response.status_code == 503
-    assert response.json()["error"]["code"] == "SERVICES_UNAVAILABLE"
+    assert response.status_code == 202
+    document = await tutor.repository.get(response.json()["analysisId"])
+    assert document["participantIds"] == [USER_A]
+
+
+async def test_el_tutor_no_decide_la_visibilidad(tutor):
+    # La visibilidad la comprueba el gateway: el Tutor acepta a cualquier solicitante con un snapshot válido
+    game = make_game(visibility="private", user_ids=(USER_A,))
+
+    response = await post_analysis(tutor, user=USER_B, game=game)
+
+    assert response.status_code == 202
+    document = await tutor.repository.get(response.json()["analysisId"])
+    assert document["requestedBy"] == USER_B
+    assert document["participantIds"] == [USER_A]
+    assert "visibility" not in document
 
 
 async def test_fallo_de_publicacion_deja_el_analisis_pending(tutor):
-    tutor.logic.add(make_game())
     tutor.publisher.accepting = False
 
     response = await post_analysis(tutor)
@@ -286,7 +257,6 @@ async def test_fallo_de_publicacion_deja_el_analisis_pending(tutor):
 
 
 async def test_acepta_id_uuid_en_mayusculas_y_lo_normaliza(tutor):
-    tutor.logic.add(make_game(game_id=GAME_2))
 
     response = await post_analysis(tutor, game_id=GAME_2.upper())
 
@@ -298,7 +268,6 @@ async def test_acepta_id_uuid_en_mayusculas_y_lo_normaliza(tutor):
 
 
 async def _failed_analysis(tutor, **failed_kwargs) -> str:
-    tutor.logic.add(make_game())
     created = await post_analysis(tutor)
     assert created.status_code == 202
     analysis_id = created.json()["analysisId"]

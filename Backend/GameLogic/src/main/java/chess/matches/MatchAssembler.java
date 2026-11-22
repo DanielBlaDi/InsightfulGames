@@ -48,7 +48,15 @@ public class MatchAssembler{
         );
     }
 
-    public GameSummary toSummary(Match match){
-        return new GameSummary(match.getGameId(), match.getMode(), match.getStatus(), match.getResult(), match.getCreatedAt().toString());
+    /** Resumen visto por userId: su color solo si juega con uno (en local juega con ambos). */
+    public GameSummary toSummary(Match match, String userId){
+        List<String> colors = match.getParticipants().stream()
+            .filter(participant -> userId.equals(participant.userId()))
+            .map(Participant::color)
+            .distinct()
+            .toList();
+        String color = colors.size() == 1 ? colors.get(0) : null;
+        return new GameSummary(match.getGameId(), match.getMode(), match.getStatus(), match.getResult(),
+            match.getCreatedAt().toString(), match.getMatchId(), match.getEndReason(), color);
     }
 }

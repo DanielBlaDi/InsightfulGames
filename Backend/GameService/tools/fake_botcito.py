@@ -1,11 +1,13 @@
-"""Gateway interno falso para probar Single Player sin el gateway ni Stockfish.
+"""Botcito falso para probar el turno del bot sin Stockfish.
+
+El turno del bot lo orquesta el gateway web (Single Player ya no llama a Botcito):
 
 Uso:
     pip install chess
     GAME_LOGIC_URL=http://localhost:8082 python fake_botcito.py   # escucha en el puerto 8000
-    # y Single Player con GATEWAY_INTERNAL_URL=http://localhost:8000
+    # y el gateway web con BOTCITO_URL=http://localhost:8000
 
-Atiende lo que Single Player pide al gateway interno (contrato, 7.4.2):
+Atiende lo que el gateway pide a Botcito (contrato, 14.4):
     /internal/logic/*            se reenvía tal cual a GAME_LOGIC_URL (método, cuerpo y query)
     POST /internal/engine/best-move   {"fen": "...", "botLevel": 1-20}  (contrato, 14.4)
       -> 200 {"uci": "e7e5", "san": "e5", "evaluation": {"type": "cp", "value": 0, "perspective": "side_to_move"}}

@@ -1,4 +1,4 @@
-"""GET estado y resultado: visibilidad recalculada, estados y explicación."""
+"""GET estado, resultado y game-ref: estados y explicación (la visibilidad la comprueba el gateway)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,6 @@ from tests.helpers import (
     SAMPLE_MOVES,
     SAMPLE_SUMMARY,
     USER_A,
-    USER_B,
     get_result,
     get_status,
     make_game,
@@ -25,7 +24,6 @@ async def _create(tutor, *, user=USER_A, **kwargs) -> str:
 
 
 async def test_estado_pending(tutor):
-    tutor.logic.add(make_game())
     analysis_id = await _create(tutor)
 
     response = await get_status(tutor, analysis_id)
@@ -38,7 +36,6 @@ async def test_estado_pending(tutor):
 
 
 async def test_estado_processing_y_failed(tutor):
-    tutor.logic.add(make_game())
     analysis_id = await _create(tutor)
 
     await tutor.repository.collection.update_one(
@@ -69,60 +66,15 @@ async def test_id_invalido_tambien_es_analysis_not_found(tutor):
     assert response.json()["error"]["code"] == "ANALYSIS_NOT_FOUND"
 
 
-async def test_otro_usuario_no_lee_analisis_de_partida_privada(tutor):
-    tutor.logic.add(make_game(user_ids=(USER_A,)))
-    analysis_id = await _create(tutor)
-
-    response = await get_status(tutor, analysis_id, user=USER_B)
-
-    assert response.status_code == 404
-    assert response.json()["error"]["code"] == "ANALYSIS_NOT_FOUND"
 
 
-async def test_la_visibilidad_se_recalcula_en_cada_lectura(tutor):
-    game = make_game(visibility="private", user_ids=(USER_A,))
-    tutor.logic.add(game)
-    analysis_id = await _create(tutor)
-
-    denied = await get_status(tutor, analysis_id, user=USER_B)
-    assert denied.status_code == 404
-
-    tutor.logic.add(make_game(visibility="shared", user_ids=(USER_A,)))
-    allowed = await get_status(tutor, analysis_id, user=USER_B)
-    assert allowed.status_code == 200
-    assert allowed.json()["status"] == "pending"
-
-    tutor.logic.add(make_game(visibility="private", user_ids=(USER_A,)))
-    denied_again = await get_status(tutor, analysis_id, user=USER_B)
-    assert denied_again.status_code == 404
 
 
-async def test_si_la_partida_desaparece_el_analisis_no_es_visible(tutor):
-    tutor.logic.add(make_game())
-    analysis_id = await _create(tutor)
-
-    tutor.logic.remove(GAME_1)
-
-    response = await get_status(tutor, analysis_id)
-
-    assert response.status_code == 404
-    assert response.json()["error"]["code"] == "ANALYSIS_NOT_FOUND"
 
 
-async def test_lectura_con_game_logic_caido_es_503(tutor):
-    tutor.logic.add(make_game())
-    analysis_id = await _create(tutor)
-
-    tutor.logic.down = True
-
-    response = await get_status(tutor, analysis_id)
-
-    assert response.status_code == 503
-    assert response.json()["error"]["code"] == "SERVICES_UNAVAILABLE"
 
 
 async def test_resultado_antes_de_completed_es_analysis_not_ready(tutor):
-    tutor.logic.add(make_game())
     analysis_id = await _create(tutor)
 
     response = await get_result(tutor, analysis_id)
@@ -132,7 +84,6 @@ async def test_resultado_antes_de_completed_es_analysis_not_ready(tutor):
 
 
 async def test_resultado_completed_incluye_informe_y_genera_explicacion(tutor):
-    tutor.logic.add(make_game())
     analysis_id = await _create(tutor)
 
     document = await tutor.repository.get(analysis_id)
@@ -167,7 +118,6 @@ async def test_resultado_completed_incluye_informe_y_genera_explicacion(tutor):
 
 
 async def test_resultado_tolera_summary_y_moves_en_la_raiz(tutor):
-    tutor.logic.add(make_game())
     analysis_id = await _create(tutor)
 
     await tutor.repository.collection.update_one(
@@ -189,7 +139,6 @@ async def test_resultado_tolera_summary_y_moves_en_la_raiz(tutor):
 
 
 async def test_completed_sin_resultado_no_entrega_informe(tutor):
-    tutor.logic.add(make_game())
     analysis_id = await _create(tutor)
     await tutor.repository.collection.update_one(
         {"analysisId": analysis_id}, {"$set": {"status": "completed"}}
@@ -202,7 +151,6 @@ async def test_completed_sin_resultado_no_entrega_informe(tutor):
 
 
 async def test_explicacion_en_ingles(tutor):
-    tutor.logic.add(make_game())
     analysis_id = await _create(tutor, language="en")
     await mark_completed(tutor, analysis_id)
 
@@ -214,7 +162,6 @@ async def test_explicacion_en_ingles(tutor):
 
 
 async def test_promedio_nulo_se_muestra_como_no_disponible(tutor):
-    tutor.logic.add(make_game())
     analysis_id = await _create(tutor)
     summary = {
         "white": {**SAMPLE_SUMMARY["white"], "averageCpLoss": None},
@@ -232,12 +179,10 @@ async def test_promedio_nulo_se_muestra_como_no_disponible(tutor):
 
 
 async def test_explicacion_brief_y_detailed(tutor):
-    tutor.logic.add(make_game(game_id=GAME_1))
     brief_id = await _create(tutor, detailLevel="brief")
     await mark_completed(tutor, brief_id)
     brief = (await get_result(tutor, brief_id)).json()["explanation"]
 
-    tutor.logic.add(make_game(game_id=GAME_2))
     detailed_id = await _create(tutor, game_id=GAME_2, detailLevel="detailed")
     await mark_completed(tutor, detailed_id)
     detailed = (await get_result(tutor, detailed_id)).json()["explanation"]
@@ -248,12 +193,28 @@ async def test_explicacion_brief_y_detailed(tutor):
     assert brief != detailed
 
 
-async def test_resultado_de_otro_usuario_en_partida_privada_no_es_visible(tutor):
-    tutor.logic.add(make_game(user_ids=(USER_A,)))
+async def test_game_ref_devuelve_la_partida_del_analisis(tutor):
     analysis_id = await _create(tutor)
-    await mark_completed(tutor, analysis_id)
 
-    response = await get_result(tutor, analysis_id, user=USER_B)
+    response = await tutor.http.get(f"/internal/tutor/analyses/{analysis_id}/game-ref")
+
+    assert response.status_code == 200
+    assert response.json() == {"gameId": GAME_1}
+
+
+async def test_game_ref_de_analisis_inexistente_es_analysis_not_found(tutor):
+    response = await tutor.http.get(
+        "/internal/tutor/analyses/99999999-9999-4999-8999-999999999999/game-ref"
+    )
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "ANALYSIS_NOT_FOUND"
+
+
+async def test_las_lecturas_no_exigen_x_user_id(tutor):
+    # La identidad ya no interviene en las lecturas: el gateway comprobó la visibilidad antes
+    analysis_id = await _create(tutor)
+    await mark_completed(tutor, analysis_id)
+
+    assert (await get_status(tutor, analysis_id)).status_code == 200
+    assert (await get_result(tutor, analysis_id)).status_code == 200

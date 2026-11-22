@@ -34,8 +34,7 @@ public class ApiException extends RuntimeException {
         return new ApiException(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", "Usuario o contraseña incorrectos");
     }
 
-    public static ApiException servicesUnavailable(String service) {
-        return new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "SERVICES_UNAVAILABLE",
-                "No se pudo borrar la cuenta: " + service + " no respondió. Intenta de nuevo");
+    public static ApiException userNotFound() {
+        return new ApiException(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "El usuario no existe");
     }
 }

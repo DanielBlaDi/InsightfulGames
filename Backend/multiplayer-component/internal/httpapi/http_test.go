@@ -1,7 +1,9 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -10,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"insightfulgames/multiplayer-component/internal/gamelogic"
 	"insightfulgames/multiplayer-component/internal/realtime"
 	"insightfulgames/multiplayer-component/internal/service"
 
@@ -92,5 +95,163 @@ func TestSocketCloseCodeDistinguishesAuthorizationFromServiceFailure(t *testing.
 				t.Fatalf("close code = %d, want %d", code, test.code)
 			}
 		})
+	}
+}
+
+// stubLogic es un Game Logic que falla si se le llama: el hub no debe consultarlo al recibir un publish.
+type stubLogic struct{ called bool }
+
+func (l *stubLogic) fail() (gamelogic.Response, error) {
+	l.called = true
+	return gamelogic.Response{}, errors.New("Game Logic must not be called")
+}
+
+func (l *stubLogic) Get(context.Context, string) (gamelogic.Response, error)        { return l.fail() }
+func (l *stubLogic) GetByMatch(context.Context, string) (gamelogic.Response, error) { return l.fail() }
+func (l *stubLogic) Move(context.Context, string, string, int64) (gamelogic.Response, error) {
+	return l.fail()
+}
+func (l *stubLogic) Resign(context.Context, string, string) (gamelogic.Response, error) {
+	return l.fail()
+}
+func (l *stubLogic) Abandon(context.Context, string, string) (gamelogic.Response, error) {
+	return l.fail()
+}
+func (l *stubLogic) Draw(context.Context, string, string, string) (gamelogic.Response, error) {
+	return l.fail()
+}
+
+const (
+	publishMatchID = "22222222-2222-4222-8222-222222222222"
+	publishGameID  = "11111111-1111-4111-8111-111111111111"
+)
+
+func publishState(version int, status string) string {
+	return `{"gameId":"` + publishGameID + `","matchId":"` + publishMatchID + `","mode":"multiplayer",` +
+		`"status":"` + status + `","turn":"white","version":` + string(rune('0'+version)) + `,"visibility":"private",` +
+		`"participants":[],"moves":[{"uci":"e2e4"}],"result":null,"endReason":null}`
+}
+
+func newPublishAPI(logic *stubLogic) (http.Handler, *realtime.Hub) {
+	hub := realtime.NewHub()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	app := service.New(logic, hub, time.Second, logger)
+	return New(app, hub, nil, logger), hub
+}
+
+func postPublish(handler http.Handler, matchID, body string) *httptest.ResponseRecorder {
+	request := httptest.NewRequest(http.MethodPost, "/internal/multiplayer/matches/"+matchID+"/publish", strings.NewReader(body))
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	return recorder
+}
+
+func TestPublishRouteBroadcastsTheStateWithoutCallingGameLogic(t *testing.T) {
+	logic := &stubLogic{}
+	handler, hub := newPublishAPI(logic)
+	client := realtime.NewClient("user", nil)
+	hub.Add(publishMatchID, client)
+
+	response := postPublish(handler, publishMatchID, `{"state":`+publishState(2, "in_progress")+`}`)
+
+	if response.Code != http.StatusNoContent || response.Body.Len() != 0 {
+		t.Fatalf("publish response = %d %q, want an empty 204", response.Code, response.Body.String())
+	}
+	var message struct {
+		Type     string `json:"type"`
+		LastMove string `json:"lastMove"`
+	}
+	select {
+	case payload := <-client.Send:
+		if err := json.Unmarshal(payload, &message); err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("the connected client did not receive the published state")
+	}
+	if message.Type != "state" || message.LastMove != "e2e4" {
+		t.Fatalf("message = %+v, want state with lastMove e2e4", message)
+	}
+	if logic.called {
+		t.Fatal("publish called Game Logic")
+	}
+}
+
+func TestPublishRouteSendsGameOverAfterTheFinalState(t *testing.T) {
+	handler, hub := newPublishAPI(&stubLogic{})
+	client := realtime.NewClient("user", nil)
+	hub.Add(publishMatchID, client)
+
+	postPublish(handler, publishMatchID, `{"state":`+publishState(3, "finished")+`}`)
+
+	var types []string
+	for range 2 {
+		select {
+		case payload := <-client.Send:
+			var message struct {
+				Type string `json:"type"`
+			}
+			if err := json.Unmarshal(payload, &message); err != nil {
+				t.Fatal(err)
+			}
+			types = append(types, message.Type)
+		case <-time.After(time.Second):
+			t.Fatalf("messages = %v, want state then game_over", types)
+		}
+	}
+	if types[0] != "state" || types[1] != "game_over" {
+		t.Fatalf("messages = %v, want state then game_over", types)
+	}
+}
+
+func TestPublishRouteRejectsInvalidRequests(t *testing.T) {
+	handler, _ := newPublishAPI(&stubLogic{})
+	tests := []struct {
+		name    string
+		matchID string
+		body    string
+		status  int
+		code    string
+	}{
+		{"invalid json", publishMatchID, `no es json`, http.StatusBadRequest, "VALIDATION_ERROR"},
+		{"missing state", publishMatchID, `{}`, http.StatusBadRequest, "VALIDATION_ERROR"},
+		{"state without ids", publishMatchID, `{"state":{"status":"waiting"}}`, http.StatusBadRequest, "VALIDATION_ERROR"},
+		{"state of another match", "33333333-3333-4333-8333-333333333333", `{"state":` + publishState(1, "waiting") + `}`, http.StatusBadRequest, "VALIDATION_ERROR"},
+		{"match id is not a uuid", "no-es-uuid", `{"state":` + publishState(1, "waiting") + `}`, http.StatusNotFound, "MATCH_NOT_FOUND"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			response := postPublish(handler, test.matchID, test.body)
+			var envelope struct {
+				Error struct {
+					Code string `json:"code"`
+				} `json:"error"`
+			}
+			if err := json.Unmarshal(response.Body.Bytes(), &envelope); err != nil {
+				t.Fatalf("body %q is not an error envelope: %v", response.Body.String(), err)
+			}
+			if response.Code != test.status || envelope.Error.Code != test.code {
+				t.Fatalf("response = %d %s, want %d %s", response.Code, envelope.Error.Code, test.status, test.code)
+			}
+		})
+	}
+}
+
+func TestRestRoutesMovedToTheGateway(t *testing.T) {
+	handler, _ := newPublishAPI(&stubLogic{})
+	routes := []struct{ method, path string }{
+		{http.MethodPost, "/internal/multiplayer/matches"},
+		{http.MethodPost, "/internal/multiplayer/matches/" + publishMatchID + "/join"},
+		{http.MethodGet, "/internal/multiplayer/matches/" + publishMatchID},
+		{http.MethodPost, "/internal/multiplayer/matches/" + publishMatchID + "/resign"},
+		{http.MethodPatch, "/internal/multiplayer/matches/" + publishMatchID + "/visibility"},
+		{http.MethodGet, "/internal/multiplayer/matches/" + publishMatchID + "/publish"},
+	}
+	for _, route := range routes {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest(route.method, route.path, strings.NewReader("{}")))
+		if response.Code != http.StatusNotFound {
+			t.Fatalf("%s %s = %d, want 404 (the gateway orchestrates this route)", route.method, route.path, response.Code)
+		}
 	}
 }

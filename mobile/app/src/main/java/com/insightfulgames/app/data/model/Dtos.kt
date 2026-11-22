@@ -108,6 +108,15 @@ data class MoveDto(
     val timestamp: String? = null,
 )
 
+/** Milisegundos de cada color al empezar su turno; al color que mueve le quedan deadline - ahora. */
+@Serializable
+data class ClocksDto(
+    val white: Long? = null,
+    val black: Long? = null,
+    val turnStartedAt: String? = null,
+    val deadline: String? = null,
+)
+
 @Serializable
 data class GameStateDto(
     val gameId: String,
@@ -125,9 +134,25 @@ data class GameStateDto(
     val fen: String? = null,
     val initialFen: String? = null,
     val moves: List<MoveDto> = emptyList(),
+    /** Casilla de origen -> destinos legales (minúsculas). Vacío si la partida terminó. */
+    val legalMoves: Map<String, List<String>> = emptyMap(),
+    val clocks: ClocksDto? = null,
     val version: Long = 0,
     val result: String? = null,
     val endReason: String? = null,
     val createdAt: String,
     val finishedAt: String? = null,
 )
+
+// ---- Partida local en vivo (POST /games, /games/{id}/moves, /games/{id}/resign) ----
+
+/** La app solo crea partidas locales. timeControl null = sin reloj; si no, { minutes: 10 }. */
+@Serializable
+data class CreateGameRequest(val mode: String, val timeControl: TimeControlDto?)
+
+@Serializable
+data class MoveRequest(val uci: String, val expectedVersion: Long)
+
+/** En local se indica qué color se rinde. */
+@Serializable
+data class ResignRequest(val side: String)

@@ -20,8 +20,8 @@ class WorkerPropertiesTest{
 
     @Test
     void normalizesTheBaseUrlAndDerivesTheStaleThreshold(){
-        WorkerProperties properties = new WorkerProperties("http://api-gateway-component:8080/", 1, 100);
-        assertEquals("http://api-gateway-component:8080", properties.gatewayInternalUrl());
+        WorkerProperties properties = new WorkerProperties("http://game-logic-component:8082/", 1, 100);
+        assertEquals("http://game-logic-component:8082", properties.gameLogicUrl());
         assertEquals(Duration.ofSeconds(60), properties.staleAfter());
         assertEquals(Duration.ofSeconds(300), new WorkerProperties("http://gw", 30, 1).staleAfter());
     }

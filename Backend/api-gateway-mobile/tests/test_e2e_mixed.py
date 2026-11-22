@@ -3,7 +3,8 @@
     MOBILE_GATEWAY_URL=http://localhost:8090 pytest tests/test_e2e_mixed.py -v
 
 Recorre lo mismo que la app: registro, login, perfil, estadísticas, inicio, historial paginado y detalle.
-Qué es real y qué es simulado lo decide el gateway interno mixto (tools/mixed_internal_gateway.py).
+Qué es real y qué es simulado lo deciden AUTH_URL, PROFILE_URL y GAME_LOGIC_URL del gateway móvil
+(los servicios simulados están en tools/fake_services.py).
 
 Si defines LOGIC_URL (Game Logic real, p. ej. http://localhost:8082) la prueba crea partidas de ese usuario
 directamente en Game Logic, porque un usuario recién registrado no tiene historial.
@@ -106,7 +107,9 @@ def test_history_pagination_and_detail(api, session, seeded):
     first = api.get("/games", params={"limit": 2}, headers=session["headers"])
     assert first.status_code == 200, first.text
     page = first.json()
-    assert set(page) == {"items", "nextCursor"} and 0 < len(page["items"]) <= 2
+    assert set(page) == {"items", "nextCursor"} and len(page["items"]) <= 2
+    if not page["items"]:
+        pytest.skip("el usuario no tiene partidas (defina LOGIC_URL para crearlas)")
     for item in page["items"]:
         assert set(item) >= {"gameId", "mode", "matchId", "status", "result", "endReason", "color", "createdAt"}
 
@@ -150,3 +153,40 @@ def test_detail_hidden_from_other_users(api, session, seeded):
 def test_non_uuid_ids_are_404_without_reaching_services(api, session):
     assert api.get("/games/no-es-uuid", headers=session["headers"]).status_code == 404
     assert api.get("/matches/no-es-uuid", headers=session["headers"]).status_code == 404
+
+
+def test_local_game_flow(api, session):
+    """Partida local desde la app: crear, mover, versión vieja = 409, rendirse y verla en el historial."""
+    h = session["headers"]
+    r = api.post("/games", json={"mode": "local", "timeControl": None}, headers=h)
+    if r.status_code == 404:
+        pytest.skip("el gateway no tiene la partida local (servicios simulados sin esa ruta)")
+    assert r.status_code == 201, r.text
+    game = r.json()
+    gid, v0 = game["gameId"], game["version"]
+    assert game["mode"] == "local" and game["status"] == "in_progress" and game["turn"] == "white"
+
+    r = api.post(f"/games/{gid}/moves", json={"uci": "e2e4", "expectedVersion": v0}, headers=h)
+    assert r.status_code == 200, r.text
+    v1 = r.json()["version"]
+    assert v1 > v0 and r.json()["turn"] == "black"
+
+    stale = api.post(f"/games/{gid}/moves", json={"uci": "e7e5", "expectedVersion": v0}, headers=h)
+    assert stale.status_code == 409 and stale.json()["error"]["code"] == "VERSION_CONFLICT"
+
+    r = api.post(f"/games/{gid}/moves", json={"uci": "e7e5", "expectedVersion": v1}, headers=h)
+    assert r.status_code == 200, r.text
+    assert [m["uci"] for m in r.json()["moves"]] == ["e2e4", "e7e5"]
+
+    r = api.post(f"/games/{gid}/resign", json={"side": "white"}, headers=h)
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "finished" and r.json()["result"] == "black"
+
+    items = api.get("/games", params={"limit": 20}, headers=h).json()["items"]
+    mine = next(i for i in items if i["gameId"] == gid)
+    assert mine["mode"] == "local" and mine["status"] == "finished" and mine["color"] is None
+
+
+def test_live_routes_do_not_create_bot_games(api, session):
+    r = api.post("/games", json={"mode": "vs_bot", "botLevel": 1, "playerColor": "white"}, headers=session["headers"])
+    assert r.status_code in (400, 404)

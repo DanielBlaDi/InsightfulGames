@@ -7,7 +7,7 @@ No guarda el historial de partidas: eso lo responde Game Logic.
 
 ## Rutas internas
 
-Solo se llaman a través del gateway interno. El gateway web y el móvil las publican como
+Solo las llaman los gateways, directamente (ningún servicio pasa por un gateway). El gateway web y el móvil las publican como
 `GET /profile/me` y `GET /stats/me`, poniendo el `userId` del JWT.
 
 | Método | Ruta | Respuesta |

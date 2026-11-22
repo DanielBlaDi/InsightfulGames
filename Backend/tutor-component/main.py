@@ -3,7 +3,8 @@
 Arranque: ``uvicorn main:app --host 0.0.0.0 --port 8085``.
 
 El servicio expone solo rutas internas ``/internal/tutor/*`` y ``GET /health``.
-El gateway web publica ``/tutor/*`` y añade ``X-User-Id``.
+No llama a ningún servicio: el gateway web publica ``/tutor/*``, lee la partida en Game Logic,
+comprueba la visibilidad y añade ``X-User-Id``.
 """
 
 from __future__ import annotations
@@ -13,7 +14,6 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Any
 
-import httpx
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -23,7 +23,6 @@ from app.config import Settings
 from app.db import create_mongo_client
 from app.errors import ApiError
 from app.events import EventPublisher
-from app.game_logic import GameLogicClient
 from app.repository import AnalysisRepository
 from app.routes import router
 from app.service import TutorService
@@ -78,7 +77,6 @@ def create_app(
     settings: Settings | None = None,
     *,
     repository: Any = None,
-    game_logic: Any = None,
     publisher: Any = None,
 ) -> FastAPI:
     """Construye la aplicación.
@@ -104,17 +102,6 @@ def create_app(
             owned.append(("mongo", mongo_client))
             await _prepare_indexes(current_repository)
 
-        current_game_logic = app.state.game_logic
-        if current_game_logic is None:
-            http_client = httpx.AsyncClient(
-                base_url=config.gateway_internal_url,
-                timeout=config.http_timeout,
-            )
-            current_game_logic = GameLogicClient(http_client)
-            app.state.game_logic = current_game_logic
-            app.state.http_client = http_client
-            owned.append(("http", http_client))
-
         current_publisher = app.state.publisher
         if current_publisher is None:
             current_publisher = EventPublisher(
@@ -127,9 +114,7 @@ def create_app(
             owned.append(("publisher", current_publisher))
             await current_publisher.start()
 
-        app.state.service = TutorService(
-            config, current_repository, current_game_logic, current_publisher
-        )
+        app.state.service = TutorService(config, current_repository, current_publisher)
         LOGGER.info(
             "Tutor listo (engineVersion=%s, depth=%s..%s)",
             config.engine_version,
@@ -159,10 +144,8 @@ def create_app(
     )
     app.state.settings = config
     app.state.repository = repository
-    app.state.game_logic = game_logic
     app.state.publisher = publisher
     app.state.mongo_client = None
-    app.state.http_client = None
     app.state.service = None
 
     @app.exception_handler(ApiError)

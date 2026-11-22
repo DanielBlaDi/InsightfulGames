@@ -270,7 +270,7 @@ Los contratos y archivos de configuración descritos documentan la implementaci�
 La validación de JWT y el control de acceso a las rutas de negocio corresponden al Gateway.
 10. Cambios del Prototipo 2 (contrato v9)
 
-Rutas. Las rutas pasan a /internal/auth/register, /internal/auth/login y DELETE /internal/auth/account, y solo se llaman a través del gateway (sección 7). Las rutas /auth/* se mantienen como alias mientras el gateway actual siga usándolas; se pueden quitar cuando el gateway web llame a /internal/auth/*.
+Rutas. Las rutas pasan a /internal/auth/register, /internal/auth/login y DELETE /internal/auth/account, y solo las llaman los gateways web y móvil, directamente (sección 7). Auth no llama a ningún otro servicio. Las rutas /auth/* se mantienen como alias mientras el gateway actual siga usándolas; se pueden quitar cuando el gateway web llame a /internal/auth/*.
 
 Errores. Todas las respuestas de error usan el formato común: { "error": { "code": "...", "message": "..." } }. Códigos: VALIDATION_ERROR (400), INVALID_CREDENTIALS (401), USERNAME_TAKEN (409), SERVICES_UNAVAILABLE (503).
 
@@ -282,15 +282,14 @@ Evento user.registered (outbox). Al registrar, Auth guarda el usuario y el event
 - La tabla la crea Auth al arrancar con src/main/resources/db/outbox.sql (CREATE TABLE IF NOT EXISTS), también en volúmenes de MySQL ya existentes. Los eventos publicados se borran a los 7 días.
 - Orden de arranque recomendado: Profile/Stats debe haber declarado su cola profile.user-registered; mientras no exista, los eventos esperan en el outbox.
 
-Borrado de cuenta (DELETE /internal/auth/account, cabecera X-User-Id):
-1. DELETE /internal/logic/users/{userId}
-2. DELETE /internal/tutor/users/{userId}
-3. DELETE /internal/profile/users/{userId}
-Las tres llamadas van por el gateway interno (GATEWAY_INTERNAL_URL). Cada una debe responder 204. Si una falla, Auth responde 503 SERVICES_UNAVAILABLE, no borra su fila y no llama a las siguientes; el usuario puede reintentar. Si las tres responden 204, se borra la fila de MySQL y se responde 204. Si la cuenta ya no existe, responde 204 sin llamar a nadie.
+Borrado de cuenta. Auth ya no llama a ningún servicio: el gateway (web y móvil) orquesta la saga y Auth solo aporta dos rutas.
+- GET /internal/auth/users/{userId} → 200 { userId, username } o 404 USER_NOT_FOUND. Es el primer paso: si no existe, no hay nada que borrar.
+- DELETE /internal/auth/account (cabecera X-User-Id) → 204. Borra solo la fila de MySQL y es idempotente (si ya no está, también 204).
+Orden de la saga en el gateway: Auth (¿existe?) → Game Logic → Tutor → Profile/Stats (DELETE /internal/<servicio>/users/{userId}, cada uno debe dar 204) → Auth (DELETE account). Si un paso falla, el gateway responde 503 SERVICES_UNAVAILABLE y no llama a Auth para borrar la fila; el usuario puede reintentar porque todos los borrados son idempotentes.
 La cookie de sesión la pone y la borra el gateway web, no Auth.
 
-Variables nuevas: RABBITMQ_URL (amqp://usuario:clave@rabbitmq:5672), GATEWAY_INTERNAL_URL (http://api-gateway-component:8080), HTTP_TIMEOUT (segundos, 15 por defecto), OUTBOX_RELAY_INTERVAL_MS (opcional).
+Variables nuevas: RABBITMQ_URL (amqp://usuario:clave@rabbitmq:5672), OUTBOX_RELAY_INTERVAL_MS (opcional). Auth ya no usa GAME_LOGIC_URL, TUTOR_URL, PROFILE_URL ni HTTP_TIMEOUT.
 
-Pruebas. mvn test (JDK 21). Usan H2 en modo MySQL con Databases/auth/01-init.sql y db/outbox.sql; RabbitMQ y los servicios del borrado se simulan. No necesitan Docker. La publicación real con confirmaciones (RabbitEventSender) no está probada contra un RabbitMQ real.
+Pruebas. mvn test (JDK 21). Usan H2 en modo MySQL con Databases/auth/01-init.sql y db/outbox.sql; RabbitMQ se simula. No necesitan Docker. La publicación real con confirmaciones (RabbitEventSender) no está probada contra un RabbitMQ real.
 
 Pendiente. El esquema de v9 (sección 7) usa la columna id y añade created_at; el script actual usa user_id y no tiene created_at. No se cambió porque obligaría a recrear el volumen de MySQL y ningún flujo necesita created_at. Pendiente de decidir con el equipo.

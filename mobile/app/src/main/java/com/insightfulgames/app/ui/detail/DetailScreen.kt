@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.Button
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -70,6 +71,8 @@ fun DetailScreen(
     id: String,
     myUserId: String,
     modifier: Modifier = Modifier,
+    /** Abre una partida local en curso para seguir jugándola. */
+    onContinue: (String) -> Unit = {},
     viewModel: DetailViewModel = viewModel(
         key = "detail-${kind.name}-$id",
         factory = viewModelFactory {
@@ -82,19 +85,34 @@ fun DetailScreen(
     when (val state = ui) {
         LoadState.Loading -> LoadingBox(modifier)
         is LoadState.Error -> ErrorBox(state.message, viewModel::load, modifier)
-        is LoadState.Success -> DetailContent(state.data, myUserId, modifier)
+        is LoadState.Success -> DetailContent(state.data, myUserId, modifier, onContinue)
     }
 }
 
 @Composable
-private fun DetailContent(game: GameStateDto, myUserId: String, modifier: Modifier = Modifier) {
+private fun DetailContent(
+    game: GameStateDto,
+    myUserId: String,
+    modifier: Modifier = Modifier,
+    onContinue: (String) -> Unit = {},
+) {
     // Cada jugada trae fenAfter (contrato, sección 19): con eso se navega sin recalcular nada.
     val replay = remember(game) { buildReplay(game.initialFen, game.moves) }
-    if (replay != null) {
-        ReplayDetailContent(game, replay, myUserId, modifier)
-    } else {
-        // Sin fenAfter no se puede navegar: se muestra la posición final y las jugadas en texto.
-        StaticDetailContent(game, myUserId, modifier)
+    val canContinue = game.mode == "local" && game.status == "in_progress" &&
+        game.participants.any { it.userId == myUserId }
+    Column(modifier.fillMaxSize()) {
+        if (canContinue) {
+            Button(
+                onClick = { onContinue(game.gameId) },
+                modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp),
+            ) { Text("Continuar partida") }
+        }
+        if (replay != null) {
+            ReplayDetailContent(game, replay, myUserId, Modifier.weight(1f))
+        } else {
+            // Sin fenAfter no se puede navegar: se muestra la posición final y las jugadas en texto.
+            StaticDetailContent(game, myUserId, Modifier.weight(1f))
+        }
     }
 }
 

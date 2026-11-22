@@ -41,14 +41,6 @@ func NewClient(baseURL string, timeout time.Duration) *Client {
 	}
 }
 
-func (c *Client) Create(ctx context.Context, payload any) (Response, error) {
-	return c.request(ctx, http.MethodPost, "/internal/logic/games", payload)
-}
-
-func (c *Client) Join(ctx context.Context, gameID, userID string) (Response, error) {
-	return c.request(ctx, http.MethodPost, gamePath(gameID, "/join"), map[string]string{"userId": userID})
-}
-
 func (c *Client) Get(ctx context.Context, gameID string) (Response, error) {
 	return c.request(ctx, http.MethodGet, gamePath(gameID, ""), nil)
 }
@@ -57,30 +49,8 @@ func (c *Client) GetByMatch(ctx context.Context, matchID string) (Response, erro
 	return c.request(ctx, http.MethodGet, "/internal/logic/games/by-match/"+url.PathEscape(matchID), nil)
 }
 
-func (c *Client) Move(ctx context.Context, gameID, uci string, expectedVersion int64) (Response, error) {
-	return c.request(ctx, http.MethodPost, gamePath(gameID, "/moves"), map[string]any{
-		"uci":             uci,
-		"expectedVersion": expectedVersion,
-	})
-}
-
-func (c *Client) Resign(ctx context.Context, gameID, side string) (Response, error) {
-	return c.request(ctx, http.MethodPost, gamePath(gameID, "/resign"), map[string]string{"side": side})
-}
-
 func (c *Client) Abandon(ctx context.Context, gameID, side string) (Response, error) {
 	return c.request(ctx, http.MethodPost, gamePath(gameID, "/abandon"), map[string]string{"side": side})
-}
-
-func (c *Client) Draw(ctx context.Context, gameID, operation, side string) (Response, error) {
-	return c.request(ctx, http.MethodPost, gamePath(gameID, "/draw/"+operation), map[string]string{"side": side})
-}
-
-func (c *Client) SetVisibility(ctx context.Context, gameID, visibility string, expectedVersion int64) (Response, error) {
-	return c.request(ctx, http.MethodPatch, gamePath(gameID, "/visibility"), map[string]any{
-		"visibility":      visibility,
-		"expectedVersion": expectedVersion,
-	})
 }
 
 func gamePath(gameID, suffix string) string {

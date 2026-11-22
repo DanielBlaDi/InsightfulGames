@@ -3,12 +3,14 @@
 - Valida la sesión: cookie `session` primero, Bearer después (HS256, exige exp y sub).
 - Pone X-User-Id a partir del sub; nunca usa el que envía el cliente.
 - Emite y borra la cookie de sesión.
-- Rutas públicas (7.4.1), passthrough /internal/* (7.4.2) y dos WebSocket
-  (validan Origin y sesión, en ese orden).
+- Rutas públicas (7.4.1) y dos WebSocket (validan Origin y sesión, en ese orden).
+- Orquesta los flujos de usuario (orchestration/). No expone ninguna ruta /internal:
+  ningún servicio llama al gateway.
 """
 
 import asyncio
 import inspect
+import json
 import logging
 import os
 import re
@@ -22,6 +24,19 @@ from fastapi import Depends, FastAPI, Query, Request, WebSocket, WebSocketDiscon
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
+
+from orchestration import account, analyses, multiplayer, single_player, upstream, ws_session
+from orchestration.context import BackgroundTasks, Ctx, GameLocks
+from orchestration.errors import FlowError
+from orchestration.errors import (
+    NOT_FOUND_CODE,
+    GatewayError,
+    UpstreamTimeout,  # noqa: F401  (reexportados: los usan los tests y los flows)
+    UpstreamUnreachable,  # noqa: F401
+    is_contract_error,
+    payload_of,
+    translate_error,
+)
 
 # --------------------------------------------------------------------------- #
 # Configuración
@@ -43,7 +58,7 @@ SESSION_COOKIE = "session"
 SESSION_MAX_AGE = 3600
 MAX_PAGE_SIZE = 20
 
-# nombre en /internal/<nombre>/*  ->  URL base del servicio
+# nombre lógico del servicio  ->  URL base (se llama a {url}/internal/{nombre}/...)
 UPSTREAMS: dict[str, str] = {
     name: url.rstrip("/")
     for name, url in {
@@ -54,19 +69,7 @@ UPSTREAMS: dict[str, str] = {
         "tutor": os.getenv("TUTOR_URL", "http://tutor-component:8085"),
         "engine": os.getenv("BOTCITO_URL", "http://botcito-component:8086"),
         "profile": os.getenv("PROFILE_URL", "http://profile-stats-component:8087"),
-        "engine-analysis": os.getenv(
-            "BOTCITO_ANALYSIS_URL", "http://botcito-analysis-component:8091"
-        ),
     }.items()
-}
-
-# Código 404 según el servicio de origen (traducción de errores, 7.3)
-NOT_FOUND_CODE = {
-    "single-player": "GAME_NOT_FOUND",
-    "logic": "GAME_NOT_FOUND",
-    "multiplayer": "MATCH_NOT_FOUND",
-    "tutor": "ANALYSIS_NOT_FOUND",
-    "profile": "PROFILE_NOT_FOUND",
 }
 
 UUID_RE = re.compile(
@@ -104,10 +107,14 @@ def _validate_config() -> None:
 async def lifespan(app: FastAPI):
     _validate_config()
     app.state.client = httpx.AsyncClient(timeout=HTTP_TIMEOUT, follow_redirects=False)
+    app.state.locks = GameLocks()
+    app.state.tasks = BackgroundTasks()
     logger.info("Gateway web listo; orígenes WebSocket: %s", sorted(WS_ALLOWED_ORIGINS))
     try:
         yield
     finally:
+        # Una jugada ya aceptada por Game Logic debe publicarse aunque el cliente se haya ido
+        await app.state.tasks.drain(timeout=2 * HTTP_TIMEOUT)
         await app.state.client.aclose()
 
 
@@ -116,22 +123,6 @@ app = FastAPI(title="Insightful Games - API Gateway web", lifespan=lifespan)
 # --------------------------------------------------------------------------- #
 # Errores (formato común, 4.1)
 # --------------------------------------------------------------------------- #
-
-
-class GatewayError(Exception):
-    def __init__(self, status: int, code: str, message: str):
-        super().__init__(message)
-        self.status, self.code, self.message = status, code, message
-
-
-class UpstreamUnreachable(GatewayError):
-    def __init__(self) -> None:
-        super().__init__(503, "SERVICES_UNAVAILABLE", "Servicio destino no disponible")
-
-
-class UpstreamTimeout(GatewayError):
-    def __init__(self) -> None:
-        super().__init__(503, "SERVICES_UNAVAILABLE", "El servicio destino no respondió a tiempo")
 
 
 def error_response(status: int, code: str, message: str) -> JSONResponse:
@@ -236,8 +227,7 @@ async def forward(
     timeout: float | None = None,
 ) -> httpx.Response:
     """Llama a {servicio}/internal/{service}{path}. X-User-Id solo se pone si
-    se pasa user_id (el sub validado o, en el passthrough, el de quien llama)."""
-    url = f"{UPSTREAMS[service]}/internal/{service}{path}"
+    se pasa user_id (siempre el sub validado del JWT)."""
     headers = {"Accept": request.headers.get("accept") or "application/json"}
 
     body = None
@@ -247,39 +237,16 @@ async def forward(
             headers["Content-Type"] = request.headers.get("content-type") or "application/json"
     if request.headers.get("idempotency-key"):
         headers["Idempotency-Key"] = request.headers["idempotency-key"]
-    if user_id:
-        headers["X-User-Id"] = user_id
 
-    try:
-        response = await request.app.state.client.request(
-            method, url, headers=headers, params=params, content=body,
-            timeout=timeout or HTTP_TIMEOUT,
-        )
-    except httpx.TimeoutException:
-        logger.error("Timeout: %s %s/%s", method, service, path)
-        raise UpstreamTimeout()
-    except httpx.RequestError:
-        logger.error("Servicio inalcanzable: %s %s/%s", method, service, path)
-        raise UpstreamUnreachable()
-
-    logger.info("%s %s%s -> %s", method, service, path, response.status_code)
-    return response
-
-
-def _payload(response: httpx.Response) -> Any:
-    try:
-        return response.json()
-    except ValueError:
-        return None
-
-
-def _is_contract_error(payload: Any) -> bool:
-    return (
-        isinstance(payload, dict)
-        and isinstance(payload.get("error"), dict)
-        and bool(payload["error"].get("code"))
-        and bool(payload["error"].get("message"))
+    return await upstream.call(
+        request.app.state.client, UPSTREAMS[service], service, method, path,
+        user_id=user_id, params=params, content=body, headers=headers,
+        timeout=timeout or HTTP_TIMEOUT,
     )
+
+
+_payload = payload_of
+_is_contract_error = is_contract_error
 
 
 def relay(
@@ -308,17 +275,9 @@ def relay(
     if _is_contract_error(payload):
         return JSONResponse(status_code=status, content=payload, headers=extra)
 
-    table: dict[int, tuple[int, str, str]] = {
-        400: (400, "VALIDATION_ERROR", "Campos faltantes o con formato inválido"),
-        401: (401, unauthorized_code, "No autorizado"),
-        404: (404, NOT_FOUND_CODE.get(service, "NOT_FOUND"), "Recurso no encontrado"),
-        503: (503, "SERVICES_UNAVAILABLE", "Un servicio dependiente no responde"),
-        504: (503, "SERVICES_UNAVAILABLE", "Un servicio dependiente no respondió a tiempo"),
-    }
-    if conflict_code:
-        table[409] = (409, conflict_code, "Conflicto con el estado actual")
-    out_status, code, message = table.get(
-        status, (502, "UPSTREAM_ERROR", "El servicio devolvió un error")
+    out_status, code, message = translate_error(
+        status, service=service, conflict_code=conflict_code,
+        unauthorized_code=unauthorized_code, not_found_codes=NOT_FOUND_CODE,
     )
     return error_response(out_status, code, message, ) if not extra else JSONResponse(
         status_code=out_status,
@@ -334,6 +293,18 @@ async def _public(
     return relay(
         await forward(request, method, service, path, user_id=user_id, **kwargs),
         service=service,
+    )
+
+
+def _ctx(conn: Request | WebSocket) -> Ctx:
+    """Contexto de los flows con estado (juego en vivo), para una petición REST o un WebSocket."""
+    state = conn.app.state
+    if getattr(state, "locks", None) is None:  # p. ej. tests que sustituyen app.state.client
+        state.locks = GameLocks()
+    if getattr(state, "tasks", None) is None:
+        state.tasks = BackgroundTasks()
+    return Ctx(
+        client=state.client, upstreams=UPSTREAMS, locks=state.locks, timeout=HTTP_TIMEOUT, tasks=state.tasks
     )
 
 
@@ -385,13 +356,10 @@ async def logout():
 
 @app.delete("/auth/account")
 async def delete_account(request: Request, user_id: str = Depends(current_user)):
-    # La saga puede tardar hasta 45 s: 4 × HTTP_TIMEOUT
-    response = await forward(
-        request, "DELETE", "auth", "/account", user_id=user_id, timeout=4 * HTTP_TIMEOUT
-    )
-    result = relay(response, service="auth")
-    if response.status_code == 204:
-        _clear_session_cookie(result)
+    # El gateway orquesta la saga (Auth ya no llama a nadie): ver orchestration/account.py
+    await account.delete_account(request.app.state.client, UPSTREAMS, user_id, timeout=HTTP_TIMEOUT)
+    result = Response(status_code=204)
+    _clear_session_cookie(result)
     return result
 
 
@@ -402,7 +370,8 @@ async def delete_account(request: Request, user_id: str = Depends(current_user))
 
 @app.post("/games")
 async def create_game(request: Request, user_id: str = Depends(current_user)):
-    return await _public(request, "POST", "single-player", "/games", user_id)
+    state = await single_player.create(_ctx(request), user_id, await request.body())
+    return JSONResponse(status_code=201, content=state)
 
 
 @app.get("/games")
@@ -425,21 +394,23 @@ async def list_games(
 async def get_game(game_id: str, request: Request, user_id: str = Depends(current_user)):
     if not UUID_RE.match(game_id):
         return _not_found("GAME_NOT_FOUND")
-    return await _public(request, "GET", "single-player", f"/games/{game_id}", user_id)
+    return JSONResponse(content=await single_player.get_game(_ctx(request), user_id, game_id))
 
 
 @app.post("/games/{game_id}/resign")
 async def resign_game(game_id: str, request: Request, user_id: str = Depends(current_user)):
     if not UUID_RE.match(game_id):
         return _not_found("GAME_NOT_FOUND")
-    return await _public(request, "POST", "single-player", f"/games/{game_id}/resign", user_id)
+    state = await single_player.resign(_ctx(request), user_id, game_id, await request.body())
+    return JSONResponse(content=state)
 
 
 @app.patch("/games/{game_id}/visibility")
 async def game_visibility(game_id: str, request: Request, user_id: str = Depends(current_user)):
     if not UUID_RE.match(game_id):
         return _not_found("GAME_NOT_FOUND")
-    return await _public(request, "PATCH", "single-player", f"/games/{game_id}/visibility", user_id)
+    state = await single_player.change_visibility(_ctx(request), user_id, game_id, await request.body())
+    return JSONResponse(content=state)
 
 
 # --------------------------------------------------------------------------- #
@@ -449,35 +420,40 @@ async def game_visibility(game_id: str, request: Request, user_id: str = Depends
 
 @app.post("/matches")
 async def create_match(request: Request, user_id: str = Depends(current_user)):
-    return await _public(request, "POST", "multiplayer", "/matches", user_id)
+    invitation, replayed = await multiplayer.create(
+        _ctx(request), user_id, request.headers.get("idempotency-key", ""), await request.body()
+    )
+    headers = {"Idempotency-Replayed": "true"} if replayed else None
+    return JSONResponse(status_code=201, content=invitation, headers=headers)
 
 
 @app.post("/matches/{match_id}/join")
 async def join_match(match_id: str, request: Request, user_id: str = Depends(current_user)):
     if not UUID_RE.match(match_id):
         return _not_found("MATCH_NOT_FOUND")
-    return await _public(request, "POST", "multiplayer", f"/matches/{match_id}/join", user_id)
+    return JSONResponse(content=await multiplayer.join(_ctx(request), user_id, match_id))
 
 
 @app.get("/matches/{match_id}")
 async def get_match(match_id: str, request: Request, user_id: str = Depends(current_user)):
     if not UUID_RE.match(match_id):
         return _not_found("MATCH_NOT_FOUND")
-    return await _public(request, "GET", "multiplayer", f"/matches/{match_id}", user_id)
+    return JSONResponse(content=await multiplayer.get(_ctx(request), user_id, match_id))
 
 
 @app.post("/matches/{match_id}/resign")
 async def resign_match(match_id: str, request: Request, user_id: str = Depends(current_user)):
     if not UUID_RE.match(match_id):
         return _not_found("MATCH_NOT_FOUND")
-    return await _public(request, "POST", "multiplayer", f"/matches/{match_id}/resign", user_id)
+    return JSONResponse(content=await multiplayer.resign(_ctx(request), user_id, match_id))
 
 
 @app.patch("/matches/{match_id}/visibility")
 async def match_visibility(match_id: str, request: Request, user_id: str = Depends(current_user)):
     if not UUID_RE.match(match_id):
         return _not_found("MATCH_NOT_FOUND")
-    return await _public(request, "PATCH", "multiplayer", f"/matches/{match_id}/visibility", user_id)
+    state = await multiplayer.change_visibility(_ctx(request), user_id, match_id, await request.body())
+    return JSONResponse(content=state)
 
 
 # --------------------------------------------------------------------------- #
@@ -487,14 +463,21 @@ async def match_visibility(match_id: str, request: Request, user_id: str = Depen
 
 @app.post("/tutor/analyses")
 async def create_analysis(request: Request, user_id: str = Depends(current_user)):
-    return await _public(request, "POST", "tutor", "/analyses", user_id)
+    # El gateway lee la partida en Game Logic y comprueba la visibilidad: el Tutor no llama a nadie
+    response = await analyses.create(
+        request.app.state.client, UPSTREAMS, user_id, await request.body(), timeout=HTTP_TIMEOUT
+    )
+    return relay(response, service="tutor")
 
 
 @app.get("/tutor/analyses/{analysis_id}")
 async def get_analysis(analysis_id: str, request: Request, user_id: str = Depends(current_user)):
     if not UUID_RE.match(analysis_id):
         return error_response(404, "ANALYSIS_NOT_FOUND", "El análisis no existe o no es visible")
-    return await _public(request, "GET", "tutor", f"/analyses/{analysis_id}", user_id)
+    response = await analyses.read(
+        request.app.state.client, UPSTREAMS, user_id, analysis_id, timeout=HTTP_TIMEOUT
+    )
+    return relay(response, service="tutor")
 
 
 @app.get("/tutor/analyses/{analysis_id}/result")
@@ -503,7 +486,11 @@ async def get_analysis_result(
 ):
     if not UUID_RE.match(analysis_id):
         return error_response(404, "ANALYSIS_NOT_FOUND", "El análisis no existe o no es visible")
-    return await _public(request, "GET", "tutor", f"/analyses/{analysis_id}/result", user_id)
+    response = await analyses.read(
+        request.app.state.client, UPSTREAMS, user_id, analysis_id,
+        suffix="/result", timeout=HTTP_TIMEOUT,
+    )
+    return relay(response, service="tutor")
 
 
 # --------------------------------------------------------------------------- #
@@ -519,37 +506,6 @@ async def profile_me(request: Request, user_id: str = Depends(current_user)):
 @app.get("/stats/me")
 async def stats_me(request: Request, user_id: str = Depends(current_user)):
     return await _public(request, "GET", "profile", f"/users/{user_id}/stats")
-
-
-# --------------------------------------------------------------------------- #
-# Passthrough interno: /internal/<servicio>/*  (7.4.2)
-# --------------------------------------------------------------------------- #
-# No valida JWT ni traduce errores: los servicios (Auth, Multiplayer, workers)
-# dependen de los códigos originales. Conserva método, cuerpo, query y X-User-Id.
-# Solo es seguro si el puerto 8080 no se publica y Vike responde 404 a /api/internal/*.
-
-
-@app.api_route("/internal/{service}/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
-async def internal_passthrough(service: str, path: str, request: Request):
-    if service not in UPSTREAMS or ".." in path.split("/"):
-        return error_response(404, "NOT_FOUND", "Ruta inexistente")
-    response = await forward(
-        request,
-        request.method,
-        service,
-        "/" + path,
-        user_id=request.headers.get("x-user-id"),
-        params=list(request.query_params.multi_items()),
-    )
-    extra = {}
-    if response.headers.get("idempotency-replayed"):
-        extra["Idempotency-Replayed"] = response.headers["idempotency-replayed"]
-    return Response(
-        content=response.content,
-        status_code=response.status_code,
-        media_type=response.headers.get("content-type"),
-        headers=extra,
-    )
 
 
 # --------------------------------------------------------------------------- #
@@ -608,11 +564,42 @@ async def _proxy_websocket(
         await _safe_close(client_ws, 4404, "Partida inexistente o ajena")
         return
 
+    # Single Player: el gateway orquesta las acciones del cliente (jugadas, rendición, turno del bot);
+    # el hub solo mantiene la sesión. Primero se comprueba aquí que el usuario participe.
+    ctx = _ctx(client_ws)
+    live: dict[str, Any] | None = None
+    if service == "single-player":
+        try:
+            live = await single_player.participant_game(ctx, user_id, resource_id)
+        except FlowError as exc:
+            await _safe_close(
+                client_ws, 4404 if exc.status == 404 else 1011,
+                "Partida inexistente o ajena" if exc.status == 404 else "Servicio no disponible",
+            )
+            return
+        except GatewayError:
+            await _safe_close(client_ws, 1011, "Servicio no disponible")
+            return
+
     upstream_url = _ws_url(
         UPSTREAMS[service], f"/internal/{service}/ws/{resource}/{resource_id}"
     )
     logger.info("WebSocket %s/%s", service, resource_id)
 
+    # Un solo escritor a la vez hacia el cliente: lo que llega del hub y las respuestas del gateway
+    send_lock = asyncio.Lock()
+
+    async def send_text(text: str) -> None:
+        async with send_lock:
+            await client_ws.send_text(text)
+
+    async def send_json(payload: dict[str, Any]) -> None:
+        try:
+            await send_text(json.dumps(payload))
+        except Exception:  # noqa: BLE001  (el cliente ya se fue)
+            logger.info("No se pudo enviar %s: el cliente se desconectó", payload.get("type"))
+
+    queue = None
     try:
         async with websockets.connect(
             upstream_url,
@@ -622,16 +609,30 @@ async def _proxy_websocket(
             **{_WS_HEADERS_KW: {"X-User-Id": user_id}},
         ) as upstream:
 
+            if live is not None:
+                queue, _ = ws_session.start_frame_worker(ctx, user_id, resource_id, send_json)
+                # Si le toca al bot (p. ej. Botcito estaba caído), se retoma en segundo plano
+                if single_player.is_bot_turn(live):
+                    ctx.tasks.spawn(single_player.resume_bot_if_needed(ctx, live))
+            elif service == "multiplayer":
+                # Jugadas, rendición y tablas las atiende el gateway; solo el ping llega al hub
+                queue, _ = ws_session.start_frame_worker(ctx, user_id, resource_id, send_json, match=True)
+
             async def client_to_upstream():
                 while True:
-                    await upstream.send(await client_ws.receive_text())
+                    text = await client_ws.receive_text()
+                    if queue is None or (service == "multiplayer" and ws_session.is_ping(text)):
+                        await upstream.send(text)  # el hub atiende el ping (y, sin cola, todo el tráfico)
+                    else:
+                        queue.put_nowait(text)  # lo atiende el gateway, no el hub
 
             async def upstream_to_client():
                 async for message in upstream:
                     if isinstance(message, str):
-                        await client_ws.send_text(message)
+                        await send_text(message)
                     else:
-                        await client_ws.send_bytes(message)
+                        async with send_lock:
+                            await client_ws.send_bytes(message)
 
             tasks = [
                 asyncio.create_task(client_to_upstream()),
@@ -660,6 +661,11 @@ async def _proxy_websocket(
             await _safe_close(client_ws, 4404, "Partida inexistente o ajena")
         else:
             await _safe_close(client_ws, 1011, "Servicio no disponible")
+
+    finally:
+        if queue is not None:
+            # El trabajador termina lo que ya aceptó (una jugada en Game Logic no se deja a medias)
+            queue.put_nowait(None)
 
 
 @app.websocket("/ws/games/{game_id}")

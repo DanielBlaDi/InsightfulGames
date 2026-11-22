@@ -2,9 +2,9 @@
 server:
   port: ${SERVER_PORT:8083}
 
-gateway:
-  # Game Logic (/internal/logic/*) y Botcito-juego (/internal/engine/*) se llaman por el gateway interno.
-  internal-url: ${GATEWAY_INTERNAL_URL:http://localhost:8080}
+services:
+  # Game Logic (/internal/logic/*) se llama directamente (solo lectura: estado inicial y game.finished).
+  game-logic-url: ${GAME_LOGIC_URL:http://localhost:8082}
 
 spring:
   rabbitmq:

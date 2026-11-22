@@ -29,7 +29,7 @@ mocks y un navegador simulado.
    `POSTGRES_USER`, `POSTGRES_PASSWORD`, `RABBITMQ_URL=amqp://user:pass@rabbitmq:5672`.
    `depends_on` PostgreSQL y RabbitMQ con `service_healthy`. Bloque completo en
    `Backend/profile-stats-component/README.md`.
-4. **Auth**: añadir `RABBITMQ_URL`, `GATEWAY_INTERNAL_URL=http://api-gateway-component:8080` y
+4. **Auth**: añadir `RABBITMQ_URL` (Auth ya no llama a otros servicios: el gateway orquesta el borrado de cuenta) y
    `depends_on: rabbitmq (service_healthy)`. El usuario de MySQL necesita permiso `CREATE` en su
    base (lo tiene si es `MYSQL_USER`): Auth crea `outbox_events` al arrancar.
 5. **`.env.example`**: añadir `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`,
@@ -55,8 +55,8 @@ mocks y un navegador simulado.
    `DELETE /internal/auth/account` y, si responde 204, borrar la cookie.
 5. **Auth por rutas internas**: llamar a `/internal/auth/register` y `/internal/auth/login`
    (Auth mantiene `/auth/*` como alias mientras tanto).
-6. **Passthrough `/internal/*`** (sección 4): sin él, el borrado de cuenta de Auth no llega a Game
-   Logic, Tutor ni Profile/Stats y siempre responde 503.
+6. ~~**Passthrough `/internal/*`**~~ (sección 4): ya no aplica. El borrado de cuenta lo orquesta el
+   gateway (saga Auth → Game Logic → Tutor → Profile/Stats → Auth) y el passthrough se eliminó.
 
 ## 4. Frontend A (Vike, cookies y `/estadisticas`)
 

@@ -8,16 +8,6 @@ import (
 
 var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
-type TimeControl struct {
-	Minutes int `json:"minutes"`
-}
-
-type CreateMatchRequest struct {
-	TimeControl  *TimeControl `json:"timeControl,omitempty"`
-	Visibility   string       `json:"visibility,omitempty"`
-	CreatorColor string       `json:"creatorColor"`
-}
-
 type Participant struct {
 	UserID string `json:"userId"`
 	Color  string `json:"color"`

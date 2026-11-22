@@ -10,13 +10,13 @@ import (
 )
 
 type Config struct {
-	Port               string
-	GatewayInternalURL string
-	RabbitMQURL        string
-	LogLevel           slog.Level
-	ReconnectWindow    time.Duration
-	RequestTimeout     time.Duration
-	AllowedOrigins     map[string]struct{}
+	Port            string
+	GameLogicURL    string
+	RabbitMQURL     string
+	LogLevel        slog.Level
+	ReconnectWindow time.Duration
+	RequestTimeout  time.Duration
+	AllowedOrigins  map[string]struct{}
 }
 
 func Load() (Config, error) {
@@ -25,19 +25,19 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	cfg := Config{
-		Port:               valueOr("PORT", "8084"),
-		GatewayInternalURL: valueOr("GATEWAY_INTERNAL_URL", "http://api-gateway-component:8080"),
-		RabbitMQURL:        strings.TrimSpace(os.Getenv("RABBITMQ_URL")),
-		LogLevel:           logLevel,
-		RequestTimeout:     5 * time.Second,
-		AllowedOrigins:     parseOrigins(os.Getenv("WS_ALLOWED_ORIGINS")),
+		Port:           valueOr("PORT", "8084"),
+		GameLogicURL:   valueOr("GAME_LOGIC_URL", "http://game-logic-component:8082"),
+		RabbitMQURL:    strings.TrimSpace(os.Getenv("RABBITMQ_URL")),
+		LogLevel:       logLevel,
+		RequestTimeout: 5 * time.Second,
+		AllowedOrigins: parseOrigins(os.Getenv("WS_ALLOWED_ORIGINS")),
 	}
 
 	if port, err := strconv.Atoi(cfg.Port); err != nil || port < 1 || port > 65535 {
 		return Config{}, fmt.Errorf("PORT must be an integer from 1 to 65535")
 	}
-	if !strings.HasPrefix(cfg.GatewayInternalURL, "http://") && !strings.HasPrefix(cfg.GatewayInternalURL, "https://") {
-		return Config{}, fmt.Errorf("GATEWAY_INTERNAL_URL must be an http or https URL")
+	if !strings.HasPrefix(cfg.GameLogicURL, "http://") && !strings.HasPrefix(cfg.GameLogicURL, "https://") {
+		return Config{}, fmt.Errorf("GAME_LOGIC_URL must be an http or https URL")
 	}
 	if cfg.RabbitMQURL == "" {
 		return Config{}, fmt.Errorf("RABBITMQ_URL is required")

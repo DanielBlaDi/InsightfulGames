@@ -1,0 +1,8 @@
+# Solo lo usan las imágenes de los gateways (contexto ./Backend): el resto de servicios tiene su propio contexto.
+*
+!api-gateway/main.py
+!api-gateway/requirements.txt
+!api-gateway-mobile/main.py
+!api-gateway-mobile/requirements.txt
+!gateway-shared/orchestration
+**/__pycache__

@@ -1,0 +1,30 @@
+# Override SOLO para depuración local: vuelve a publicar en 127.0.0.1 los puertos internos que
+# el compose base ya no expone, para probar cada servicio con curl saltándose el proxy inverso.
+# No lo uses en un despliegue: abre caminos que evitan el proxy.
+#
+#   docker compose -f compose.yaml -f compose.debug.yaml up -d --build
+services:
+  api-gateway-component:
+    ports:
+      - "127.0.0.1:8080:8080"
+  auth-component:
+    ports:
+      - "127.0.0.1:8081:8081"
+  game-logic-component:
+    ports:
+      - "127.0.0.1:8082:8082"
+  single-player-component:
+    ports:
+      - "127.0.0.1:8083:8083"
+  multiplayer-component:
+    ports:
+      - "127.0.0.1:8084:8084"
+  tutor-component:
+    ports:
+      - "127.0.0.1:8085:8085"
+  botcito-component:
+    ports:
+      - "127.0.0.1:8086:8086"
+  api-gateway-mobile:
+    ports:
+      - "127.0.0.1:8091:8090"

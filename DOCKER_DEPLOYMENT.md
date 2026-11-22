@@ -23,15 +23,17 @@ Hito alcanzable con este paquete: **H0** del plan, que es Compose arriba y regis
 
 | Grupo | Servicios | Publicado en el host |
 |---|---|---|
-| Por defecto | `api-gateway-mobile` | `${MOBILE_GATEWAY_PORT}`, 8090 |
+| Por defecto | `reverse-proxy` (único punto de entrada, ver `docs/proxy-inverso.md`) | `${FRONTEND_PORT}` (web) y `${MOBILE_GATEWAY_PORT}`, 8090 (móvil) |
+| Por defecto | `api-gateway-mobile` | No |
 | Por defecto | `api-gateway-component`, `auth-component`, `game-logic-component`, `single-player-component`, `tutor-component`, `botcito-component`, `profile-stats-component` | No |
 | Por defecto | `mysql`, `mongo`, `mongo-analysis`, `postgres-profile`, `rabbitmq` | No |
-| Perfil `pendiente` | `frontend` | `${FRONTEND_PORT}`, 80 |
+| Perfil `pendiente` | `frontend` | No (se accede por `reverse-proxy`) |
 | Perfil `pendiente` | `multiplayer-component`, `botcito-analysis-component`, `timeout-worker`, `analysis-worker` | No |
 
 Red: `app`. Volúmenes: `mysql-data`, `mongo-data`, `mongo-analysis-data`, `postgres-data`, `rabbitmq-data`.
 
-Android no es un contenedor: se conecta a `api-gateway-mobile`.
+Android no es un contenedor: se conecta a `reverse-proxy` en `${MOBILE_GATEWAY_PORT}`, que reenvía a `api-gateway-mobile`.
+Para probar un servicio con curl saltándose el proxy: `docker compose -f compose.yaml -f compose.debug.yaml up -d` (puertos en 127.0.0.1; el gateway móvil queda en 8091).
 
 ## 3. Requisitos
 
@@ -260,7 +262,6 @@ Cambiarla en `.env` no la cambia dentro de una base ya inicializada: la aplicaci
 | Tutor en `unhealthy` | Mongo de análisis no acepta credenciales, o `init-mongo.sh` no corrió | Revisar `docker compose logs mongo-analysis` y la sección 8.1 |
 | `api-gateway-component` no arranca | Espera a todos sus servicios | `docker compose ps` indica cuál falla |
 | Healthcheck Java falla con `bash: not found` | La imagen no trae `bash` | Hay que cambiar la comprobación. Se validará en el primer arranque |
-| Gateway móvil responde 404 en `/auth/login` | Falta el passthrough (GW-04) | Es esperado hoy |
 | Perfil no aparece tras registrar | Cola sin consumidor o broker caído | Revisar logs de Auth y Profile/Stats. El evento queda en `outbox_events` |
 | Puerto 8090 ocupado | Otro proceso lo usa | Cambiar `MOBILE_GATEWAY_PORT` |
 

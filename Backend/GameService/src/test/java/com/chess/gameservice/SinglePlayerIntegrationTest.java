@@ -12,6 +12,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -37,11 +38,13 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 import com.chess.gameservice.events.GameFinishedListener;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /**
- * Single Player real (REST y WebSocket) contra un gateway interno falso que hace de Game Logic y
- * Botcito-juego. Comprueba rutas internas, cuerpo de creación, GameState completo, expectedVersion,
- * participantes, visibilidad, códigos de error y la notificación de game.finished.
+ * Single Player como hub (publish del gateway y WebSocket) contra un Game Logic
+ * falso. Comprueba el aviso publish (orden, guarda de versión, señales), el estado inicial por WebSocket,
+ * que el hub no opera por su cuenta, el cierre de no participantes y la notificación de game.finished.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class SinglePlayerIntegrationTest {
@@ -49,11 +52,11 @@ class SinglePlayerIntegrationTest {
     static final String USER = "7d1f9d5e-3c2b-4f0e-9a41-0b5f6d7a8c90";
     static final String OTHER = "11111111-2222-4333-8444-555555555555";
 
-    static final FakeInternalGateway gateway;
+    static final FakeGameLogic logic;
 
     static {
         try {
-            gateway = new FakeInternalGateway();
+            logic = new FakeGameLogic();
         } catch (IOException e) {
             throw new IllegalStateException(e);
         }
@@ -61,14 +64,14 @@ class SinglePlayerIntegrationTest {
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
-        registry.add("gateway.internal-url", gateway::url);
+        registry.add("services.game-logic-url", logic::url);
         // Sin broker en la prueba: el consumidor se invoca directamente.
         registry.add("spring.rabbitmq.listener.simple.auto-startup", () -> "false");
     }
 
     @AfterAll
     static void stopGateway() {
-        gateway.close();
+        logic.close();
     }
 
     @LocalServerPort
@@ -82,159 +85,151 @@ class SinglePlayerIntegrationTest {
 
     @BeforeEach
     void reset() {
-        gateway.requests.clear();
-        gateway.engineError = null;
-        gateway.logicBroken = false;
+        logic.requests.clear();
+        logic.logicBroken = false;
     }
 
-    // ------------------------------------------------------------ REST
+    // ------------------------------------------------------------ publish (gateway -> hub)
 
     @Test
-    void localGameIsCreatedInGameLogicWithTheContractBody() throws Exception {
-        Response created = request("POST", "/internal/single-player/games", USER, "{\"mode\":\"local\"}");
-
-        assertEquals(201, created.status());
-        JsonNode body = gateway.requestsTo("/internal/logic/games").get(0).body();
-        assertEquals("local", body.get("mode").asText());
-        assertEquals("private", body.get("visibility").asText());
-        assertTrue(body.get("timeControl").isNull());
-        assertTrue(body.get("botLevel").isNull());
-        assertEquals(2, body.get("participants").size());
-        assertEquals(USER, body.at("/participants/0/userId").asText());
-        assertEquals("white", body.at("/participants/0/color").asText());
-        assertEquals(USER, body.at("/participants/1/userId").asText());
-        assertEquals("black", body.at("/participants/1/color").asText());
-        assertFalse(body.has("userId"));
-        assertFalse(body.has("playerColor"));
-
-        // GameState completo, sin campos descartados
-        JsonNode state = created.json();
-        for (String field : new String[]{"gameId", "mode", "visibility", "matchId", "participants", "botLevel",
-                "timeControl", "clocks", "status", "turn", "fen", "initialFen", "legalMoves", "moves",
-                "drawOffer", "version", "result", "endReason", "createdAt", "finishedAt"}) {
-            assertTrue(state.has(field), "falta " + field);
-        }
-        assertEquals(0, state.get("version").asInt());
-    }
-
-    @Test
-    void botGameAsBlackOpensWithTheInternalEngineRoute() throws Exception {
-        Response created = request("POST", "/internal/single-player/games", USER,
-                "{\"mode\":\"vs_bot\",\"botLevel\":7,\"playerColor\":\"black\",\"timeControl\":{\"minutes\":10},\"visibility\":\"shared\"}");
-
-        assertEquals(201, created.status());
-        JsonNode create = gateway.requestsTo("/internal/logic/games").get(0).body();
-        assertEquals(1, create.get("participants").size());
-        assertEquals("black", create.at("/participants/0/color").asText());
-        assertEquals(7, create.get("botLevel").asInt());
-        assertEquals(10, create.at("/timeControl/minutes").asInt());
-        assertEquals("shared", create.get("visibility").asText());
-
-        JsonNode engine = gateway.requestsTo("/internal/engine/best-move").get(0).body();
-        assertEquals(7, engine.get("botLevel").asInt());
-        assertEquals("fen-0", engine.get("fen").asText());
-        assertFalse(engine.has("level"));
-
-        JsonNode botMove = gateway.requestsTo("/moves").get(0).body();
-        assertEquals(0, botMove.get("expectedVersion").asInt());
-        assertEquals(1, created.json().get("version").asInt());
-        assertEquals("white", created.json().at("/moves/0/color").asText());
-    }
-
-    @Test
-    void invalidCreationRequestsAreValidationErrors() throws Exception {
-        for (String body : new String[]{
-                "{\"mode\":\"vs_bot\",\"level\":5,\"playerColor\":\"white\"}",
-                "{\"mode\":\"local\",\"timeControl\":{\"minutes\":5}}",
-                "{\"mode\":\"local\",\"visibility\":\"public\"}",
-                "no es json"}) {
-            Response response = request("POST", "/internal/single-player/games", USER, body);
-            assertEquals(400, response.status(), body);
-            assertEquals("VALIDATION_ERROR", response.json().at("/error/code").asText());
-        }
-        assertTrue(gateway.requests.isEmpty());
-    }
-
-    @Test
-    void readingRequiresParticipantOrSharedGame() throws Exception {
+    void restOperationsMovedToTheGateway() throws Exception {
         String id = createLocal();
-
-        assertEquals(200, request("GET", "/internal/single-player/games/" + id, USER, null).status());
-
-        Response other = request("GET", "/internal/single-player/games/" + id, OTHER, null);
-        assertEquals(404, other.status());
-        assertEquals("GAME_NOT_FOUND", other.json().at("/error/code").asText());
-
-        Response noUser = request("GET", "/internal/single-player/games/" + id, null, null);
-        assertEquals(401, noUser.status());
-        assertEquals("UNAUTHORIZED", noUser.json().at("/error/code").asText());
-
-        int version = request("GET", "/internal/single-player/games/" + id, USER, null).json().get("version").asInt();
-        request("PATCH", "/internal/single-player/games/" + id + "/visibility", USER,
-                "{\"visibility\":\"shared\",\"expectedVersion\":" + version + "}");
-        assertEquals(200, request("GET", "/internal/single-player/games/" + id, OTHER, null).status());
-    }
-
-    @Test
-    void visibilityForwardsExpectedVersionAndReportsConflicts() throws Exception {
-        String id = createLocal();
-
-        Response changed = request("PATCH", "/internal/single-player/games/" + id + "/visibility", USER,
-                "{\"visibility\":\"shared\",\"expectedVersion\":0}");
-        assertEquals(200, changed.status());
-        assertEquals("shared", changed.json().get("visibility").asText());
-        assertEquals(1, changed.json().get("version").asInt());
-
-        Response stale = request("PATCH", "/internal/single-player/games/" + id + "/visibility", USER,
-                "{\"visibility\":\"private\",\"expectedVersion\":0}");
-        assertEquals(409, stale.status());
-        assertEquals("VERSION_CONFLICT", stale.json().at("/error/code").asText());
-
-        Response notParticipant = request("PATCH", "/internal/single-player/games/" + id + "/visibility", OTHER,
-                "{\"visibility\":\"private\",\"expectedVersion\":1}");
-        assertEquals(404, notParticipant.status());
-    }
-
-    @Test
-    void resignOverRestUsesTheGivenSideInLocal() throws Exception {
-        String id = createLocal();
-
-        Response resigned = request("POST", "/internal/single-player/games/" + id + "/resign", USER,
-                "{\"side\":\"white\"}");
-
-        assertEquals(200, resigned.status());
-        assertEquals("black", resigned.json().get("result").asText());
-        assertEquals("surrender", resigned.json().get("endReason").asText());
-        assertEquals("white", gateway.requestsTo("/resign").get(0).body().get("side").asText());
-    }
-
-    @Test
-    void failingDependencyIsServicesUnavailable503() throws Exception {
-        String id = createLocal();
-        gateway.logicBroken = true;
-
-        Response response = request("GET", "/internal/single-player/games/" + id, USER, null);
-
-        assertEquals(503, response.status());
-        assertEquals("SERVICES_UNAVAILABLE", response.json().at("/error/code").asText());
-    }
-
-    @Test
-    void legacyRoutesWereRetired() throws Exception {
-        String id = createLocal();
-        for (String path : new String[]{"/games", "/games/" + id}) {
+        assertEquals(404, request("POST", "/internal/single-player/games", USER, "{\"mode\":\"local\"}").status());
+        for (String path : new String[]{"/internal/single-player/games/" + id, "/games", "/games/" + id}) {
             Response response = request("GET", path, USER, null);
             assertEquals(404, response.status(), path);
             assertEquals("NOT_FOUND", response.json().at("/error/code").asText());
         }
-        assertEquals(404, request("POST", "/games", USER, "{\"mode\":\"local\"}").status());
+        assertEquals(404, request("POST", "/internal/single-player/games/" + id + "/resign", USER, "{\"side\":\"white\"}").status());
+        assertEquals(404, request("PATCH", "/internal/single-player/games/" + id + "/visibility", USER,
+                "{\"visibility\":\"shared\",\"expectedVersion\":0}").status());
         assertEquals(200, request("GET", "/health", null, null).status());
+    }
+
+    @Test
+    void publishReachesConnectedClientsWithoutQueryingAnyService() throws Exception {
+        String id = createLocal();
+        try (Socket socket = connect(id, USER)) {
+            socket.next(); // state inicial
+            int before = logic.requests.size();
+
+            Response response = request("POST", publishPath(id), null,
+                    publishBody(stateAt(id, 1, "in_progress", null, null), "e2e4", null));
+
+            assertEquals(204, response.status());
+            JsonNode moved = socket.next();
+            assertEquals("state", moved.get("type").asText());
+            assertEquals("e2e4", moved.get("lastMove").asText());
+            assertEquals(1, moved.at("/state/version").asInt());
+            assertEquals(before, logic.requests.size(), "publish no debe llamar a Game Logic ni a Botcito");
+        }
+    }
+
+    @Test
+    void publishOfAFinishedGameSendsStateThenGameOver() throws Exception {
+        String id = createLocal();
+        try (Socket socket = connect(id, USER)) {
+            socket.next();
+
+            request("POST", publishPath(id), null,
+                    publishBody(stateAt(id, 3, "finished", "black", "surrender"), null, null));
+
+            assertEquals("finished", socket.next().at("/state/status").asText());
+            JsonNode over = socket.next();
+            assertEquals("game_over", over.get("type").asText());
+            assertEquals("black", over.get("result").asText());
+            assertEquals("surrender", over.get("endReason").asText());
+        }
+    }
+
+    @Test
+    void publishCanSkipGameOverWhenOnlyTheVisibilityChanged() throws Exception {
+        String id = createLocal();
+        try (Socket socket = connect(id, USER)) {
+            socket.next();
+
+            request("POST", publishPath(id), null,
+                    publishBody(stateAt(id, 4, "finished", "black", "surrender"), null, false));
+
+            assertEquals("state", socket.next().get("type").asText());
+            assertNull(socket.messages.poll(300, TimeUnit.MILLISECONDS), "no debe llegar game_over");
+        }
+    }
+
+    @Test
+    void aStalePublishDoesNotMakeTheClientGoBack() throws Exception {
+        String id = createLocal();
+        try (Socket socket = connect(id, USER)) {
+            socket.next();
+            request("POST", publishPath(id), null, publishBody(stateAt(id, 5, "in_progress", null, null), "e2e4", null));
+            assertEquals(5, socket.next().at("/state/version").asInt());
+
+            Response stale = request("POST", publishPath(id), null,
+                    publishBody(stateAt(id, 3, "in_progress", null, null), "d2d4", null));
+
+            assertEquals(204, stale.status());
+            assertNull(socket.messages.poll(300, TimeUnit.MILLISECONDS), "el aviso atrasado debe ignorarse");
+
+            // Reenviar la misma version (resync) si se entrega
+            request("POST", publishPath(id), null, publishBody(stateAt(id, 5, "in_progress", null, null), null, null));
+            assertEquals(5, socket.next().at("/state/version").asInt());
+        }
+    }
+
+    @Test
+    void signalsReachClientsAsBotThinkingAndError() throws Exception {
+        String id = createLocal();
+        try (Socket socket = connect(id, USER)) {
+            socket.next();
+
+            request("POST", publishPath(id), null, "{\"signal\":{\"type\":\"bot_thinking\"}}");
+            assertEquals("bot_thinking", socket.next().get("type").asText());
+
+            request("POST", publishPath(id), null,
+                    "{\"signal\":{\"type\":\"error\",\"code\":\"ENGINE_BUSY\",\"message\":\"Motores ocupados\"}}");
+            JsonNode error = socket.next();
+            assertEquals("error", error.get("type").asText());
+            assertEquals("ENGINE_BUSY", error.get("code").asText());
+        }
+    }
+
+    @Test
+    void publishWithoutOpenSessionsIsANoOp() throws Exception {
+        String id = createLocal();
+        int before = logic.requests.size();
+
+        Response response = request("POST", publishPath(id), null,
+                publishBody(stateAt(id, 1, "in_progress", null, null), "e2e4", null));
+
+        assertEquals(204, response.status());
+        assertEquals(before, logic.requests.size());
+    }
+
+    @Test
+    void invalidPublishRequestsAreValidationErrors() throws Exception {
+        String id = createLocal();
+        ObjectNode otherGame = stateAt(id, 1, "in_progress", null, null);
+        otherGame.put("gameId", "otra-partida");
+        ObjectNode noVersion = stateAt(id, 1, "in_progress", null, null);
+        noVersion.remove("version");
+
+        for (String body : new String[]{
+                "{}",
+                "no es json",
+                publishBody(otherGame, null, null),
+                publishBody(noVersion, null, null),
+                "{\"signal\":{\"type\":\"desconocido\"}}",
+                "{\"signal\":{\"type\":\"error\"}}"}) {
+            Response response = request("POST", publishPath(id), null, body);
+            assertEquals(400, response.status(), body);
+            assertEquals("VALIDATION_ERROR", response.json().at("/error/code").asText());
+        }
     }
 
     // ------------------------------------------------------------ WebSocket
 
     @Test
-    void localGameIsPlayedOverWebSocketWithExpectedVersion() throws Exception {
+    void connectingSendsTheInitialStateAndTheHubDoesNotPlayForTheClient() throws Exception {
         String id = createLocal();
         try (Socket socket = connect(id, USER)) {
             JsonNode first = socket.next();
@@ -242,79 +237,16 @@ class SinglePlayerIntegrationTest {
             assertFalse(first.has("lastMove"));
             assertEquals(0, first.at("/state/version").asInt());
             assertEquals(2, first.at("/state/participants").size());
+            int before = logic.requests.size();
 
+            // Las jugadas y la rendición las atiende el gateway: si un mensaje llega aquí, se ignora
             socket.send("{\"type\":\"move\",\"uci\":\"e2e4\",\"expectedVersion\":0}");
-            JsonNode moved = socket.next();
-            assertEquals("state", moved.get("type").asText());
-            assertEquals("e2e4", moved.get("lastMove").asText());
-            assertEquals(1, moved.at("/state/version").asInt());
-            assertEquals("white", moved.at("/state/moves/0/color").asText());
+            socket.send("{\"type\":\"resign\",\"side\":\"white\"}");
+            socket.send("no es json");
 
-            JsonNode forwarded = gateway.requestsTo("/moves").get(0).body();
-            assertEquals("e2e4", forwarded.get("uci").asText());
-            assertEquals(0, forwarded.get("expectedVersion").asInt());
-
-            // Misma versión otra vez: llega el state vigente y luego move_rejected
-            socket.send("{\"type\":\"move\",\"uci\":\"e7e5\",\"expectedVersion\":0}");
-            JsonNode resynced = socket.next();
-            assertEquals("state", resynced.get("type").asText());
-            assertEquals(1, resynced.at("/state/version").asInt());
-            JsonNode rejected = socket.next();
-            assertEquals("move_rejected", rejected.get("type").asText());
-            assertEquals("VERSION_CONFLICT", rejected.get("code").asText());
-
-            socket.send("{\"type\":\"move\",\"uci\":\"e7e5\"}");
-            JsonNode missing = socket.next();
-            assertEquals("move_rejected", missing.get("type").asText());
-            assertEquals("VALIDATION_ERROR", missing.get("code").asText());
-        }
-    }
-
-    @Test
-    void mateSendsStateThenGameOver() throws Exception {
-        String id = createLocal();
-        try (Socket socket = connect(id, USER)) {
-            socket.next();
-            socket.send("{\"type\":\"move\",\"uci\":\"d8h4\",\"expectedVersion\":0}");
-            JsonNode state = socket.next();
-            assertEquals("finished", state.at("/state/status").asText());
-            JsonNode over = socket.next();
-            assertEquals("game_over", over.get("type").asText());
-            assertEquals("white", over.get("result").asText());
-            assertEquals("checkmate", over.get("endReason").asText());
-        }
-    }
-
-    @Test
-    void botErrorsArriveWithTheirRealCodeAndTheHumanMoveIsKept() throws Exception {
-        String id = request("POST", "/internal/single-player/games", USER,
-                "{\"mode\":\"vs_bot\",\"botLevel\":3,\"playerColor\":\"white\"}").json().get("gameId").asText();
-        gateway.engineError = "ENGINE_BUSY";
-
-        try (Socket socket = connect(id, USER)) {
-            socket.next();
-            socket.send("{\"type\":\"move\",\"uci\":\"e2e4\",\"expectedVersion\":0}");
-            assertEquals("state", socket.next().get("type").asText());
-            assertEquals("bot_thinking", socket.next().get("type").asText());
-            JsonNode error = socket.next();
-            assertEquals("error", error.get("type").asText());
-            assertEquals("ENGINE_BUSY", error.get("code").asText());
-
-            // Es turno del bot: el humano no puede mover
-            socket.send("{\"type\":\"move\",\"uci\":\"d2d4\",\"expectedVersion\":1}");
-            JsonNode rejected = socket.next();
-            assertEquals("move_rejected", rejected.get("type").asText());
-            assertEquals("NOT_YOUR_TURN", rejected.get("code").asText());
-        }
-
-        // Al reconectar con Botcito disponible se retoma el turno del bot
-        gateway.engineError = null;
-        try (Socket socket = connect(id, USER)) {
-            assertEquals(1, socket.next().at("/state/version").asInt());
-            assertEquals("bot_thinking", socket.next().get("type").asText());
-            JsonNode afterBot = socket.next();
-            assertEquals("e7e5", afterBot.get("lastMove").asText());
-            assertEquals(2, afterBot.at("/state/version").asInt());
+            assertNull(socket.messages.poll(400, TimeUnit.MILLISECONDS), "el hub no responde a los frames");
+            assertEquals(before, logic.requests.size(), "el hub no opera en Game Logic ni en Botcito");
+            assertEquals("in_progress", logic.games.get(id).get("status").asText());
         }
     }
 
@@ -333,7 +265,7 @@ class SinglePlayerIntegrationTest {
         String id = createLocal();
         try (Socket socket = connect(id, USER)) {
             socket.next();
-            gateway.finish(gateway.games.get(id), null, "account_deleted");
+            logic.finish(logic.games.get(id), null, "account_deleted");
 
             listener.onGameFinished(event(id, "local"));
 
@@ -360,10 +292,65 @@ class SinglePlayerIntegrationTest {
         }
     }
 
+    /** La partida se crea directamente en Game Logic (en produccion lo hace el gateway). */
+    private String createInLogic(String mode, Integer botLevel, List<String[]> participants) throws Exception {
+        ObjectNode body = mapper.createObjectNode();
+        body.put("mode", mode).put("visibility", "private");
+        body.putNull("timeControl");
+        if (botLevel == null) {
+            body.putNull("botLevel");
+        } else {
+            body.put("botLevel", botLevel);
+        }
+        ArrayNode list = body.putArray("participants");
+        for (String[] p : participants) {
+            list.addObject().put("userId", p[0]).put("color", p[1]);
+        }
+        HttpResponse<String> response = http.send(
+                HttpRequest.newBuilder(URI.create(logic.url() + "/internal/logic/games"))
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString(body.toString())).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertEquals(201, response.statusCode());
+        return mapper.readTree(response.body()).get("gameId").asText();
+    }
+
     private String createLocal() throws Exception {
-        Response created = request("POST", "/internal/single-player/games", USER, "{\"mode\":\"local\"}");
-        assertEquals(201, created.status());
-        return created.json().get("gameId").asText();
+        return createInLogic("local", null, List.of(new String[]{USER, "white"}, new String[]{USER, "black"}));
+    }
+
+    private static String publishPath(String gameId) {
+        return "/internal/single-player/games/" + gameId + "/publish";
+    }
+
+    /** GameState de la partida (la del Game Logic falso) con la version y el estado indicados. */
+    private ObjectNode stateAt(String gameId, int version, String status, String result, String endReason) {
+        ObjectNode state = logic.games.get(gameId).deepCopy();
+        state.put("version", version);
+        state.put("status", status);
+        if (result == null) {
+            state.putNull("result");
+        } else {
+            state.put("result", result);
+        }
+        if (endReason == null) {
+            state.putNull("endReason");
+        } else {
+            state.put("endReason", endReason);
+        }
+        return state;
+    }
+
+    private String publishBody(ObjectNode state, String lastMove, Boolean gameOver) {
+        ObjectNode body = mapper.createObjectNode();
+        body.set("state", state);
+        if (lastMove != null) {
+            body.put("lastMove", lastMove);
+        }
+        if (gameOver != null) {
+            body.put("gameOver", gameOver);
+        }
+        return body.toString();
     }
 
     private Response request(String method, String path, String userId, String body) throws Exception {

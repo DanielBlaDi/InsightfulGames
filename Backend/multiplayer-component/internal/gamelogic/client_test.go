@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func TestGetByMatchUsesInternalGatewayRoute(t *testing.T) {
+func TestGetByMatchUsesInternalRoute(t *testing.T) {
 	const matchID = "22222222-2222-4222-8222-222222222222"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet || r.URL.Path != "/internal/logic/games/by-match/"+matchID {
@@ -40,7 +40,7 @@ func TestClientReturnsContractError(t *testing.T) {
 	defer server.Close()
 
 	client := NewClient(server.URL, time.Second)
-	_, err := client.Join(context.Background(), "33333333-3333-4333-8333-333333333333", "22222222-2222-4222-8222-222222222222")
+	_, err := client.Abandon(context.Background(), "33333333-3333-4333-8333-333333333333", "white")
 	apiError, ok := err.(*APIError)
 	if !ok {
 		t.Fatalf("error = %T %v, want *APIError", err, err)

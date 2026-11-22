@@ -29,11 +29,6 @@ spring:
     publisher-confirm-type: simple
     publisher-returns: true
 
-# Borrado de cuenta: Auth llama a Game Logic, Tutor y Profile/Stats por el gateway interno.
-gateway:
-  internal-url: ${GATEWAY_INTERNAL_URL:http://localhost:8080}
-  timeout-seconds: ${HTTP_TIMEOUT:15}
-
 outbox:
   relay-interval-ms: ${OUTBOX_RELAY_INTERVAL_MS:2000}
   confirm-timeout-ms: 5000

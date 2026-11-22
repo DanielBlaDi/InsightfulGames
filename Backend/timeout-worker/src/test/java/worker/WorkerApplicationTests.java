@@ -17,51 +17,51 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 /**
- * Arranque completo con las mismas variables que da Compose: el planificador consulta al gateway
+ * Arranque completo con las mismas variables que da Compose: el planificador consulta a Game Logic
  * con el límite configurado, cierra lo vencido y /health y la opción -health responden.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class WorkerApplicationTests{
 
     static final String GAME = "aaaaaaaa-0000-4000-8000-000000000001";
-    static final FakeGateway gateway;
+    static final FakeGameLogic logic;
 
     static{
         try{
-            gateway = new FakeGateway();
+            logic = new FakeGameLogic();
         }catch(IOException e){
             throw new IllegalStateException(e);
         }
-        gateway.expired = new FakeGateway.Reply(200,
+        logic.expired = new FakeGameLogic.Reply(200,
             "[{\"gameId\":\"" + GAME + "\",\"version\":4,\"reason\":\"timeout\"}]");
     }
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry){
         registry.add("PORT", () -> "0");
-        registry.add("GATEWAY_INTERNAL_URL", gateway::url);
+        registry.add("GAME_LOGIC_URL", logic::url);
         registry.add("TIMEOUT_POLL_INTERVAL_SECONDS", () -> "1");
         registry.add("TIMEOUT_BATCH_LIMIT", () -> "100");
     }
 
     @AfterAll
     static void stop(){
-        gateway.close();
+        logic.close();
     }
 
     @Value("${local.server.port}")
     int port;
 
     @Test
-    void schedulerPollsTheGatewayAndClosesExpiredGames() throws Exception{
+    void schedulerPollsGameLogicAndClosesExpiredGames() throws Exception{
         long deadline = System.currentTimeMillis() + 10_000;
-        while(gateway.posts().isEmpty() && System.currentTimeMillis() < deadline){
+        while(logic.posts().isEmpty() && System.currentTimeMillis() < deadline){
             Thread.sleep(100);
         }
-        FakeGateway.Request get = gateway.requests.stream().filter(r -> r.method().equals("GET")).findFirst().orElseThrow();
+        FakeGameLogic.Request get = logic.requests.stream().filter(r -> r.method().equals("GET")).findFirst().orElseThrow();
         assertEquals("/internal/logic/games/expired", get.path());
         assertEquals("limit=100", get.query());
-        FakeGateway.Request post = gateway.posts().get(0);
+        FakeGameLogic.Request post = logic.posts().get(0);
         assertEquals("/internal/logic/games/" + GAME + "/timeout", post.path());
         assertEquals("{\"expectedVersion\":4}", post.body().replace(" ", ""));
     }

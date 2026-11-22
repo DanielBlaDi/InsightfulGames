@@ -279,6 +279,9 @@ public class ChessApplicationHTTPTests{
 						fieldWithPath("items.[].status").description(Status.allPossibleStatuses()),
 						fieldWithPath("items.[].result").description("String that describes the end result of this match. Takes one of " + (Result.size() + 1) + " values: " + Result.allPossibleResults() + " | Null (in the case that the match hasn't ended)"),
 						fieldWithPath("items.[].createdAt").description("The date and time in which each of the returned matches started."),
+						fieldWithPath("items.[].matchId").description("Identifier of the multiplayer match, null for \"" + Mode.LOCAL.toString() + "\" and \"" + Mode.VS_BOT.toString() + "\".").optional(),
+						fieldWithPath("items.[].endReason").description("Why the match ended, null while it hasn't ended.").optional(),
+						fieldWithPath("items.[].color").description("Color played by the queried user, null in \"" + Mode.LOCAL.toString() + "\" matches (the user plays both colors).").optional(),
 						fieldWithPath("nextCursor").description("The current page number for the query, encoded in base64url, starts on 1, null if there are no more Matches to show")
 					)
 				)
@@ -307,6 +310,33 @@ public class ChessApplicationHTTPTests{
 			.andExpect(jsonPath("$.items.length()").value(1))
 			.andExpect(jsonPath("$.items[0].gameId").value(mockMatches.get(2).getGameId()))
 			.andExpect(jsonPath("$.nextCursor").value(nullValue()));
+	}
+
+	/**Cada resumen trae lo que el historial necesita: matchId (para abrir el detalle multiplayer),
+	 * endReason y el color del usuario consultado (null en partidas locales, donde juega con ambos).*/
+	@Test public void shouldReturnSummaryFieldsForHistory() throws Exception{
+		String rivalId = "22222222-2222-4222-8222-222222222222";
+		Match local = createTestMatch(Mode.LOCAL.toString(), null, List.of(
+			new Participant(TEST_USER_ID, Color.WHITE.toString()), new Participant(TEST_USER_ID, Color.BLACK.toString())));
+		Match vsBot = createTestMatch(Mode.VS_BOT.toString(), 8, List.of(new Participant(TEST_USER_ID, Color.BLACK.toString())));
+		vsBot.finish(Color.WHITE.toString(), EndReason.SURRENDER.toString());
+		Match online = new Match(Mode.MULTIPLAYER.toString(), new TimeControl(10), Visibility.PRIVATE.toString(), null,
+			"33333333-3333-4333-8333-333333333333", null, null,
+			List.of(new Participant(rivalId, Color.WHITE.toString()), new Participant(TEST_USER_ID, Color.BLACK.toString())));
+		online.finish(Color.BLACK.toString(), EndReason.CHECKMATE.toString());
+
+		when(repository.findByParticipantsUserIdOrderByCreatedAtDesc(TEST_USER_ID)).thenReturn(List.of(local, vsBot, online));
+
+		this.mockMvc.perform(get("/internal/logic/games").param("userId", TEST_USER_ID)).andExpect(status().isOk())
+			.andExpect(jsonPath("$.items[0].matchId").value(nullValue()))
+			.andExpect(jsonPath("$.items[0].endReason").value(nullValue()))
+			.andExpect(jsonPath("$.items[0].color").value(nullValue()))
+			.andExpect(jsonPath("$.items[1].matchId").value(nullValue()))
+			.andExpect(jsonPath("$.items[1].endReason").value(EndReason.SURRENDER.toString()))
+			.andExpect(jsonPath("$.items[1].color").value(Color.BLACK.toString()))
+			.andExpect(jsonPath("$.items[2].matchId").value("33333333-3333-4333-8333-333333333333"))
+			.andExpect(jsonPath("$.items[2].endReason").value(EndReason.CHECKMATE.toString()))
+			.andExpect(jsonPath("$.items[2].color").value(Color.BLACK.toString()));
 	}
 
 	/**Un cursor más allá de la última página devuelve una página vacía (200), no un error 500*/

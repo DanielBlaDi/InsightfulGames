@@ -8,10 +8,12 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -43,10 +45,14 @@ import com.insightfulgames.app.ui.auth.AuthScreen
 import com.insightfulgames.app.ui.detail.DetailScreen
 import com.insightfulgames.app.ui.history.HistoryScreen
 import com.insightfulgames.app.ui.home.HomeScreen
+import com.insightfulgames.app.ui.play.NewGameScreen
+import com.insightfulgames.app.ui.play.PlayScreen
 import com.insightfulgames.app.ui.profile.ProfileScreen
 import com.insightfulgames.app.ui.stats.StatsScreen
 
 private const val ROUTE_HOME = "home"
+private const val ROUTE_NEW_GAME = "new-game"
+private const val ROUTE_PLAY = "play/{id}"
 private const val ROUTE_PROFILE = "profile"
 private const val ROUTE_STATS = "stats"
 private const val ROUTE_HISTORY = "history"
@@ -56,6 +62,7 @@ private data class Tab(val route: String, val label: String, val icon: ImageVect
 
 private val tabs = listOf(
     Tab(ROUTE_HOME, "Inicio", Icons.Filled.Home),
+    Tab(ROUTE_NEW_GAME, "Jugar", Icons.Filled.PlayArrow),
     Tab(ROUTE_PROFILE, "Perfil", Icons.Filled.Person),
     Tab(ROUTE_STATS, "Estadísticas", Icons.Filled.Star),
     Tab(ROUTE_HISTORY, "Historial", Icons.AutoMirrored.Filled.List),
@@ -90,9 +97,9 @@ private fun MainScaffold(session: Session) {
 
     Scaffold(
         topBar = {
-            if (route == ROUTE_DETAIL) {
+            if (route == ROUTE_DETAIL || route == ROUTE_PLAY) {
                 TopAppBar(
-                    title = { Text("Detalle de partida") },
+                    title = { Text(if (route == ROUTE_PLAY) "Partida local" else "Detalle de partida") },
                     navigationIcon = {
                         IconButton(onClick = { nav.popBackStack() }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
@@ -109,7 +116,8 @@ private fun MainScaffold(session: Session) {
                             selected = backStack?.destination?.hierarchy?.any { it.route == tab.route } == true,
                             onClick = { nav.navigateToTab(tab.route) },
                             icon = { Icon(tab.icon, contentDescription = null) },
-                            label = { Text(tab.label) },
+                            // Con 5 pestañas, "Estadísticas" no cabe en una línea con el tamaño por defecto.
+                            label = { Text(tab.label, maxLines = 1, softWrap = false, style = MaterialTheme.typography.labelSmall) },
                         )
                     }
                 }
@@ -122,6 +130,19 @@ private fun MainScaffold(session: Session) {
                     onOpenGame = { nav.openDetail(it) },
                     onOpenHistory = { nav.navigateToTab(ROUTE_HISTORY) },
                 )
+            }
+            composable(ROUTE_NEW_GAME) {
+                NewGameScreen(onCreated = { id -> nav.navigate("play/$id") })
+            }
+            composable(ROUTE_PLAY, arguments = listOf(navArgument("id") { type = NavType.StringType })) { entry ->
+                val id = entry.arguments?.getString("id")
+                if (id != null) {
+                    // Volver a Jugar sacando la partida de la pila. navigateToTab restauraría la pila guardada
+                    // de esa pestaña, que es justo la que contiene esta partida.
+                    PlayScreen(gameId = id, onNewGame = {
+                        if (!nav.popBackStack(ROUTE_NEW_GAME, inclusive = false)) nav.navigateToTab(ROUTE_NEW_GAME)
+                    })
+                }
             }
             composable(ROUTE_PROFILE) { ProfileScreen(sessionUsername = session.username) }
             composable(ROUTE_STATS) { StatsScreen() }
@@ -137,7 +158,12 @@ private fun MainScaffold(session: Session) {
                     ?.let { k -> DetailKind.entries.firstOrNull { it.name.equals(k, ignoreCase = true) } }
                 val id = entry.arguments?.getString("id")
                 if (kind != null && id != null) {
-                    DetailScreen(kind = kind, id = id, myUserId = session.userId)
+                    DetailScreen(
+                        kind = kind,
+                        id = id,
+                        myUserId = session.userId,
+                        onContinue = { gameId -> nav.navigate("play/$gameId") },
+                    )
                 }
             }
         }

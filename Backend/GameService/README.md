@@ -4,76 +4,87 @@ Java 21 + Spring Boot 3.3.5 (Maven). Puerto `8083`. Nombre en Compose: `single-p
 La carpeta conserva el nombre histórico `GameService`.
 
 Coordina las partidas de un solo usuario: `local` (dos personas en la misma pantalla) y `vs_bot`
-(contra el motor). Autoriza cada acción, mantiene la sesión WebSocket y gestiona el turno del bot.
-No tiene base propia: el estado vive en Game Logic, que es la única fuente de verdad.
+(contra el motor). Es un **hub de sesiones**: mantiene las conexiones WebSocket, envía el estado inicial a
+quien se conecta y avisa a los clientes de lo que cambia. No tiene base propia ni decide nada del juego: el
+estado vive en Game Logic, que es la única fuente de verdad.
 
-Toda comunicación con otros servicios pasa por el gateway interno:
+**Todo lo que cambia una partida lo orquesta el gateway web** (`Backend/api-gateway`, con los módulos compartidos de `Backend/gateway-shared/`
+`orchestration/single_player.py` y `ws_session.py`; el gateway móvil usa los mismos para la partida local): crear, leer, rendirse, cambiar la visibilidad, las
+jugadas, el turno del bot y las respuestas `move_rejected` / `error` al cliente. El gateway llama a Game
+Logic y a Botcito y, tras cada cambio, avisa a este hub con `POST .../publish`. Este servicio ya no llama a
+Botcito ni expone rutas REST de juego.
+
+Única llamada saliente, directa y de solo lectura (sin gateway), para el estado inicial al conectar y para
+`game.finished`:
 
 | Destino | Ruta |
 |---|---|
-| Game Logic | `{GATEWAY_INTERNAL_URL}/internal/logic/*` |
-| Botcito-juego | `POST {GATEWAY_INTERNAL_URL}/internal/engine/best-move` con `{ fen, botLevel }` |
+| Game Logic | `GET {GAME_LOGIC_URL}/internal/logic/games/{id}` |
 
 ## Variables de entorno
 
 | Variable | Default | Uso |
 |---|---|---|
 | `SERVER_PORT` | `8083` | Puerto HTTP y WebSocket |
-| `GATEWAY_INTERNAL_URL` | `http://localhost:8080` | Gateway interno (Game Logic y Botcito) |
+| `GAME_LOGIC_URL` | `http://localhost:8082` | Game Logic |
 | `RABBITMQ_URL` | `amqp://guest:guest@localhost:5672` | Consumo de `game.finished` |
 
-## Rutas REST
-
-Todas reciben `X-User-Id`, que pone el gateway. Sin esa cabecera responden `401 UNAUTHORIZED`.
+## Rutas
 
 | Ruta | Cuerpo | Respuesta | Quién |
 |---|---|---|---|
-| `POST /internal/single-player/games` | `{ mode, botLevel, playerColor, timeControl, visibility }` | `201 GameState` | Usuario autenticado |
-| `GET /internal/single-player/games/{id}` | — | `200 GameState` | Participante, o cualquiera si es `shared` |
-| `POST /internal/single-player/games/{id}/resign` | `{ side }` solo en local | `200 GameState` | Participante |
-| `PATCH /internal/single-player/games/{id}/visibility` | `{ visibility, expectedVersion }` | `200 GameState` | Participante |
+| `POST /internal/single-player/games/{id}/publish` | `{ state?, lastMove?, gameOver?, signal? }` | `204` | El gateway |
 | `GET /health` | — | `200 { "status": "ok" }` | — |
 
-Reglas de creación:
+`publish` envía a los clientes conectados a esa partida, sin consultar a nadie:
 
-- `mode`: `local` o `vs_bot`.
-- `botLevel` (1 a 20) y `playerColor` (`white` o `black`): obligatorios solo en `vs_bot`; en local se ignoran.
-- `timeControl`: `null` o `{ "minutes": 10 }`.
-- `visibility`: `private` (por defecto) o `shared`.
-- El cuerpo que recibe Game Logic lo arma este servicio: en local, dos participantes con el mismo
-  `userId` (uno por color); en vs_bot, uno solo, el humano.
-- Si el humano juega con negras, el bot abre antes de responder. Si el bot falla, la partida se devuelve igual.
+- `state`: GameState vigente (con `version`, obligatoria y del mismo `gameId` que la ruta). Se envía como
+  `{ type: "state" }` y, si la partida terminó, `game_over` justo después. `gameOver: false` omite el
+  `game_over` (el gateway lo usa al cambiar la visibilidad de una partida terminada).
+- `lastMove`: última jugada (uci), se omite si no hubo jugada.
+- `signal`: aviso sin cambio de estado. `{ type: "bot_thinking" }` o `{ type: "error", code, message }`.
+- **Guarda de orden:** un `state` con `version` menor que la última enviada a esa partida se ignora (un
+  aviso atrasado no hace retroceder al cliente); la misma versión se acepta (reenvío del estado vigente).
+  Sin sesiones abiertas no hace nada. `400 VALIDATION_ERROR` si falta `state` y `signal`, si el `gameId`
+  no coincide, si falta `version` o si el `signal` es inválido.
 
+Las reglas de creación (modo, `botLevel`, `playerColor`, `timeControl`, `visibility`, participantes por
+modo) y de visibilidad de la partida (participante, o `shared` para leer) las aplica ahora el gateway.
 Una partida multijugador, o una en la que el usuario no participa, responde `404 GAME_NOT_FOUND`.
 
 ## WebSocket
 
-`/internal/single-player/ws/games/{id}`. La ruta pública `/ws/games/{id}` la atiende el gateway web,
-que valida Origin y sesión y reenvía `X-User-Id`. Solo para participantes.
+`/internal/single-player/ws/games/{id}`. La ruta pública `/ws/games/{id}` la atiende el gateway web, que
+valida Origin y sesión, comprueba que el usuario participe y abre este WebSocket con `X-User-Id`. Este hub
+es **solo de salida**: registra la sesión, envía el `state` inicial y reenvía lo que llega por `publish` y por
+`game.finished`. Los mensajes del cliente no llegan aquí: el gateway los atiende y, si llegara alguno
+directamente, se ignora.
+
+Mensajes del cliente (los procesa el gateway, en orden por conexión):
 
 | Dirección | Mensaje |
 |---|---|
 | Cliente | `{ "type": "move", "uci": "e2e4", "expectedVersion": 3 }` |
 | Cliente | `{ "type": "resign", "side": "white" }` (`side` solo en local) |
-| Servidor | `{ "type": "state", "state": GameState, "lastMove"? }` |
-| Servidor | `{ "type": "move_rejected", "code", "message" }` |
-| Servidor | `{ "type": "bot_thinking" }` |
-| Servidor | `{ "type": "game_over", "result", "endReason" }` |
-| Servidor | `{ "type": "error", "code", "message" }` |
+| Servidor | `{ "type": "state", "state": GameState, "lastMove"? }` (por el hub) |
+| Servidor | `{ "type": "move_rejected", "code", "message" }` (lo envía el gateway al cliente que actuó) |
+| Servidor | `{ "type": "bot_thinking" }` (por el hub) |
+| Servidor | `{ "type": "game_over", "result", "endReason" }` (por el hub) |
+| Servidor | `{ "type": "error", "code", "message" }` (por el hub, o el gateway al cliente que actuó) |
 
 - `state` se envía completo al conectar (sin `lastMove`) y tras cada cambio, incluida la visibilidad.
   `game_over` va justo después del `state` final.
-- `move_rejected`: la acción del cliente no se aceptó. Corresponde a los errores 400, 409 y 422:
-  `VALIDATION_ERROR`, `VERSION_CONFLICT`, `GAME_NOT_IN_PROGRESS`, `INVALID_MOVE`, `NOT_YOUR_TURN`,
-  `GAME_FINISHED` y `CLOCK_EXPIRED`.
-- Con `VERSION_CONFLICT` o `CLOCK_EXPIRED`, el servidor envía antes el `state` vigente (y `game_over`
-  si el reloj terminó la partida), para que el cliente juegue con la versión correcta.
-- `error`: fallo ajeno a la jugada que no cambia la partida, como `SERVICES_UNAVAILABLE`,
-  `ENGINE_BUSY` o `ENGINE_TIMEOUT`.
+- `move_rejected`: la acción no se aceptó (errores 400, 409 y 422: `VALIDATION_ERROR`, `VERSION_CONFLICT`,
+  `GAME_NOT_IN_PROGRESS`, `INVALID_MOVE`, `NOT_YOUR_TURN`, `GAME_FINISHED`, `CLOCK_EXPIRED`).
+- Con `VERSION_CONFLICT` o `CLOCK_EXPIRED`, el gateway publica antes el `state` vigente (y el hub envía
+  `game_over` si el reloj terminó la partida) para que el cliente juegue con la versión correcta.
+- `error`: fallo ajeno a la jugada que no cambia la partida, como `SERVICES_UNAVAILABLE`, `ENGINE_BUSY`,
+  `ENGINE_TIMEOUT` o `GAME_NOT_FOUND`.
 - Cierres: `4401` sin usuario, `4404` partida inexistente o usuario que no participa.
 
-Si Botcito falla, la jugada humana queda guardada, se envía `error` y la partida sigue en turno del
-bot. Al reconectar, Single Player retoma ese turno. El cliente nunca repite su jugada.
+Si Botcito falla, la jugada humana queda guardada, el gateway publica una señal `error` y la partida sigue en
+turno del bot. Al reconectar, el gateway retoma ese turno en segundo plano. El cliente nunca repite su
+jugada. Una jugada que Game Logic ya aceptó se publica aunque el cliente se desconecte.
 
 ## Errores
 
@@ -99,33 +110,26 @@ mvn test
 
 | Clase | Qué cubre |
 |---|---|
-| `SinglePlayerServiceTest` | Cuerpo de creación por modo, participantes, turno, bot, `expectedVersion`, rendición, visibilidad y `game.finished`, con dependencias simuladas |
-| `SinglePlayerIntegrationTest` | El servicio real, REST y WebSocket, contra un gateway interno falso que hace de Game Logic y Botcito. Verifica rutas, cuerpos, versiones, errores, cierres y la notificación de fin |
+| `SinglePlayerServiceTest` | `publish` (orden, guarda de versión, señales, validación), participantes del WebSocket y `game.finished`, con dependencias simuladas |
+| `SinglePlayerIntegrationTest` | El servicio real (`publish` y WebSocket) contra un Game Logic falso. Verifica que las rutas REST ya no existen, `publish` sin consultar a nadie, la guarda de versión, que el hub ignora los frames del cliente, el cierre de no participantes y la notificación de fin |
 | `GameStateContractTest` | El GameState del contrato pasa sin perder campos, y los mensajes tienen la forma exacta |
 | `GameFinishedListenerTest` | Filtro por modo, DLQ y reintentos |
 
 ## Prueba manual
 
-Con Game Logic en `:8082`, levanta el gateway interno falso y luego Single Player:
-
-```bash
-pip install chess
-GAME_LOGIC_URL=http://localhost:8082 python tools/fake_botcito.py     # puerto 8000
-GATEWAY_INTERNAL_URL=http://localhost:8000 mvn spring-boot:run
-```
+Las partidas se crean y se juegan por el gateway web (`POST /games`, WebSocket `/ws/games/{id}`). Aquí se puede
+crear una partida directamente en Game Logic, conectarse al hub y simular un aviso del gateway:
 
 ```bash
 U=7d1f9d5e-3c2b-4f0e-9a41-0b5f6d7a8c90
-curl -s -X POST localhost:8083/internal/single-player/games -H "X-User-Id: $U" \
-     -H 'Content-Type: application/json' -d '{"mode":"local"}'
+curl -s -X POST localhost:8082/internal/logic/games -H 'Content-Type: application/json' \
+     -d "{\"mode\":\"local\",\"visibility\":\"private\",\"timeControl\":null,\"botLevel\":null,\"participants\":[{\"userId\":\"$U\",\"color\":\"white\"},{\"userId\":\"$U\",\"color\":\"black\"}]}"
 
 # npm i -g wscat
 wscat -c "ws://localhost:8083/internal/single-player/ws/games/<gameId>" -H "X-User-Id: $U"
-> {"type":"move","uci":"f2f3","expectedVersion":0}
-> {"type":"move","uci":"e7e5","expectedVersion":1}
-> {"type":"move","uci":"g2g4","expectedVersion":2}
-> {"type":"move","uci":"d8h4","expectedVersion":3}   # llega state y luego game_over
-```
+# llega el state inicial; las jugadas ya no se envían aquí sino al gateway (/api/ws/games/{id})
 
-Contra el bot: `-d '{"mode":"vs_bot","botLevel":5,"playerColor":"black"}'`. La respuesta ya trae la
-primera jugada del bot.
+# Aviso del gateway (lo que llega al wscat de arriba)
+curl -i -X POST localhost:8083/internal/single-player/games/<gameId>/publish \
+     -H 'Content-Type: application/json' -d '{"signal":{"type":"bot_thinking"}}'
+```

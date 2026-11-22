@@ -21,7 +21,8 @@ function normalizedPath(url) {
 /**
  * /api/internal/* nunca llega al gateway (4.4 y 5.4.1). Se compara la ruta normalizada para que
  * variantes como /API/Internal, /api//internal o /api/%69nternal tampoco pasen. Una ruta mal
- * codificada se trata como interna: se bloquea.
+ * codificada se trata como interna: se bloquea. El gateway ya no expone /internal/*; el bloqueo
+ * se mantiene como defensa en profundidad.
  * @param {string} url
  */
 export function isInternalApiPath(url) {

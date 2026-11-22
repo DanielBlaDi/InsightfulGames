@@ -1,8 +1,8 @@
 """Rutas internas del Tutor (prefijo ``/internal/tutor/``, contrato sección 16.4).
 
-El gateway web traduce las rutas públicas ``/tutor/*`` a estas y añade la
-cabecera ``X-User-Id`` después de validar el JWT. Las rutas internas no se
-publican hacia el exterior (sección 2).
+Los gateways orquestan: leen la partida en Game Logic, comprueban la visibilidad y llaman a estas
+rutas. El Tutor no consulta a ningún servicio. Solo el POST necesita ``X-User-Id`` (queda como
+``requestedBy``). Las rutas internas no se publican hacia el exterior (sección 2).
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ import uuid
 from fastapi import APIRouter, Request, Response
 
 from app.errors import ApiError
-from app.models import AnalysisRequest, AnalysisStatus
+from app.models import AnalysisRequest, AnalysisStatus, EraseRequest
 from app.service import TutorService
 
 router = APIRouter(prefix="/internal/tutor", tags=["tutor"])
@@ -69,9 +69,16 @@ async def request_analysis(
 )
 async def get_analysis(analysis_id: str, request: Request):
     """Estado del análisis: pending, processing, completed o failed."""
-    return await _service(request).get_analysis(
-        analysis_id, _requesting_user(request)
-    )
+    return await _service(request).get_analysis(analysis_id)
+
+
+@router.get(
+    "/analyses/{analysis_id}/game-ref",
+    responses={404: {"description": "ANALYSIS_NOT_FOUND"}},
+)
+async def get_analysis_game_ref(analysis_id: str, request: Request):
+    """``{ gameId }`` del análisis: el gateway lo usa para comprobar la visibilidad en Game Logic."""
+    return await _service(request).get_game_ref(analysis_id)
 
 
 @router.get(
@@ -89,17 +96,22 @@ async def get_analysis_result(analysis_id: str, request: Request):
     ``moves`` lo escribe el Analysis Worker y se entrega tal cual, para no
     recortar campos que el worker agregue dentro del contrato.
     """
-    return await _service(request).get_result(
-        analysis_id, _requesting_user(request)
-    )
+    return await _service(request).get_result(analysis_id)
 
 
-@router.delete(
-    "/users/{user_id}",
+@router.get("/users/{user_id}/game-ids")
+async def user_game_ids(user_id: str, request: Request):
+    """``{ gameIds }``: partidas con análisis de este usuario (primer paso del borrado de cuenta)."""
+    return {"gameIds": await _service(request).game_ids_for_user(user_id)}
+
+
+@router.post(
+    "/users/{user_id}/erase",
     status_code=204,
     responses={204: {"description": "Borrado idempotente, exista o no el usuario"}},
 )
-async def delete_user(user_id: str, request: Request):
-    """Borra los análisis privados y anonimiza los conservados del usuario."""
-    await _service(request).delete_user(user_id)
+async def erase_user(user_id: str, payload: EraseRequest, request: Request):
+    """Borra los análisis de las partidas del usuario que no estén en ``keepGameIds``
+    (las partidas shared que el gateway decidió conservar) y anonimiza lo que queda."""
+    await _service(request).erase_user(user_id, payload.keepGameIds)
     return Response(status_code=204)

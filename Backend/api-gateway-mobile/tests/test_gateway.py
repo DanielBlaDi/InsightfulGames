@@ -1,5 +1,5 @@
 """Pruebas del gateway móvil contra el contrato técnico definitivo (secciones 4.11, 4.12 y 5).
-El gateway interno se simula con httpx.MockTransport."""
+Los servicios (Auth, Profile/Stats, Game Logic) se simulan con httpx.MockTransport."""
 
 import os
 import sys
@@ -7,7 +7,6 @@ import time
 
 os.environ["JWT_SECRET"] = "test-secret-test-secret-test-secret-123"
 os.environ["JWT_ALGORITHM"] = "HS256"
-os.environ["GATEWAY_INTERNAL_URL"] = "http://internal.test"
 os.environ["HTTP_TIMEOUT"] = "2"
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -20,8 +19,18 @@ from fastapi.testclient import TestClient
 import main
 
 USER = "11111111-1111-4111-8111-111111111111"
+OTHER = "99999999-9999-4999-8999-999999999999"
 GAME = "22222222-2222-4222-8222-222222222222"
 MATCH = "33333333-3333-4333-8333-333333333333"
+
+
+def state(game_id=GAME, mode="vs_bot", participants=None, visibility="private", **extra):
+    """GameState como lo entrega Game Logic (solo los campos que usa el gateway)."""
+    return {
+        "gameId": game_id, "mode": mode, "visibility": visibility,
+        "participants": participants if participants is not None else [{"userId": USER, "color": "white"}],
+        **extra,
+    }
 
 
 def token(sub=USER, exp_in=3600, secret=None, alg="HS256"):
@@ -34,7 +43,7 @@ def auth(**kw):
 
 
 class Internal:
-    """Gateway interno falso: registra las peticiones y responde según un mapa."""
+    """Servicios falsos: registran las peticiones y responden según un mapa (método, ruta)."""
 
     def __init__(self):
         self.calls: list[httpx.Request] = []
@@ -60,10 +69,7 @@ class Internal:
 def env():
     internal = Internal()
     with TestClient(main.app) as client:
-        main.app.state.client = httpx.AsyncClient(
-            base_url=main.GATEWAY_INTERNAL_URL,
-            transport=httpx.MockTransport(internal.handler),
-        )
+        main.app.state.client = httpx.AsyncClient(transport=httpx.MockTransport(internal.handler))
         yield client, internal
 
 
@@ -114,10 +120,13 @@ def test_cookie_is_not_accepted(env):
 
 def test_client_x_user_id_is_never_forwarded(env):
     client, internal = env
-    internal.on("GET", f"/internal/single-player/games/{GAME}", json={"gameId": GAME})
-    r = client.get(f"/games/{GAME}", headers={**auth(), "X-User-Id": "99999999-9999-4999-8999-999999999999"})
-    assert r.status_code == 200
-    assert internal.calls[0].headers["x-user-id"] == USER  # el del JWT, no el del cliente
+    internal.on("GET", f"/internal/logic/games/{GAME}", json=state())
+    r = client.get(f"/games/{GAME}", headers={**auth(), "X-User-Id": OTHER})
+    assert r.status_code == 200  # la visibilidad la decide el sub del JWT, no la cabecera del cliente
+    assert all("x-user-id" not in c.headers for c in internal.calls)
+
+    r = client.get(f"/games/{GAME}", headers={**auth(sub=OTHER), "X-User-Id": USER})
+    assert r.status_code == 404
 
 
 # --------------------------------------------------------------------- auth
@@ -195,27 +204,65 @@ def test_games_default_limit_and_invalid_limit(env):
     assert client.get("/games?limit=abc", headers=auth()).status_code == 400
 
 
-def test_game_detail_goes_to_single_player(env):
+def test_game_detail_reads_game_logic_directly(env):
     client, internal = env
-    internal.on("GET", f"/internal/single-player/games/{GAME}", json={"gameId": GAME, "mode": "vs_bot"})
+    internal.on("GET", f"/internal/logic/games/{GAME}", json=state(mode="vs_bot"))
     r = client.get(f"/games/{GAME}", headers=auth())
     assert r.status_code == 200 and r.json()["mode"] == "vs_bot"
-    assert internal.calls[0].url.path == f"/internal/single-player/games/{GAME}"
+    assert [c.url.path for c in internal.calls] == [f"/internal/logic/games/{GAME}"]
 
 
-def test_match_detail_goes_to_multiplayer(env):
+def test_game_detail_visible_only_to_participants_or_shared(env):
     client, internal = env
-    internal.on("GET", f"/internal/multiplayer/matches/{MATCH}", json={"gameId": GAME, "mode": "multiplayer"})
+    internal.on("GET", f"/internal/logic/games/{GAME}", json=state(mode="local"))
+    assert client.get(f"/games/{GAME}", headers=auth()).status_code == 200
+    r = client.get(f"/games/{GAME}", headers=auth(sub=OTHER))
+    assert r.status_code == 404 and r.json()["error"]["code"] == "GAME_NOT_FOUND"
+
+    internal.on("GET", f"/internal/logic/games/{GAME}", json=state(mode="local", visibility="shared"))
+    assert client.get(f"/games/{GAME}", headers=auth(sub=OTHER)).status_code == 200
+
+
+def test_game_detail_rejects_multiplayer_games(env):
+    client, internal = env
+    internal.on("GET", f"/internal/logic/games/{GAME}", json=state(mode="multiplayer", visibility="shared"))
+    r = client.get(f"/games/{GAME}", headers=auth())
+    assert r.status_code == 404 and r.json()["error"]["code"] == "GAME_NOT_FOUND"
+
+
+def test_match_detail_reads_game_logic_by_match(env):
+    client, internal = env
+    internal.on("GET", f"/internal/logic/games/by-match/{MATCH}", json=state(mode="multiplayer", matchId=MATCH))
     r = client.get(f"/matches/{MATCH}", headers=auth())
-    assert r.status_code == 200
-    assert internal.calls[0].headers["x-user-id"] == USER
+    assert r.status_code == 200 and r.json()["matchId"] == MATCH
+    assert [c.url.path for c in internal.calls] == [f"/internal/logic/games/by-match/{MATCH}"]
+    assert all("x-user-id" not in c.headers for c in internal.calls)
+
+
+def test_match_detail_visible_only_to_participants_or_shared(env):
+    client, internal = env
+    internal.on("GET", f"/internal/logic/games/by-match/{MATCH}", json=state(mode="multiplayer"))
+    denied = client.get(f"/matches/{MATCH}", headers=auth(sub=OTHER))
+    assert denied.status_code == 404 and denied.json()["error"]["code"] == "MATCH_NOT_FOUND"
+
+    internal.on("GET", f"/internal/logic/games/by-match/{MATCH}", json=state(mode="multiplayer", visibility="shared"))
+    assert client.get(f"/matches/{MATCH}", headers=auth(sub=OTHER)).status_code == 200
+
+
+def test_match_detail_rejects_non_multiplayer_games(env):
+    client, internal = env
+    internal.on("GET", f"/internal/logic/games/by-match/{MATCH}", json=state(mode="local"))
+    r = client.get(f"/matches/{MATCH}", headers=auth())
+    assert r.status_code == 404 and r.json()["error"]["code"] == "MATCH_NOT_FOUND"
 
 
 def test_not_found_codes_depend_on_origin(env):
     client, internal = env
-    internal.on("GET", f"/internal/single-player/games/{GAME}", status=404, json={"detail": "x"})
-    internal.on("GET", f"/internal/multiplayer/matches/{MATCH}", status=404, json={"detail": "x"})
+    internal.on("GET", f"/internal/logic/games/{GAME}", status=404, json={"detail": "x"})
+    internal.on("GET", f"/internal/logic/games/by-match/{MATCH}", status=404,
+                json={"error": {"code": "GAME_NOT_FOUND", "message": "x"}})
     assert client.get(f"/games/{GAME}", headers=auth()).json()["error"]["code"] == "GAME_NOT_FOUND"
+    # Game Logic dice GAME_NOT_FOUND; para una partida multiplayer el cliente ve MATCH_NOT_FOUND
     assert client.get(f"/matches/{MATCH}", headers=auth()).json()["error"]["code"] == "MATCH_NOT_FOUND"
     internal.on("GET", f"/internal/profile/users/{USER}/profile", status=404, json={"detail": "x"})
     assert client.get("/profile/me", headers=auth()).json()["error"]["code"] == "NOT_FOUND"
@@ -223,10 +270,26 @@ def test_not_found_codes_depend_on_origin(env):
 
 def test_contract_errors_pass_through(env):
     client, internal = env
-    err = {"error": {"code": "MATCH_NOT_FOUND", "message": "Texto del servicio"}}
-    internal.on("GET", f"/internal/multiplayer/matches/{MATCH}", status=404, json=err)
-    r = client.get(f"/matches/{MATCH}", headers=auth())
+    err = {"error": {"code": "GAME_NOT_FOUND", "message": "Texto del servicio"}}
+    internal.on("GET", f"/internal/logic/games/{GAME}", status=404, json=err)
+    r = client.get(f"/games/{GAME}", headers=auth())
     assert r.status_code == 404 and r.json() == err
+
+
+def test_each_service_is_called_directly_on_its_own_host(env):
+    client, internal = env
+    internal.on("GET", f"/internal/profile/users/{USER}/profile", json={"userId": USER})
+    internal.on("GET", f"/internal/logic/games/{GAME}", json=state())
+    internal.on("POST", "/internal/auth/login", json={"accessToken": "t"})
+    client.get("/profile/me", headers=auth())
+    client.get(f"/games/{GAME}", headers=auth())
+    client.post("/auth/login", json={"username": "ana", "password": "x"})
+    hosts = {c.url.path.split("/")[2]: c.url.host for c in internal.calls}
+    assert hosts == {
+        "profile": "profile-stats-component",
+        "logic": "game-logic-component",
+        "auth": "auth-component",
+    }
 
 
 def test_malformed_ids_never_reach_internal(env):
@@ -239,10 +302,10 @@ def test_malformed_ids_never_reach_internal(env):
     assert internal.calls == []
 
 
-def test_tutor_and_account_deletion_not_exposed(env):
+def test_tutor_routes_are_not_exposed(env):
     client, _ = env
     assert client.get("/tutor/analyses", headers=auth()).status_code == 404
-    assert client.delete("/auth/account", headers=auth()).status_code == 404
+    assert client.post("/tutor/analyses", headers=auth(), json={}).status_code == 404
 
 
 # ---------------------------------------------------------------------- home
@@ -299,7 +362,7 @@ def test_home_all_failing_but_reachable_is_still_200(env):
     assert r.json()["unavailable"] == ["profile", "stats", "recentGames"]
 
 
-def test_home_503_when_internal_gateway_unreachable(env):
+def test_home_503_when_no_service_is_reachable(env):
     client, internal = env
     for path in [f"/internal/profile/users/{USER}/profile", f"/internal/profile/users/{USER}/stats", "/internal/logic/games"]:
         internal.on("GET", path, exc=httpx.ConnectError("caído"))
@@ -408,11 +471,11 @@ def test_wrong_method_is_not_found_not_405(env):
 
 def test_unformatted_409_and_422_become_upstream_error(env):
     client, internal = env
-    internal.on("GET", f"/internal/single-player/games/{GAME}", status=409, json={"x": 1})
+    internal.on("GET", f"/internal/logic/games/{GAME}", status=409, json={"x": 1})
     r = client.get(f"/games/{GAME}", headers=auth())
     assert r.status_code == 502 and r.json()["error"]["code"] == "UPSTREAM_ERROR"
 
-    internal.on("GET", f"/internal/single-player/games/{GAME}", status=422, json={"x": 1})
+    internal.on("GET", f"/internal/logic/games/{GAME}", status=422, json={"x": 1})
     r = client.get(f"/games/{GAME}", headers=auth())
     assert r.status_code == 502 and r.json()["error"]["code"] == "UPSTREAM_ERROR"
 
@@ -420,7 +483,7 @@ def test_unformatted_409_and_422_become_upstream_error(env):
 def test_contract_errors_from_services_pass_through(env):
     client, internal = env
     body = {"error": {"code": "GAME_NOT_FOUND", "message": "No existe"}}
-    internal.on("GET", f"/internal/single-player/games/{GAME}", status=404, json=body)
+    internal.on("GET", f"/internal/logic/games/{GAME}", status=404, json=body)
     r = client.get(f"/games/{GAME}", headers=auth())
     assert r.status_code == 404 and r.json() == body
 

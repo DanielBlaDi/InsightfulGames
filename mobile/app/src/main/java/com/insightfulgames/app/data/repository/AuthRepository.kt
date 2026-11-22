@@ -12,6 +12,7 @@ class AuthRepository(
     private val sessionStore: SessionStore,
 ) {
     val sessionExpired: StateFlow<Boolean> = sessionStore.expired
+    val accountDeleted: StateFlow<Boolean> = sessionStore.accountDeleted
 
     suspend fun login(username: String, password: String): Result<Unit> =
         apiCall { api.login(LoginRequest(username.trim(), password)) }
@@ -26,4 +27,8 @@ class AuthRepository(
 
     /** La app no usa /auth/logout (no hay cookie): solo borra el token del teléfono. */
     suspend fun logout() = sessionStore.clear()
+
+    /** Borra la cuenta (saga del gateway). Si sale bien, cierra la sesión con el aviso de cuenta borrada. */
+    suspend fun deleteAccount(): Result<Unit> =
+        apiCall { api.deleteAccount() }.mapCatching { sessionStore.clearAfterDeletion() }
 }
