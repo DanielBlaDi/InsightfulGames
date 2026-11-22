@@ -28,7 +28,7 @@ from pathlib import Path
 
 import httpx
 
-HOST = os.getenv("PROXY_HOST", "localhost")
+HOST = os.getenv("PROXY_HOST", "127.0.0.1")  # no "localhost": en Windows prueba IPv6 primero y retrasa ~1,5 s la primera conexión
 WEB_PORT = int(os.getenv("FRONTEND_PORT", "80"))
 MOBILE_PORT = int(os.getenv("MOBILE_GATEWAY_PORT", "8090"))
 BRUTE_FORCE_ATTEMPTS = int(os.getenv("BRUTE_FORCE_ATTEMPTS", "300"))
@@ -36,6 +36,15 @@ BRUTE_FORCE_CONCURRENCY = 50
 LEGIT_CONTAINER = os.getenv("LEGIT_CONTAINER", "api-gateway-mobile")  # cliente legítimo con otra IP
 GATEWAY_CONTAINERS = ["api-gateway-component", "api-gateway-mobile"]
 PASSWORD = "Clave-Segura-123"
+
+# limit_req de nginx.conf: rate=10r/s, burst=20 (nodelay)
+RATE_PER_S = 10
+BURST = 20
+
+
+def allowed_by(t):
+    """Intentos que nginx puede dejar pasar en un ataque de t segundos: el primero, la ráfaga y 10 por segundo."""
+    return 1 + BURST + RATE_PER_S * t
 
 ENTRIES = {
     "web": {
@@ -146,7 +155,8 @@ async def brute_force(entry, victim):
                     status = r.status_code
                 except httpx.HTTPError:
                     status = 0
-                results.append((status, (time.perf_counter() - t) * 1000))
+                # (estado, latencia ms, instante de envío en s desde el inicio del ataque)
+                results.append((status, (time.perf_counter() - t) * 1000, t - start))
 
         start = time.perf_counter()
         await asyncio.gather(*(attempt(i) for i in range(BRUTE_FORCE_ATTEMPTS)))
@@ -155,19 +165,36 @@ async def brute_force(entry, victim):
     out, _ = await legit.communicate()
     legit_results = json.loads(out.decode() or "[]")
 
-    blocked = [ms for s, ms in results if s == 429]
-    reached = [ms for s, ms in results if s == 401]
-    other = sorted({s for s, _ in results if s not in (401, 429)})
+    blocked = [ms for s, ms, _ in results if s == 429]
+    reached = [ms for s, ms, _ in results if s == 401]
+    other = sorted({s for s, _, _ in results if s not in (401, 429)})
+
+    # Medida por tasa (la que define la táctica): tras la ráfaga inicial (el primero + 20), el resto de intentos
+    # que llega a Auth no debe superar 10 por segundo de media. Se mide sobre toda la duración del ataque: la
+    # comprobación instante a instante no es fiable desde el cliente (con 50 conexiones simultáneas, el instante
+    # de envío del cliente y el de llegada a nginx difieren en ~100 ms).
+    sent_times = sorted(t for _, _, t in results)
+    reached_times = sorted(t for s, _, t in results if s == 401)
+    sustained_rate = max(0, len(reached_times) - 1 - BURST) / duration
+    per_second = {}
+    for t in reached_times:
+        per_second[int(t)] = per_second.get(int(t), 0) + 1
     legit_ok = sum(1 for s, _ in legit_results if s == 200)
     return {
         "intentos": len(results),
+        "serie_envios_s": [round(t, 3) for t in sent_times],
+        "serie_llegaron_a_auth_s": [round(t, 3) for t in reached_times],
+        "llegaron_a_auth_por_segundo": [per_second.get(k, 0) for k in range(int(duration) + 1)],
+        "tasa_sostenida_a_auth_rps": round(sustained_rate, 1),
+        "limite_tasa_rps": RATE_PER_S,
+        "cumple_limite_de_tasa": len(reached_times) <= allowed_by(duration) and sustained_rate <= RATE_PER_S,
         "duracion_s": round(duration, 2),
         "tasa_ataque_rps": round(len(results) / duration, 1),
         "bloqueados_429": len(blocked),
         "llegaron_a_auth_401": len(reached),
         "otros_estados": other,
         "pct_bloqueado": round(100 * len(blocked) / len(results), 1),
-        "maximo_teorico_que_pasa": round(20 + 10 * duration),
+        "maximo_teorico_que_pasa": int(allowed_by(duration)),
         "latencia_429_p50_ms": percentile(blocked, 50),
         "latencia_429_p95_ms": percentile(blocked, 95),
         "latencia_401_p95_ms": percentile(reached, 95),
@@ -330,7 +357,7 @@ async def main():
     for entry in ENTRIES:
         print(f"[{entry}] S1 fuerza bruta...")
         s1 = await brute_force(entry, victim)
-        await asyncio.sleep(5)
+        await asyncio.sleep(15)  # que terminen las peticiones de S1 que siguen en curso en Auth
         print(f"[{entry}] S2 acceso interno...")
         s2 = await internal_access(entry)
         print(f"[{entry}] S3 suplantación...")
