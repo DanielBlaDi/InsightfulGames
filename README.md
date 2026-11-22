@@ -175,10 +175,11 @@ docker compose up --build -d
 
 ## Mobile app (Android)
 
-The Android app lives in `mobile/` and talks only to the **mobile gateway** (`Backend/api-gateway-mobile/`, port `MOBILE_GATEWAY_PORT`, 8090 by default), which calls Auth, Profile/Stats and Game Logic directly (it does not go through the web gateway). It shows profile, statistics, game history and game details; it does not play live games.
+The Android app lives in `mobile/` and talks only to the **mobile gateway** (`Backend/api-gateway-mobile/`, port `MOBILE_GATEWAY_PORT`, 8090 by default), which calls Auth, Profile/Stats and Game Logic directly (it does not go through the web gateway). It shows profile, statistics, game history and game details, plays local (two players, same phone) games and can delete the account; it does not play vs the bot or online multiplayer.
 
 ```
-Android app ──▶ reverse-proxy :8090 ──▶ api-gateway-mobile ──▶ Auth · Profile/Stats · Game Logic · Tutor (account deletion)
+Android app ──▶ reverse-proxy-mobile :8090 ──▶ api-gateway-mobile ──▶ Auth · Profile/Stats · Game Logic · Tutor (account deletion) · Single Player hub (publish)
+Browser     ──▶ reverse-proxy-web    :80   ──▶ frontend / api-gateway-component ──▶ services
 ```
 
 1. `cp .env.example .env` and fill in the values (`MOBILE_GATEWAY_PORT=8090`).
@@ -186,7 +187,7 @@ Android app ──▶ reverse-proxy :8090 ──▶ api-gateway-mobile ──▶
 3. Check `http://localhost:8090/health` → `{"status":"ok"}`.
 4. Open `mobile/` in Android Studio and run it (emulator: `BASE_URL` is already `http://10.0.2.2:8090/`). See `mobile/README.md`.
 
-Profile and statistics come from the Profile/Stats service (not built yet): until `PROFILE_URL` is configured in `compose.yaml`, the app shows those cards as "No disponible en este momento"; login, history and game details work.
+Profile and statistics come from the Profile/Stats service. Right after registering, the profile appears once the `user.registered` event is consumed (about a second); until then the app shows "No disponible en este momento" with a retry button.
 
 Tests: `cd Backend/api-gateway-mobile && pip install -r requirements-dev.txt && pytest -q` and `cd Backend/api-gateway && pip install -r requirements-dev.txt && pytest -q`.
 

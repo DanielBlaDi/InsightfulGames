@@ -43,6 +43,9 @@ services:
     build:
       context: ./Backend/reverse-proxy
       dockerfile: Dockerfile
+      args:
+        ENTRY: web            # nginx/common.conf + nginx/web.conf
+        HEALTH_PORT: "8000"
     image: reverse-proxy-web:dev
     # Temporary mock / bypass without WAF: comment these lines out when enabling `waf-component`.
     ports:
@@ -66,6 +69,9 @@ services:
     build:
       context: ./Backend/reverse-proxy
       dockerfile: Dockerfile
+      args:
+        ENTRY: mobile         # nginx/common.conf + nginx/mobile.conf
+        HEALTH_PORT: "8090"
     image: reverse-proxy-mobile:dev
     # Temporary mock / bypass without WAF: comment these lines out when enabling `waf-component`.
     ports:
