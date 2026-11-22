@@ -16,7 +16,7 @@ from . import engine, logic, upstream
 from .context import Ctx
 from .errors import FlowError, GatewayError
 
-logger = logging.getLogger("gateway.web")
+logger = logging.getLogger("gateway.orchestration")
 
 LOCAL = "local"
 VS_BOT = "vs_bot"
@@ -299,6 +299,12 @@ async def resync(ctx: Ctx, game_id: str) -> None:
 async def handle_move(ctx: Ctx, user_id: str, game_id: str, uci: Any, expected_version: Any) -> None:
     """Jugada del humano (frame `move`). Todo lo que cambia se publica a los clientes conectados; si es
     el turno del bot, se le pide su jugada a continuación. Lanza FlowError si la jugada no se acepta."""
+    await apply_move(ctx, user_id, game_id, uci, expected_version)
+
+
+async def apply_move(ctx: Ctx, user_id: str, game_id: str, uci: Any, expected_version: Any) -> dict[str, Any]:
+    """Aplica la jugada y la publica; en vs_bot sigue con el turno del bot. Devuelve el estado tras la
+    jugada del humano (el gateway móvil lo responde por REST). Lanza FlowError si no se acepta."""
     if not isinstance(uci, str) or not uci.strip():
         raise _validation("Falta el campo uci")
     if not _is_int(expected_version):
@@ -323,6 +329,7 @@ async def handle_move(ctx: Ctx, user_id: str, game_id: str, uci: Any, expected_v
 
         if is_bot_turn(nxt):
             await try_bot_turn(ctx, nxt)
+        return nxt
 
 
 async def resume_bot_if_needed(ctx: Ctx, state: dict[str, Any]) -> None:

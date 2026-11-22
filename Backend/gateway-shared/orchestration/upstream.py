@@ -7,7 +7,7 @@ import httpx
 
 from .errors import UpstreamTimeout, UpstreamUnreachable
 
-logger = logging.getLogger("gateway.web")
+logger = logging.getLogger("gateway.orchestration")
 
 
 async def call(

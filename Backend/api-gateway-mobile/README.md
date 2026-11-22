@@ -4,6 +4,11 @@ Contrato técnico definitivo (secciones 4.11 y 5). FastAPI, puerto 8090. **Orque
 (Auth, Profile/Stats y Game Logic, rutas `/internal/<servicio>/*` de cada uno). No depende del gateway web ni de ningún
 gateway interno. Ya está en el `compose.yaml` raíz.
 
+**Partida local en vivo.** Crear, mover y rendirse usan los flows de `Backend/gateway-shared/orchestration` (los mismos del
+gateway web). Por eso la imagen se construye con contexto `./Backend` (`docker build -f api-gateway-mobile/Dockerfile Backend`)
+y, en local, `conftest.py` agrega `../gateway-shared` al `sys.path`. Para correr el gateway a mano:
+`PYTHONPATH=../gateway-shared uvicorn main:app --port 8090`.
+
 **Lista de partidas.** El contrato (4.1) define `GET /internal/logic/games` → `{items, nextCursor}` y Game Logic ya lo cumple
 (GL-04). El gateway deja pasar esa respuesta sin transformarla: el cursor es opaco y la paginación la hace Game Logic.
 Una lista plana o el formato anterior `{matches, cursor}` ya no se convierten; se responden como 502 `UPSTREAM_ERROR`.
@@ -19,6 +24,9 @@ Una lista plana o el formato anterior `{matches, cursor}` ya no se convierten; s
 | `GET /games?limit&cursor` | sí   | Game Logic `GET /internal/logic/games?userId=&limit=&cursor=` (limit máx. 20)      |
 | `GET /games/{id}`         | sí   | Game Logic `GET /internal/logic/games/{id}`: solo `local` y `vs_bot`, con visibilidad |
 | `GET /matches/{id}`       | sí   | Game Logic `GET /internal/logic/games/by-match/{id}`: solo `multiplayer`, con visibilidad |
+| `POST /games`             | sí   | Solo `{mode:"local", timeControl: null \| {minutes:10}}` (otro `mode` = 400). Game Logic `POST games` con los dos colores para el usuario → 201 `GameState` |
+| `POST /games/{id}/moves`  | sí   | `{uci, expectedVersion}` → Game Logic `POST games/{id}/moves` → 200 `GameState`. 409 `VERSION_CONFLICT` / 422 pasan tal cual |
+| `POST /games/{id}/resign` | sí   | `{side}` (en local, qué color se rinde) → Game Logic `POST games/{id}/resign` → 200 `GameState` |
 
 - **Visibilidad (regla del gateway).** El detalle solo se entrega al participante o si la partida es `shared`; si no, 404
   (`GAME_NOT_FOUND` / `MATCH_NOT_FOUND`). Un `GET /games/{id}` sobre una partida multiplayer, o un `GET /matches/{id}` sobre una
@@ -40,6 +48,9 @@ Una lista plana o el formato anterior `{matches, cursor}` ya no se convierten; s
 - Solo emite códigos del catálogo 4.12. Un método no soportado responde 404 `NOT_FOUND`; un 409 o 422 de un servicio sin formato de error común responde 502 `UPSTREAM_ERROR`.
 - Un id de ruta que no es UUID responde 404 sin llamar a ningún servicio.
 - No arranca sin `JWT_SECRET`.
+- Partida local: solo participantes (si no, 404 `GAME_NOT_FOUND`). Tras cada cambio avisa al hub de Single Player
+  (`publish`, mejor esfuerzo: si el hub está caído la jugada igual responde 200), así una sesión web abierta de la misma
+  partida se actualiza. No llama a Botcito.
 
 ## Variables
 
@@ -52,6 +63,7 @@ y la URL base de cada servicio:
 | `GAME_LOGIC_URL` | `http://game-logic-component:8082`  |
 | `PROFILE_URL`    | `http://profile-stats-component:8087` |
 | `TUTOR_URL`      | `http://tutor-component:8085` (solo para el borrado de cuenta) |
+| `SINGLE_PLAYER_URL` | `http://single-player-component:8083` (solo `publish` de la partida local) |
 
 ## Pruebas
 
@@ -63,7 +75,8 @@ pytest -q     # las e2e se omiten si no defines MOBILE_GATEWAY_URL
 | Archivo                   | Qué prueba                                                                                              | Necesita             |
 | ------------------------- | ------------------------------------------------------------------------------------------------------- | -------------------- |
 | `tests/test_gateway.py`   | El gateway móvil contra servicios simulados con `httpx.MockTransport`                                    | nada                 |
-| `tests/test_e2e_mixed.py` | Registro, login, perfil, estadísticas, inicio, historial paginado y detalle contra **procesos reales**  | `MOBILE_GATEWAY_URL` |
+| `tests/test_local_games.py` | Partida local: crear, mover, rendirse, errores de Game Logic y hub caído (simulados)                   | nada                 |
+| `tests/test_e2e_mixed.py` | Registro, login, perfil, estadísticas, inicio, historial, detalle y partida local contra **procesos reales** | `MOBILE_GATEWAY_URL` |
 
 ## Probar con servicios reales y/o simulados
 

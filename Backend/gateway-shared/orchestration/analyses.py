@@ -17,7 +17,7 @@ from . import logic, upstream
 from .errors import FlowError, GatewayError, deletion_unavailable
 from .visibility import is_visible, participant_ids
 
-logger = logging.getLogger("gateway.web")
+logger = logging.getLogger("gateway.orchestration")
 
 INVALID_BODY = "La solicitud no cumple el formato esperado."
 NOT_VISIBLE = "La partida no existe o no es visible para el usuario."

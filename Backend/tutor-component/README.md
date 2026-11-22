@@ -499,7 +499,7 @@ RABBITMQ_DEFAULT_USER=
 RABBITMQ_DEFAULT_PASS=
 ```
 
-### Gateway web (`Backend/api-gateway`, módulo `orchestration/analyses.py`)
+### Gateway web (`Backend/api-gateway`, módulo `gateway-shared/orchestration/analyses.py`)
 
 El gateway **orquesta**: el Tutor no consulta a Game Logic.
 

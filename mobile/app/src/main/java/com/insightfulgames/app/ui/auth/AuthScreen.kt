@@ -42,6 +42,7 @@ fun AuthScreen(
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     val expired by viewModel.sessionExpired.collectAsStateWithLifecycle()
+    val accountDeleted by viewModel.accountDeleted.collectAsStateWithLifecycle()
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
@@ -67,6 +68,14 @@ fun AuthScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
+            if (accountDeleted && !ui.registerMode) {
+                Text(
+                    text = "Tu cuenta fue borrada.",
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
             if (expired && !ui.registerMode) {
                 Text(
                     text = "Tu sesión expiró. Inicia sesión de nuevo.",

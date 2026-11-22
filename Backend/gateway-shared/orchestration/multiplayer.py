@@ -19,7 +19,7 @@ from . import upstream
 from .context import Ctx
 from .errors import FlowError, GatewayError, is_contract_error, payload_of
 
-logger = logging.getLogger("gateway.web")
+logger = logging.getLogger("gateway.orchestration")
 
 IDEMPOTENCY_KEY_RE = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
 UUID_RE = re.compile(

@@ -16,6 +16,7 @@ val AppJson = Json {
 }
 
 object ApiClient {
+    private const val ACCOUNT_DELETION_TIMEOUT_S = 70
 
     /**
      * @param tokenProvider token vigente (o null).
@@ -32,7 +33,13 @@ object ApiClient {
                 if (token != null) header("Authorization", "Bearer $token")
             }.build()
 
-            val response = chain.proceed(request)
+            // El borrado de cuenta es una saga que puede tardar hasta 60 s en el gateway (nginx espera 65 s).
+            val isAccountDeletion = request.method == "DELETE" && request.url.encodedPath.endsWith("/auth/account")
+            val response = if (isAccountDeletion) {
+                chain.withReadTimeout(ACCOUNT_DELETION_TIMEOUT_S, TimeUnit.SECONDS).proceed(request)
+            } else {
+                chain.proceed(request)
+            }
 
             // 401 en login/registro = credenciales incorrectas: no cierra nada.
             val path = request.url.encodedPath

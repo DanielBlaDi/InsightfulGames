@@ -8,9 +8,13 @@ Puerta de la app Kotlin:
 - Responde 404 a cualquier ruta /internal/* que llegue desde fuera.
 - Orquesta la saga de borrado de cuenta (DELETE /auth/account); es lo único que hace con el Tutor,
   no expone ninguna de sus rutas.
+- Partidas locales en vivo por REST (crear, mover, rendirse) con los flows compartidos de
+  Backend/gateway-shared/orchestration, los mismos del gateway web. Tras cada cambio avisa al hub de
+  Single Player (mejor esfuerzo). No crea partidas vs_bot ni multiplayer: no llama a Botcito.
 """
 
 import asyncio
+import json
 import logging
 import os
 import re
@@ -24,6 +28,10 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
+
+from orchestration import single_player
+from orchestration.context import BackgroundTasks, Ctx, GameLocks
+from orchestration.errors import GatewayError as FlowGatewayError
 
 # --------------------------------------------------------------------------- #
 # Configuración
@@ -45,6 +53,8 @@ UPSTREAMS: dict[str, str] = {
         "profile": os.getenv("PROFILE_URL", "http://profile-stats-component:8087"),
         # solo para el borrado de cuenta: el móvil no expone rutas del Tutor
         "tutor": os.getenv("TUTOR_URL", "http://tutor-component:8085"),
+        # solo para avisar (publish) al hub de las partidas locales que se juegan desde la app
+        "single-player": os.getenv("SINGLE_PLAYER_URL", "http://single-player-component:8083"),
     }.items()
 }
 JWT_SECRET = os.getenv("JWT_SECRET", "")
@@ -75,10 +85,13 @@ def _validate_config() -> None:
 async def lifespan(app: FastAPI):
     _validate_config()
     app.state.client = httpx.AsyncClient(timeout=HTTP_TIMEOUT, follow_redirects=False)
+    app.state.locks = GameLocks()
+    app.state.tasks = BackgroundTasks()
     logger.info("Gateway móvil listo; servicios: %s", UPSTREAMS)
     try:
         yield
     finally:
+        await app.state.tasks.drain(timeout=HTTP_TIMEOUT)
         await app.state.client.aclose()
 
 
@@ -118,6 +131,12 @@ def error_response(status: int, code: str, message: str) -> JSONResponse:
 
 @app.exception_handler(GatewayError)
 async def gateway_error_handler(_: Request, exc: GatewayError):
+    return error_response(exc.status, exc.code, exc.message)
+
+
+@app.exception_handler(FlowGatewayError)
+async def flow_error_handler(_: Request, exc: FlowGatewayError):
+    """Errores de los flows compartidos (orchestration): mismo formato común."""
     return error_response(exc.status, exc.code, exc.message)
 
 
@@ -505,6 +524,60 @@ async def get_game(game_id: str, request: Request, user_id: str = Depends(curren
         return error_response(502, "UPSTREAM_ERROR", "Respuesta inesperada del servicio")
     if state.get("mode") not in ("local", "vs_bot") or not _is_visible(state, user_id):
         return error_response(404, "GAME_NOT_FOUND", "La partida no existe o no es visible")
+    return JSONResponse(status_code=200, content=state)
+
+
+# --- Partida local en vivo (flows compartidos con el gateway web) ---
+
+
+def _ctx(request: Request) -> Ctx:
+    state = request.app.state
+    return Ctx(state.client, UPSTREAMS, state.locks, HTTP_TIMEOUT, state.tasks)
+
+
+def _json_body(raw: bytes) -> Any:
+    try:
+        return json.loads(raw) if raw and raw.strip() else None
+    except ValueError:
+        return None
+
+
+def _game_not_found() -> JSONResponse:
+    return error_response(404, "GAME_NOT_FOUND", "La partida no existe o no es visible")
+
+
+@app.post("/games")
+async def create_game(request: Request, user_id: str = Depends(current_user)):
+    """Crea una partida local (los dos colores para el usuario). La app no crea vs_bot ni multiplayer."""
+    raw = await request.body()
+    body = _json_body(raw)
+    if isinstance(body, dict) and body.get("mode") != "local":
+        return error_response(400, "VALIDATION_ERROR", 'mode debe ser "local"')
+    state = await single_player.create(_ctx(request), user_id, raw)
+    return JSONResponse(status_code=201, content=state)
+
+
+@app.post("/games/{game_id}/moves")
+async def move_game(game_id: str, request: Request, user_id: str = Depends(current_user)):
+    """Jugada { uci, expectedVersion }. Devuelve el GameState nuevo; 409 VERSION_CONFLICT si la versión
+    es vieja (la app relee la partida) y 422 si la jugada no es legal o la partida terminó."""
+    if not UUID_RE.match(game_id):
+        return _game_not_found()
+    body = _json_body(await request.body())
+    if not isinstance(body, dict):
+        return error_response(400, "VALIDATION_ERROR", "El cuerpo de la petición no es un JSON válido")
+    state = await single_player.apply_move(
+        _ctx(request), user_id, game_id, body.get("uci"), body.get("expectedVersion")
+    )
+    return JSONResponse(status_code=200, content=state)
+
+
+@app.post("/games/{game_id}/resign")
+async def resign_game(game_id: str, request: Request, user_id: str = Depends(current_user)):
+    """Rendición { side }: en local se indica qué color se rinde."""
+    if not UUID_RE.match(game_id):
+        return _game_not_found()
+    state = await single_player.resign(_ctx(request), user_id, game_id, await request.body())
     return JSONResponse(status_code=200, content=state)
 
 

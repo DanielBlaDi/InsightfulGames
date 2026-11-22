@@ -22,7 +22,7 @@ import httpx
 from . import analyses, upstream
 from .errors import GatewayError, deletion_unavailable as _unavailable
 
-logger = logging.getLogger("gateway.web")
+logger = logging.getLogger("gateway.orchestration")
 
 
 async def _step(

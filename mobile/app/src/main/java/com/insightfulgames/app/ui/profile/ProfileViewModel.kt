@@ -12,6 +12,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
+/** Borrado de cuenta: Idle, Deleting o Error (con el mensaje del servidor; la sesión sigue abierta). */
+sealed interface DeleteState {
+    data object Idle : DeleteState
+    data object Deleting : DeleteState
+    data class Error(val message: String) : DeleteState
+}
+
 class ProfileViewModel(
     private val repo: ProfileRepository,
     private val auth: AuthRepository,
@@ -35,5 +42,23 @@ class ProfileViewModel(
 
     fun logout() {
         viewModelScope.launch { auth.logout() }
+    }
+
+    private val _delete = MutableStateFlow<DeleteState>(DeleteState.Idle)
+    val delete: StateFlow<DeleteState> = _delete.asStateFlow()
+
+    /** Si sale bien, la sesión se cierra y AppRoot vuelve al login con el aviso de cuenta borrada. */
+    fun deleteAccount() {
+        if (_delete.value == DeleteState.Deleting) return
+        _delete.value = DeleteState.Deleting
+        viewModelScope.launch {
+            auth.deleteAccount()
+                .onSuccess { _delete.value = DeleteState.Idle }
+                .onFailure { _delete.value = DeleteState.Error(it.userMessage()) }
+        }
+    }
+
+    fun resetDelete() {
+        if (_delete.value != DeleteState.Deleting) _delete.value = DeleteState.Idle
     }
 }

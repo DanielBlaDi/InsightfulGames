@@ -6,11 +6,11 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY api-gateway/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY main.py .
-COPY orchestration orchestration
+COPY api-gateway/main.py .
+COPY gateway-shared/orchestration orchestration
 
 RUN useradd -r -u 1001 app && chown -R app /app
 USER app

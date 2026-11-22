@@ -7,7 +7,7 @@ from typing import Any, Coroutine, Mapping
 
 import httpx
 
-logger = logging.getLogger("gateway.web")
+logger = logging.getLogger("gateway.orchestration")
 
 
 class GameLocks:

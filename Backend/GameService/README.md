@@ -8,8 +8,8 @@ Coordina las partidas de un solo usuario: `local` (dos personas en la misma pant
 quien se conecta y avisa a los clientes de lo que cambia. No tiene base propia ni decide nada del juego: el
 estado vive en Game Logic, que es la única fuente de verdad.
 
-**Todo lo que cambia una partida lo orquesta el gateway web** (`Backend/api-gateway`, módulos
-`orchestration/single_player.py` y `ws_session.py`): crear, leer, rendirse, cambiar la visibilidad, las
+**Todo lo que cambia una partida lo orquesta el gateway web** (`Backend/api-gateway`, con los módulos compartidos de `Backend/gateway-shared/`
+`orchestration/single_player.py` y `ws_session.py`; el gateway móvil usa los mismos para la partida local): crear, leer, rendirse, cambiar la visibilidad, las
 jugadas, el turno del bot y las respuestas `move_rejected` / `error` al cliente. El gateway llama a Game
 Logic y a Botcito y, tras cada cambio, avisa a este hub con `POST .../publish`. Este servicio ya no llama a
 Botcito ni expone rutas REST de juego.

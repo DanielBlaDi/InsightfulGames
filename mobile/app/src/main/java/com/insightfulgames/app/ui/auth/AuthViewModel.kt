@@ -26,6 +26,9 @@ class AuthViewModel(private val auth: AuthRepository) : ViewModel() {
     /** true si la sesión anterior se cerró por un 401 (token vencido). */
     val sessionExpired: StateFlow<Boolean> = auth.sessionExpired
 
+    /** true si la sesión anterior se cerró porque el usuario borró su cuenta. */
+    val accountDeleted: StateFlow<Boolean> = auth.accountDeleted
+
     fun onUsernameChange(value: String) = _ui.update { it.copy(username = value, error = null) }
     fun onPasswordChange(value: String) = _ui.update { it.copy(password = value, error = null) }
     fun toggleMode() = _ui.update { it.copy(registerMode = !it.registerMode, error = null) }

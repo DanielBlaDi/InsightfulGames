@@ -5,7 +5,7 @@ en Go 1.24 y escucha en el puerto `8084`. Es un **hub de sesiones**: mantiene la
 WebSocket, la presencia de los jugadores y los plazos de reconexión, y envía a los clientes lo que
 cambia. No tiene base de datos.
 
-**Todo lo que cambia una partida lo orquesta el gateway web** (`Backend/api-gateway`, módulos
+**Todo lo que cambia una partida lo orquesta el gateway web** (`Backend/api-gateway`, con los módulos compartidos de `Backend/gateway-shared/`
 `orchestration/multiplayer.py` y `ws_session.py`): crear la partida (con `Idempotency-Key`), unirse, leerla,
 rendirse, cambiar la visibilidad y las acciones por WebSocket (`move`, `resign`, `draw_*`). El gateway llama a
 Game Logic y, tras cada cambio, avisa a este hub con `POST /internal/multiplayer/matches/{id}/publish`.

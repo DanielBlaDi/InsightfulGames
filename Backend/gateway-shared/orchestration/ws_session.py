@@ -18,7 +18,7 @@ from . import multiplayer, single_player
 from .context import Ctx
 from .errors import GatewayError
 
-logger = logging.getLogger("gateway.web")
+logger = logging.getLogger("gateway.orchestration")
 
 # 400, 409 y 422 son acciones no aceptadas (move_rejected); el resto (404, 5xx) son fallos ajenos a la
 # jugada que no cambian la partida (error)

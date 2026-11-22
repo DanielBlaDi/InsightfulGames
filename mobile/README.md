@@ -2,7 +2,8 @@
 
 Contrato técnico definitivo, sección 15 (rutas en 4.11). Kotlin · Jetpack Compose · Material 3 · Navigation · Retrofit/OkHttp · kotlinx.serialization · EncryptedSharedPreferences.
 
-Alcance: perfil, estadísticas, historial y detalle. No juega partidas en vivo, no muestra análisis del Tutor y no borra la cuenta.
+Alcance: perfil, estadísticas, historial, detalle, **partidas locales en vivo** (dos jugadores en el mismo teléfono, con o sin
+reloj de 10 min) y **borrado de cuenta**. No juega contra el bot ni multijugador online, y no muestra análisis del Tutor.
 
 ## Cómo abrirla
 1. Android Studio (Koala o más nuevo) → *Open* → esta carpeta.
@@ -23,7 +24,16 @@ Alcance: perfil, estadísticas, historial y detalle. No juega partidas en vivo, 
    registrarse desde la app crea el usuario en la simulación.
 
 ## Pantallas (navegación inferior)
-Login/Registro · Inicio (`GET /home`) · Perfil · Estadísticas · Historial (20 por página + "Cargar más") · Detalle.
+Login/Registro · Inicio (`GET /home`) · Jugar · Perfil · Estadísticas · Historial (20 por página + "Cargar más") · Detalle · Partida.
+
+- Jugar: "Sin reloj" o "10 minutos por bando" → `POST /games` (`mode: local`) → pantalla de partida.
+- Partida (`play/{gameId}`): tocar una pieza muestra sus destinos legales (`legalMoves`); cada jugada es `POST /games/{id}/moves`
+  con `expectedVersion` (un 409 relee la partida). Coronación con diálogo, girar tablero, rendirse (el color que tiene el turno)
+  y relojes que corren en pantalla; al llegar a 0 la app relee la partida hasta que el backend la cierra por tiempo.
+  La lógica de entrada (`ui/play/MoveInput.kt`) es pura y tiene pruebas JUnit.
+- Una partida local `in_progress` del historial muestra "Continuar partida" en el detalle.
+- Perfil → "Borrar cuenta": hay que escribir el nombre de usuario. `DELETE /auth/account` (hasta 70 s de espera); si sale bien
+  se borra la sesión y el login muestra "Tu cuenta fue borrada"; si falla (503) se muestra el error y se puede reintentar.
 
 - Detalle: `local` y `vs_bot` → `GET /games/{gameId}`; `multiplayer` → `GET /matches/{matchId}` (el `matchId` viene en la lista).
 - Inicio: una sección en `unavailable` muestra "No disponible en este momento" + Reintentar; el resto se ve normal. No reintenta sola.
@@ -52,7 +62,7 @@ Desde `mobile/` (necesita JDK 17 y el Android SDK; define `ANDROID_HOME` o `sdk.
 ./gradlew test          # Windows: gradlew.bat test
 ```
 Cubre `GameLabelsTest` (incluye la etiqueta de `account_deleted`), `UserMessageTest` (`PROFILE_NOT_FOUND` es "no disponible"),
-`FenParserTest` y `ReplayTest`.
+`FenParserTest`, `ReplayTest` y `MoveInputTest` (selección, destinos, coronación y relojes).
 
 El wrapper (`gradlew`, `gradlew.bat`, `gradle/wrapper/gradle-wrapper.jar`) se copió de `Backend/GameLogic/`; el `.jar` se
 versiona gracias a la excepción de `mobile/.gitignore`. `gradle-wrapper.properties` fija Gradle 8.9. Si `./gradlew --version`

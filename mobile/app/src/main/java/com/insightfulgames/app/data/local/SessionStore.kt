@@ -32,6 +32,10 @@ class SessionStore(context: Context) {
     private val _expired = MutableStateFlow(false)
     val expired: StateFlow<Boolean> = _expired.asStateFlow()
 
+    /** true si la sesión se cerró porque el usuario borró su cuenta. */
+    private val _accountDeleted = MutableStateFlow(false)
+    val accountDeleted: StateFlow<Boolean> = _accountDeleted.asStateFlow()
+
     /** Token vigente, leído por el interceptor de red desde hilos de OkHttp. */
     @Volatile
     var token: String? = null
@@ -64,6 +68,7 @@ class SessionStore(context: Context) {
                 .apply()
             token = accessToken
             _expired.value = false
+            _accountDeleted.value = false
             _state.value = SessionState.LoggedIn(Session(accessToken, user.userId, user.username))
         }
 
@@ -71,6 +76,14 @@ class SessionStore(context: Context) {
     suspend fun clear() = withContext(Dispatchers.IO) {
         wipe()
         _expired.value = false
+        _accountDeleted.value = false
+    }
+
+    /** La cuenta se borró en el servidor: se borra la sesión y el login muestra el aviso. */
+    suspend fun clearAfterDeletion() = withContext(Dispatchers.IO) {
+        wipe()
+        _expired.value = false
+        _accountDeleted.value = true
     }
 
     /**
