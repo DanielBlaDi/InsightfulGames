@@ -10,8 +10,8 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Map;
 
 /**
- * Rutas internas de la sección 8. El gateway las llama con el userId tomado del JWT;
- * Auth llama al DELETE durante el borrado de cuenta.
+ * Rutas internas de la sección 8. Los gateways (web y móvil) las llaman con el userId tomado
+ * del JWT, y también llaman al DELETE durante la saga de borrado de cuenta.
  */
 @RestController
 public class ProfileController {

@@ -29,7 +29,7 @@ services:
       api-gateway-component:
         condition: service_healthy
       api-gateway-mobile:
-        condition: service_started
+        condition: service_healthy
 
 # presetacion----------------------------------------------------------------------------------------------------------------------------
 
@@ -69,6 +69,12 @@ services:
       JWT_ALGORITHM: ${JWT_ALGORITHM:?}
       HTTP_TIMEOUT: ${HTTP_TIMEOUT:?}
       LOG_LEVEL: ${LOG_LEVEL:?}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
 # api gateway
 
@@ -291,6 +297,13 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:?}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
       RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:?}:${RABBITMQ_DEFAULT_PASS:?}@rabbitmq:5672
+    healthcheck:
+      # La imagen eclipse-temurin JRE no trae curl ni wget: bash abre el socket directamente.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8087 && printf 'GET /health HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3 && grep -q '\"ok\"' <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
     depends_on:
       postgres-profile:
         condition: service_healthy

@@ -10,10 +10,14 @@ Alcance: perfil, estadísticas, historial y detalle. No juega partidas en vivo, 
    - Emulador: `http://10.0.2.2:8090/` (ya configurado).
    - Dispositivo físico: `http://<IP-del-PC>:8090/` (mismo Wi-Fi, firewall abierto).
    - Siempre con `/` al final y **sin** `/api`. La app habla con el gateway móvil, no con el web.
-3. **Backend real: todavía NO validado.** Esta app se probó solo contra simuladores. Para llegar a los servicios reales
-   el gateway móvil ya llama directo a Auth, Profile/Stats y Game Logic (no depende del gateway web), pero falta
-   comprobarlo de punta a punta desde la app. Este README se actualizará con lo
-   que se compruebe en emulador (MOB-01).
+3. **Backend real: validado el 2026-11-21** (MOB-01) en un emulador Android 14 contra `docker compose up` completo
+   (app → nginx :8090 → gateway móvil → Auth, Profile/Stats, Game Logic). Funcionó todo esto:
+   - registro con login automático, login y validación del formulario;
+   - Inicio con perfil, estadísticas y últimas partidas;
+   - Historial y el detalle de partidas `local`, `vs_bot` y `multiplayer` (incluida una invitación caducada), con replay;
+   - Estadísticas, Perfil y cierre de sesión, que no se restaura al reabrir la app.
+
+   Para eso, Game Logic ahora incluye `matchId`, `endReason` y `color` en cada partida de `GET /games`.
 4. Sin backend, o con parte real: `Backend/api-gateway-mobile/README.md` explica cómo correr el gateway móvil contra
    servicios **simulados** o **mixtos** (servicios reales donde existen, simulados donde no). Con el simulado,
    registrarse desde la app crea el usuario en la simulación.
@@ -53,6 +57,16 @@ Cubre `GameLabelsTest` (incluye la etiqueta de `account_deleted`), `UserMessageT
 El wrapper (`gradlew`, `gradlew.bat`, `gradle/wrapper/gradle-wrapper.jar`) se copió de `Backend/GameLogic/`; el `.jar` se
 versiona gracias a la excepción de `mobile/.gitignore`. `gradle-wrapper.properties` fija Gradle 8.9. Si `./gradlew --version`
 falla, regenera con `gradle wrapper --gradle-version 8.9` (o desde Android Studio).
+
+## Probar en un emulador (sin Android Studio)
+Ejemplo con el SDK y los AVD en `D:\Android` (PowerShell):
+```powershell
+$env:ANDROID_SDK_ROOT = "D:\Android\Sdk"; $env:ANDROID_AVD_HOME = "D:\Android\avd"
+D:\Android\Sdk\emulator\emulator.exe -avd insightful34 -no-snapshot
+.\gradlew.bat assembleDebug
+D:\Android\Sdk\platform-tools\adb.exe install -r app\build\outputs\apk\debug\app-debug.apk
+```
+El emulador necesita la aceleración WHPX (Windows Hypervisor Platform); compruébala con `emulator -accel-check`.
 
 ## Pendiente
 - Logo, tipografías (Playfair Display / Plus Jakarta Sans) y modo oscuro.
