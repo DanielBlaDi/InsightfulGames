@@ -1,0 +1,1015 @@
+{
+  "fecha": "2026-11-22T15:53:02+00:00",
+  "proxy": {
+    "web": "http://localhost:80",
+    "movil": "http://localhost:8090"
+  },
+  "parametros": {
+    "intentos_fuerza_bruta": 300,
+    "concurrencia": 50,
+    "limite_nginx": "10 r/s por IP, ráfaga 20 (zona auth_zone compartida por ambas entradas)"
+  },
+  "S2_puertos": {
+    "puertos_probados": 15,
+    "alcanzables": 0,
+    "detalle": [
+      {
+        "puerto": 8080,
+        "servicio": "api-gateway web",
+        "alcanzable": false
+      },
+      {
+        "puerto": 8081,
+        "servicio": "auth",
+        "alcanzable": false
+      },
+      {
+        "puerto": 8082,
+        "servicio": "game-logic",
+        "alcanzable": false
+      },
+      {
+        "puerto": 8083,
+        "servicio": "single-player",
+        "alcanzable": false
+      },
+      {
+        "puerto": 8084,
+        "servicio": "multiplayer",
+        "alcanzable": false
+      },
+      {
+        "puerto": 8085,
+        "servicio": "tutor",
+        "alcanzable": false
+      },
+      {
+        "puerto": 8086,
+        "servicio": "botcito",
+        "alcanzable": false
+      },
+      {
+        "puerto": 8087,
+        "servicio": "profile-stats",
+        "alcanzable": false
+      },
+      {
+        "puerto": 8091,
+        "servicio": "gateway móvil (debug)",
+        "alcanzable": false
+      },
+      {
+        "puerto": 27017,
+        "servicio": "mongo",
+        "alcanzable": false
+      },
+      {
+        "puerto": 27018,
+        "servicio": "mongo-analysis",
+        "alcanzable": false
+      },
+      {
+        "puerto": 3306,
+        "servicio": "mysql",
+        "alcanzable": false
+      },
+      {
+        "puerto": 5432,
+        "servicio": "postgres",
+        "alcanzable": false
+      },
+      {
+        "puerto": 5672,
+        "servicio": "rabbitmq",
+        "alcanzable": false
+      },
+      {
+        "puerto": 15672,
+        "servicio": "rabbitmq admin",
+        "alcanzable": false
+      }
+    ],
+    "publicados_esperados": {
+      "web": 80,
+      "movil": 8090
+    }
+  },
+  "web": {
+    "S1": {
+      "intentos": 300,
+      "duracion_s": 3.07,
+      "tasa_ataque_rps": 97.7,
+      "bloqueados_429": 261,
+      "llegaron_a_auth_401": 39,
+      "otros_estados": [],
+      "pct_bloqueado": 87.0,
+      "maximo_teorico_que_pasa": 51,
+      "latencia_429_p50_ms": 176.2,
+      "latencia_429_p95_ms": 855.7,
+      "latencia_401_p95_ms": 849.1,
+      "legitimo_intentos": 20,
+      "legitimo_ok": 20,
+      "pct_legitimo_ok": 100.0,
+      "legitimo_p95_ms": 106.5
+    },
+    "S2": {
+      "peticiones": 39,
+      "bloqueadas": 39,
+      "pct_bloqueado": 100.0,
+      "estados": [
+        400,
+        404
+      ],
+      "llegaron_a_un_gateway_segun_logs": 0,
+      "latencia_p50_ms": 2.3,
+      "latencia_p95_ms": 6.3,
+      "detalle": [
+        {
+          "metodo": "GET",
+          "ruta": "/api/internal/auth/login",
+          "estado": 404,
+          "ms": 4.1
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/api/internal/auth/login",
+          "estado": 404,
+          "ms": 2.6
+        },
+        {
+          "metodo": "PUT",
+          "ruta": "/api/internal/auth/login",
+          "estado": 404,
+          "ms": 2.8
+        },
+        {
+          "metodo": "DELETE",
+          "ruta": "/api/internal/auth/login",
+          "estado": 404,
+          "ms": 2.3
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/api/internal/logic/games",
+          "estado": 404,
+          "ms": 2.3
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/api/internal/profile/users/x/profile",
+          "estado": 404,
+          "ms": 2.6
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/api/internal/tutor/analyses",
+          "estado": 404,
+          "ms": 2.3
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/api/internal",
+          "estado": 404,
+          "ms": 2.2
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/api/internal/",
+          "estado": 404,
+          "ms": 2.2
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/api/internal?x=1",
+          "estado": 404,
+          "ms": 2.7
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/API/INTERNAL/auth/login",
+          "estado": 404,
+          "ms": 2.2
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/Api/Internal/logic/games",
+          "estado": 404,
+          "ms": 2.0
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/api/iNtErNaL/auth/login",
+          "estado": 404,
+          "ms": 2.2
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/api//internal/auth/login",
+          "estado": 404,
+          "ms": 2.5
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/api//internal/auth/login",
+          "estado": 404,
+          "ms": 2.1
+        },
+        {
+          "metodo": "PUT",
+          "ruta": "/api//internal/auth/login",
+          "estado": 404,
+          "ms": 2.1
+        },
+        {
+          "metodo": "DELETE",
+          "ruta": "/api//internal/auth/login",
+          "estado": 404,
+          "ms": 2.7
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/api///internal/logic/games",
+          "estado": 404,
+          "ms": 2.4
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/api/%69nternal/auth/login",
+          "estado": 404,
+          "ms": 2.1
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/api/%49NTERNAL/logic/games",
+          "estado": 404,
+          "ms": 2.1
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/api/internal%2Fauth/login",
+          "estado": 404,
+          "ms": 2.5
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/api/%2569nternal/auth/login",
+          "estado": 404,
+          "ms": 5.5
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/api/./internal/auth/login",
+          "estado": 404,
+          "ms": 2.6
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/api/./internal/auth/login",
+          "estado": 404,
+          "ms": 2.1
+        },
+        {
+          "metodo": "PUT",
+          "ruta": "/api/./internal/auth/login",
+          "estado": 404,
+          "ms": 2.1
+        },
+        {
+          "metodo": "DELETE",
+          "ruta": "/api/./internal/auth/login",
+          "estado": 404,
+          "ms": 2.2
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/api/x/../internal/auth/login",
+          "estado": 404,
+          "ms": 2.3
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/api/x/../internal/auth/login",
+          "estado": 404,
+          "ms": 2.2
+        },
+        {
+          "metodo": "PUT",
+          "ruta": "/api/x/../internal/auth/login",
+          "estado": 404,
+          "ms": 2.1
+        },
+        {
+          "metodo": "DELETE",
+          "ruta": "/api/x/../internal/auth/login",
+          "estado": 404,
+          "ms": 2.6
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/api/internal/../internal/logic/games",
+          "estado": 404,
+          "ms": 2.2
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/api/ws/../internal/logic/games",
+          "estado": 404,
+          "ms": 2.0
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/api/internal/auth/login;x=1",
+          "estado": 404,
+          "ms": 2.1
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/api/internal/auth/login%00",
+          "estado": 400,
+          "ms": 2.4
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/internal/auth/login",
+          "estado": 404,
+          "ms": 2738.8
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/internal/auth/login",
+          "estado": 404,
+          "ms": 6.3
+        },
+        {
+          "metodo": "PUT",
+          "ruta": "/internal/auth/login",
+          "estado": 404,
+          "ms": 4.1
+        },
+        {
+          "metodo": "DELETE",
+          "ruta": "/internal/auth/login",
+          "estado": 404,
+          "ms": 4.4
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/INTERNAL/logic/games",
+          "estado": 404,
+          "ms": 8.3
+        }
+      ]
+    },
+    "S3": {
+      "peticiones": 24,
+      "con_datos_de_la_victima": 0,
+      "pct_fuga": 0.0,
+      "con_token_respuestas_200_propias": 12,
+      "con_token_total": 12,
+      "sin_token_401": 12,
+      "sin_token_total": 12,
+      "detalle": [
+        {
+          "ruta": "/api/profile/me",
+          "cabecera": "X-User-Id",
+          "token": "atacante",
+          "estado": 200,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/api/profile/me",
+          "cabecera": "X-User-Id",
+          "token": "ninguno",
+          "estado": 401,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/api/profile/me",
+          "cabecera": "x-user-id",
+          "token": "atacante",
+          "estado": 200,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/api/profile/me",
+          "cabecera": "x-user-id",
+          "token": "ninguno",
+          "estado": 401,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/api/profile/me",
+          "cabecera": "X-USER-ID",
+          "token": "atacante",
+          "estado": 200,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/api/profile/me",
+          "cabecera": "X-USER-ID",
+          "token": "ninguno",
+          "estado": 401,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/api/profile/me",
+          "cabecera": "X_User_Id",
+          "token": "atacante",
+          "estado": 200,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/api/profile/me",
+          "cabecera": "X_User_Id",
+          "token": "ninguno",
+          "estado": 401,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/api/stats/me",
+          "cabecera": "X-User-Id",
+          "token": "atacante",
+          "estado": 200,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/api/stats/me",
+          "cabecera": "X-User-Id",
+          "token": "ninguno",
+          "estado": 401,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/api/stats/me",
+          "cabecera": "x-user-id",
+          "token": "atacante",
+          "estado": 200,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/api/stats/me",
+          "cabecera": "x-user-id",
+          "token": "ninguno",
+          "estado": 401,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/api/stats/me",
+          "cabecera": "X-USER-ID",
+          "token": "atacante",
+          "estado": 200,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/api/stats/me",
+          "cabecera": "X-USER-ID",
+          "token": "ninguno",
+          "estado": 401,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/api/stats/me",
+          "cabecera": "X_User_Id",
+          "token": "atacante",
+          "estado": 200,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/api/stats/me",
+          "cabecera": "X_User_Id",
+          "token": "ninguno",
+          "estado": 401,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/api/games",
+          "cabecera": "X-User-Id",
+          "token": "atacante",
+          "estado": 200,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/api/games",
+          "cabecera": "X-User-Id",
+          "token": "ninguno",
+          "estado": 401,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/api/games",
+          "cabecera": "x-user-id",
+          "token": "atacante",
+          "estado": 200,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/api/games",
+          "cabecera": "x-user-id",
+          "token": "ninguno",
+          "estado": 401,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/api/games",
+          "cabecera": "X-USER-ID",
+          "token": "atacante",
+          "estado": 200,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/api/games",
+          "cabecera": "X-USER-ID",
+          "token": "ninguno",
+          "estado": 401,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/api/games",
+          "cabecera": "X_User_Id",
+          "token": "atacante",
+          "estado": 200,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/api/games",
+          "cabecera": "X_User_Id",
+          "token": "ninguno",
+          "estado": 401,
+          "datos_de_la_victima": false
+        }
+      ]
+    }
+  },
+  "movil": {
+    "S1": {
+      "intentos": 300,
+      "duracion_s": 1.92,
+      "tasa_ataque_rps": 156.6,
+      "bloqueados_429": 261,
+      "llegaron_a_auth_401": 39,
+      "otros_estados": [],
+      "pct_bloqueado": 87.0,
+      "maximo_teorico_que_pasa": 39,
+      "latencia_429_p50_ms": 170.9,
+      "latencia_429_p95_ms": 864.7,
+      "latencia_401_p95_ms": 577.2,
+      "legitimo_intentos": 20,
+      "legitimo_ok": 20,
+      "pct_legitimo_ok": 100.0,
+      "legitimo_p95_ms": 110.2
+    },
+    "S2": {
+      "peticiones": 34,
+      "bloqueadas": 34,
+      "pct_bloqueado": 100.0,
+      "estados": [
+        400,
+        404
+      ],
+      "llegaron_a_un_gateway_segun_logs": 0,
+      "latencia_p50_ms": 2.2,
+      "latencia_p95_ms": 3.5,
+      "detalle": [
+        {
+          "metodo": "GET",
+          "ruta": "/internal/auth/login",
+          "estado": 404,
+          "ms": 7.0
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/internal/auth/login",
+          "estado": 404,
+          "ms": 3.5
+        },
+        {
+          "metodo": "PUT",
+          "ruta": "/internal/auth/login",
+          "estado": 404,
+          "ms": 2.8
+        },
+        {
+          "metodo": "DELETE",
+          "ruta": "/internal/auth/login",
+          "estado": 404,
+          "ms": 2.4
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/internal/logic/games",
+          "estado": 404,
+          "ms": 2.7
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/internal/profile/users/x/profile",
+          "estado": 404,
+          "ms": 2.1
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/internal/tutor/analyses",
+          "estado": 404,
+          "ms": 2.2
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/internal",
+          "estado": 404,
+          "ms": 2.3
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/internal/",
+          "estado": 404,
+          "ms": 2.3
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/internal?x=1",
+          "estado": 404,
+          "ms": 2.1
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/INTERNAL/auth/login",
+          "estado": 404,
+          "ms": 2.0
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/Internal/logic/games",
+          "estado": 404,
+          "ms": 2.4
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/iNtErNaL/auth/login",
+          "estado": 404,
+          "ms": 2.2
+        },
+        {
+          "metodo": "GET",
+          "ruta": "//internal/auth/login",
+          "estado": 404,
+          "ms": 2.1
+        },
+        {
+          "metodo": "POST",
+          "ruta": "//internal/auth/login",
+          "estado": 404,
+          "ms": 2.0
+        },
+        {
+          "metodo": "PUT",
+          "ruta": "//internal/auth/login",
+          "estado": 404,
+          "ms": 2.8
+        },
+        {
+          "metodo": "DELETE",
+          "ruta": "//internal/auth/login",
+          "estado": 404,
+          "ms": 2.6
+        },
+        {
+          "metodo": "GET",
+          "ruta": "///internal/logic/games",
+          "estado": 404,
+          "ms": 2.2
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/%69nternal/auth/login",
+          "estado": 404,
+          "ms": 2.4
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/%49NTERNAL/logic/games",
+          "estado": 404,
+          "ms": 2.2
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/internal%2Fauth/login",
+          "estado": 404,
+          "ms": 2.1
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/%2569nternal/auth/login",
+          "estado": 404,
+          "ms": 4.2
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/./internal/auth/login",
+          "estado": 404,
+          "ms": 2.2
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/./internal/auth/login",
+          "estado": 404,
+          "ms": 2.1
+        },
+        {
+          "metodo": "PUT",
+          "ruta": "/./internal/auth/login",
+          "estado": 404,
+          "ms": 2.0
+        },
+        {
+          "metodo": "DELETE",
+          "ruta": "/./internal/auth/login",
+          "estado": 404,
+          "ms": 2.4
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/x/../internal/auth/login",
+          "estado": 404,
+          "ms": 2.1
+        },
+        {
+          "metodo": "POST",
+          "ruta": "/x/../internal/auth/login",
+          "estado": 404,
+          "ms": 2.0
+        },
+        {
+          "metodo": "PUT",
+          "ruta": "/x/../internal/auth/login",
+          "estado": 404,
+          "ms": 1.9
+        },
+        {
+          "metodo": "DELETE",
+          "ruta": "/x/../internal/auth/login",
+          "estado": 404,
+          "ms": 2.4
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/internal/../internal/logic/games",
+          "estado": 404,
+          "ms": 2.1
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/x/../internal/logic/games",
+          "estado": 404,
+          "ms": 2.0
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/internal/auth/login;x=1",
+          "estado": 404,
+          "ms": 1.9
+        },
+        {
+          "metodo": "GET",
+          "ruta": "/internal/auth/login%00",
+          "estado": 400,
+          "ms": 2.3
+        }
+      ]
+    },
+    "S3": {
+      "peticiones": 32,
+      "con_datos_de_la_victima": 0,
+      "pct_fuga": 0.0,
+      "con_token_respuestas_200_propias": 16,
+      "con_token_total": 16,
+      "sin_token_401": 16,
+      "sin_token_total": 16,
+      "detalle": [
+        {
+          "ruta": "/profile/me",
+          "cabecera": "X-User-Id",
+          "token": "atacante",
+          "estado": 200,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/profile/me",
+          "cabecera": "X-User-Id",
+          "token": "ninguno",
+          "estado": 401,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/profile/me",
+          "cabecera": "x-user-id",
+          "token": "atacante",
+          "estado": 200,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/profile/me",
+          "cabecera": "x-user-id",
+          "token": "ninguno",
+          "estado": 401,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/profile/me",
+          "cabecera": "X-USER-ID",
+          "token": "atacante",
+          "estado": 200,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/profile/me",
+          "cabecera": "X-USER-ID",
+          "token": "ninguno",
+          "estado": 401,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/profile/me",
+          "cabecera": "X_User_Id",
+          "token": "atacante",
+          "estado": 200,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/profile/me",
+          "cabecera": "X_User_Id",
+          "token": "ninguno",
+          "estado": 401,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/stats/me",
+          "cabecera": "X-User-Id",
+          "token": "atacante",
+          "estado": 200,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/stats/me",
+          "cabecera": "X-User-Id",
+          "token": "ninguno",
+          "estado": 401,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/stats/me",
+          "cabecera": "x-user-id",
+          "token": "atacante",
+          "estado": 200,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/stats/me",
+          "cabecera": "x-user-id",
+          "token": "ninguno",
+          "estado": 401,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/stats/me",
+          "cabecera": "X-USER-ID",
+          "token": "atacante",
+          "estado": 200,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/stats/me",
+          "cabecera": "X-USER-ID",
+          "token": "ninguno",
+          "estado": 401,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/stats/me",
+          "cabecera": "X_User_Id",
+          "token": "atacante",
+          "estado": 200,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/stats/me",
+          "cabecera": "X_User_Id",
+          "token": "ninguno",
+          "estado": 401,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/games",
+          "cabecera": "X-User-Id",
+          "token": "atacante",
+          "estado": 200,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/games",
+          "cabecera": "X-User-Id",
+          "token": "ninguno",
+          "estado": 401,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/games",
+          "cabecera": "x-user-id",
+          "token": "atacante",
+          "estado": 200,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/games",
+          "cabecera": "x-user-id",
+          "token": "ninguno",
+          "estado": 401,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/games",
+          "cabecera": "X-USER-ID",
+          "token": "atacante",
+          "estado": 200,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/games",
+          "cabecera": "X-USER-ID",
+          "token": "ninguno",
+          "estado": 401,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/games",
+          "cabecera": "X_User_Id",
+          "token": "atacante",
+          "estado": 200,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/games",
+          "cabecera": "X_User_Id",
+          "token": "ninguno",
+          "estado": 401,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/home",
+          "cabecera": "X-User-Id",
+          "token": "atacante",
+          "estado": 200,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/home",
+          "cabecera": "X-User-Id",
+          "token": "ninguno",
+          "estado": 401,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/home",
+          "cabecera": "x-user-id",
+          "token": "atacante",
+          "estado": 200,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/home",
+          "cabecera": "x-user-id",
+          "token": "ninguno",
+          "estado": 401,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/home",
+          "cabecera": "X-USER-ID",
+          "token": "atacante",
+          "estado": 200,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/home",
+          "cabecera": "X-USER-ID",
+          "token": "ninguno",
+          "estado": 401,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/home",
+          "cabecera": "X_User_Id",
+          "token": "atacante",
+          "estado": 200,
+          "datos_de_la_victima": false
+        },
+        {
+          "ruta": "/home",
+          "cabecera": "X_User_Id",
+          "token": "ninguno",
+          "estado": 401,
+          "datos_de_la_victima": false
+        }
+      ]
+    }
+  }
+}
