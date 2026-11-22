@@ -14,6 +14,7 @@ from fastapi import APIRouter, Request, Response
 from app.errors import ApiError
 from app.models import AnalysisRequest, AnalysisStatus
 from app.service import TutorService
+from app.validation import normalize_uuid, normalize_sanitized_text
 
 router = APIRouter(prefix="/internal/tutor", tags=["tutor"])
 
@@ -40,6 +41,16 @@ def _requesting_user(request: Request) -> str:
         ) from exc
 
 
+def _validate_analysis_id(analysis_id: str) -> str:
+    """Valida y normaliza un analysis_id (UUID v4)."""
+    return normalize_uuid(analysis_id, "analysis_id")
+
+
+def _validate_user_id(user_id: str) -> str:
+    """Valida y normaliza un user_id (UUID v4)."""
+    return normalize_uuid(user_id, "user_id")
+
+
 @router.post(
     "/analyses",
     response_model=AnalysisStatus,
@@ -55,8 +66,25 @@ async def request_analysis(
     payload: AnalysisRequest, request: Request, response: Response
 ):
     """Crea el análisis (202), lo reactiva (202) o devuelve el existente (200)."""
+    # Validar y sanitizar campos de entrada
+    try:
+        sanitized_language = normalize_sanitized_text(payload.language, "language", 16)
+        sanitized_detail_level = normalize_sanitized_text(payload.detailLevel, "detailLevel", 32)
+    except ApiError:
+        raise
+    except Exception as exc:
+        raise ApiError(400, "VALIDATION_ERROR", "Datos de entrada inválidos") from exc
+
+    # Crear payload sanitizado
+    sanitized_payload = AnalysisRequest(
+        gameId=payload.gameId,
+        language=sanitized_language,
+        detailLevel=sanitized_detail_level,
+        depth=payload.depth
+    )
+
     view, created = await _service(request).request_analysis(
-        payload, _requesting_user(request)
+        sanitized_payload, _requesting_user(request)
     )
     response.status_code = 202 if created else 200
     return view
@@ -69,8 +97,9 @@ async def request_analysis(
 )
 async def get_analysis(analysis_id: str, request: Request):
     """Estado del análisis: pending, processing, completed o failed."""
+    safe_analysis_id = _validate_analysis_id(analysis_id)
     return await _service(request).get_analysis(
-        analysis_id, _requesting_user(request)
+        safe_analysis_id, _requesting_user(request)
     )
 
 
@@ -89,8 +118,9 @@ async def get_analysis_result(analysis_id: str, request: Request):
     ``moves`` lo escribe el Analysis Worker y se entrega tal cual, para no
     recortar campos que el worker agregue dentro del contrato.
     """
+    safe_analysis_id = _validate_analysis_id(analysis_id)
     return await _service(request).get_result(
-        analysis_id, _requesting_user(request)
+        safe_analysis_id, _requesting_user(request)
     )
 
 
@@ -101,5 +131,6 @@ async def get_analysis_result(analysis_id: str, request: Request):
 )
 async def delete_user(user_id: str, request: Request):
     """Borra los análisis privados y anonimiza los conservados del usuario."""
-    await _service(request).delete_user(user_id)
+    safe_user_id = _validate_user_id(user_id)
+    await _service(request).delete_user(safe_user_id)
     return Response(status_code=204)

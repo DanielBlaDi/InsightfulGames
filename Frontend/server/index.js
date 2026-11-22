@@ -64,6 +64,33 @@ const socketProxy = createProxyMiddleware({
 const app = express();
 app.disable('x-powered-by');
 
+// Security headers middleware
+app.use((_req, res, next) => {
+  // Content Security Policy - restrictive for Vike + React + WebSockets
+  res.setHeader('Content-Security-Policy', [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "connect-src 'self' wss: https: http:",
+    "img-src 'self' data: https:",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'"
+  ].join('; '));
+
+  // XSS Protection
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  // Prevent MIME type sniffing
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  // Referrer policy
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  // Permissions policy
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+
+  next();
+});
+
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
 });

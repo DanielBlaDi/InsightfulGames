@@ -5,6 +5,7 @@ import type { Color, EndReason, GameMode, GameResult, GameStatus } from '../game
 import AnalysisModal from '../tutor/AnalysisModal';
 import { fetchGameHistory } from './api';
 import type { GameSummary, HistoryFilter } from './types';
+import { escapeHtml, sanitizeFreeText, isValidUuid } from '../utils/sanitize';
 
 export const HISTORIAL_PATH = '/historial';
 
@@ -303,10 +304,13 @@ export default function HistoryPage() {
                   {visibleItems.map((game) => {
                     const modeInfo = MODE_LABEL[game.mode] ?? { label: game.mode, icon: 'extension' };
                     const isFinished = game.status === 'finished';
+                    // Validar y sanitizar gameId para prevenir XSS en URLs
+                    const safeGameId = isValidUuid(game.gameId) ? game.gameId : '';
+                    const safeMatchId = isValidUuid(game.matchId) ? game.matchId : '';
 
                     return (
                       <article
-                        key={game.gameId}
+                        key={safeGameId || game.gameId}
                         className="p-4 sm:p-5 rounded-2xl bg-surface-container-low border border-outline-variant/30 shadow-sm hover:shadow-md transition-shadow flex flex-col sm:flex-row sm:items-center justify-between gap-4"
                       >
                         <div className="flex items-start gap-3.5">
@@ -316,14 +320,14 @@ export default function HistoryPage() {
                           <div className="flex flex-col gap-1">
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="font-label-lg text-label-lg text-on-surface font-semibold">
-                                {modeInfo.label}
+                                {escapeHtml(modeInfo.label)}
                               </span>
                               {resultBadge(game.status, game.result, game.endReason, game.color)}
                             </div>
                             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-body-sm text-body-sm text-on-surface-variant">
                               <span className="flex items-center gap-1">
                                 <span className="material-symbols-outlined text-[16px]">schedule</span>
-                                {formatDate(game.createdAt)}
+                                {escapeHtml(formatDate(game.createdAt))}
                               </span>
                               {game.color && (
                                 <span className="flex items-center gap-1">
@@ -336,7 +340,7 @@ export default function HistoryPage() {
                                 </span>
                               )}
                               <span className="font-mono text-[11px] text-on-surface-variant/70">
-                                ID: {game.gameId.slice(0, 8)}…
+                                ID: {escapeHtml(safeGameId.slice(0, 8))}…
                               </span>
                             </div>
                           </div>
@@ -347,7 +351,7 @@ export default function HistoryPage() {
                           {isFinished && (
                             <button
                               type="button"
-                              onClick={() => setAnalyzingGameId(game.gameId)}
+                              onClick={() => setAnalyzingGameId(safeGameId)}
                               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-primary text-on-primary font-label-md text-label-md shadow-sm hover:bg-primary-container transition-colors cursor-pointer"
                               title="Solicitar análisis posicional y pedagógico con el Tutor IA"
                             >
@@ -356,9 +360,9 @@ export default function HistoryPage() {
                             </button>
                           )}
 
-                          {game.status === 'waiting' && game.matchId && (
+                          {game.status === 'waiting' && safeMatchId && (
                             <a
-                              href={`/partida/${game.matchId}`}
+                              href={`/partida/${escapeHtml(safeMatchId)}`}
                               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-amber-600 text-white font-label-md text-label-md shadow-sm hover:bg-amber-700 transition-colors"
                             >
                               <span className="material-symbols-outlined text-[18px]">hourglass_top</span>
@@ -366,9 +370,9 @@ export default function HistoryPage() {
                             </a>
                           )}
 
-                          {game.status === 'in_progress' && game.matchId && (
+                          {game.status === 'in_progress' && safeMatchId && (
                             <a
-                              href={`/partida/${game.matchId}`}
+                              href={`/partida/${escapeHtml(safeMatchId)}`}
                               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-secondary text-on-secondary font-label-md text-label-md shadow-sm hover:opacity-95 transition-opacity"
                             >
                               <span className="material-symbols-outlined text-[18px]">play_arrow</span>

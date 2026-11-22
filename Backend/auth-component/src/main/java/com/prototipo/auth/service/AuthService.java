@@ -13,6 +13,7 @@ import com.prototipo.auth.exception.ApiException;
 import com.prototipo.auth.outbox.UserRegisteredOutbox;
 import com.prototipo.auth.repository.UserRepository;
 import com.prototipo.auth.security.JwtService;
+import com.prototipo.auth.util.SanitizeUtil;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -50,12 +51,20 @@ public class AuthService {
      */
     @Transactional
     public RegisterResponse registrar(RegisterRequest solicitud) {
-        if (userRepository.existsByUsername(solicitud.username())) {
+        // Sanitizar y validar nombre de usuario
+        String sanitizedUsername;
+        try {
+            sanitizedUsername = SanitizeUtil.sanitizeUsername(solicitud.username());
+        } catch (IllegalArgumentException ex) {
+            throw ApiException.validation("Nombre de usuario inválido: " + ex.getMessage());
+        }
+
+        if (userRepository.existsByUsername(sanitizedUsername)) {
             throw ApiException.usernameTaken();
         }
 
         String hash = passwordEncoder.encode(solicitud.password());
-        User usuario = new User(solicitud.username(), hash);
+        User usuario = new User(sanitizedUsername, hash);
 
         try {
             User guardado = userRepository.saveAndFlush(usuario);

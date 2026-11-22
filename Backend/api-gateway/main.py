@@ -76,6 +76,75 @@ ORIGIN_RE = re.compile(r"^https?://[a-z0-9.-]+(:\d+)?$")
 
 WS_ALLOWED_ORIGINS: frozenset[str] = frozenset()
 
+# Patrones XSS para validación de entrada
+XSS_PATTERNS = [
+    r'<script\b[^>]*>.*?</script>',
+    r'javascript:',
+    r'on\w+\s*=',
+    r'<iframe\b',
+    r'<object\b',
+    r'<embed\b',
+    r'<form\b',
+    r'<input\b',
+    r'<meta\b',
+    r'<link\b',
+    r'expression\s*\(',
+    r'vbscript:',
+    r'data:text/html',
+]
+
+XSS_RE = [re.compile(pattern, re.IGNORECASE | re.DOTALL) for pattern in XSS_PATTERNS]
+
+
+def contains_xss(value: str) -> bool:
+    """Detecta patrones comunes de XSS en el input."""
+    if not isinstance(value, str):
+        return False
+    lower = value.lower()
+    for pattern_re in XSS_RE:
+        if pattern_re.search(lower):
+            return True
+    return False
+
+
+def sanitize_text_input(value: str, max_length: int) -> str:
+    """
+    Sanitiza texto de entrada del usuario.
+
+    - Escapa HTML
+    - Detecta y rechaza patrones XSS
+    - Limita longitud
+    """
+    if not isinstance(value, str):
+        raise ValueError("El valor debe ser un string")
+
+    # Detectar XSS antes de sanitizar
+    if contains_xss(value):
+        raise ValueError("Entrada contiene patrones no permitidos")
+
+    # Escapar HTML
+    import html
+    escaped = html.escape(value, quote=True)
+
+    # Limitar longitud
+    if len(escaped) > max_length:
+        raise ValueError(f"El texto excede el máximo de {max_length} caracteres")
+
+    return escaped
+
+
+def validate_uuid(value: str, field_name: str) -> str:
+    """Valida y normaliza un UUID v4."""
+    if not isinstance(value, str) or not value.strip():
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail=f"El campo {field_name} es obligatorio.")
+    try:
+        import uuid
+        return str(uuid.UUID(value.strip()))
+    except (ValueError, AttributeError, TypeError) as exc:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail=f"El campo {field_name} debe ser un UUID v4 válido.") from exc
+
 
 def _validate_config() -> None:
     """El gateway no arranca con configuración insegura (7.4.4 y 7.3)."""
@@ -169,6 +238,36 @@ async def unhandled_error_handler(_: Request, exc: Exception):
 async def no_store(request: Request, call_next):
     response = await call_next(request)
     response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+# Security headers middleware
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+
+    # Content Security Policy
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "font-src 'self'; "
+        "connect-src 'self' wss: https: http:; "
+        "img-src 'self' data:; "
+        "frame-ancestors 'none'; "
+        "base-uri 'self'; "
+        "form-action 'self'"
+    )
+
+    # XSS Protection
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    # Prevent MIME type sniffing
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    # Referrer policy
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    # Permissions policy
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+
     return response
 
 
@@ -358,6 +457,24 @@ async def health():
 
 @app.post("/auth/register")
 async def register(request: Request):
+    # Leer y validar el body antes de reenviar
+    try:
+        body = await request.body()
+        import json
+        payload = json.loads(body.decode()) if body else {}
+        username = payload.get("username", "")
+
+        # Validar y sanitizar username
+        if contains_xss(username):
+            return error_response(400, "VALIDATION_ERROR", "El nombre de usuario contiene caracteres no permitidos")
+
+        # Reenviar con el body original (el servicio de auth hará su propia validación)
+    except json.JSONDecodeError:
+        return error_response(400, "VALIDATION_ERROR", "Cuerpo de la petición inválido")
+    except Exception:
+        # Si hay error de validación, dejar que el servicio de auth lo maneje
+        pass
+
     response = await forward(request, "POST", "auth", "/register")
     return relay(response, service="auth", conflict_code="USERNAME_TAKEN")
 

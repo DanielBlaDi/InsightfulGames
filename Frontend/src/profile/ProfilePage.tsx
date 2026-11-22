@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { fetchProfile, loginUrl } from '../auth/session';
 import type { Profile } from '../auth/session';
 import AccountNav from '../components/AccountNav';
+import { escapeHtml, sanitizeFreeText } from '../utils/sanitize';
 
 export const PROFILE_PATH = '/perfil';
 
@@ -103,12 +104,12 @@ export default function ProfilePage() {
                 <div className="w-14 h-14 rounded-full bg-primary flex items-center justify-center text-on-primary" aria-hidden="true">
                   <span className="material-symbols-outlined text-[32px]">person</span>
                 </div>
-                <p className="font-headline-md text-headline-md text-on-surface break-all">{state.profile.username}</p>
+                <p className="font-headline-md text-headline-md text-on-surface break-all">{escapeHtml(state.profile.username)}</p>
               </div>
               <dl>
-                <Field label="Nombre de usuario" value={state.profile.username} />
-                <Field label="Miembro desde" value={formatDate(state.profile.createdAt)} />
-                <Field label="Identificador" value={state.profile.userId} mono />
+                <Field label="Nombre de usuario" value={escapeHtml(state.profile.username)} />
+                <Field label="Miembro desde" value={escapeHtml(formatDate(state.profile.createdAt))} />
+                <Field label="Identificador" value={escapeHtml(state.profile.userId)} mono />
               </dl>
               <div className="flex flex-wrap gap-space-xs pt-space-xs">
                 <a

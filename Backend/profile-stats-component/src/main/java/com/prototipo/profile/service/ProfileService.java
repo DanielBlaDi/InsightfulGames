@@ -4,6 +4,7 @@ import com.prototipo.profile.domain.DeletedUser;
 import com.prototipo.profile.domain.DeletedUserRepository;
 import com.prototipo.profile.domain.ProfileRepository;
 import com.prototipo.profile.domain.StatsRepository;
+import com.prototipo.profile.util.SanitizeUtil;
 import com.prototipo.profile.web.ApiException;
 import com.prototipo.profile.web.ProfileResponse;
 import com.prototipo.profile.web.StatsResponse;
@@ -31,8 +32,8 @@ public class ProfileService {
 
     @Transactional(readOnly = true)
     public ProfileResponse getProfile(String userId) {
-        requireUuid(userId);
-        return profiles.findById(userId)
+        String safeUserId = validateAndSanitizeUserId(userId);
+        return profiles.findById(safeUserId)
                 .map(p -> new ProfileResponse(p.getUserId(), p.getUsername(), p.getCreatedAt().toString()))
                 .orElseThrow(ApiException::profileNotFound);
     }
@@ -40,8 +41,8 @@ public class ProfileService {
     /** Sin perfil o sin partidas, contadores en cero. Leer nunca crea filas. */
     @Transactional(readOnly = true)
     public StatsResponse getStats(String userId) {
-        requireUuid(userId);
-        return stats.findById(userId)
+        String safeUserId = validateAndSanitizeUserId(userId);
+        return stats.findById(safeUserId)
                 .map(s -> new StatsResponse(s.getGamesPlayed(), s.getWins(), s.getLosses(), s.getDraws()))
                 .orElse(StatsResponse.EMPTY);
     }
@@ -52,17 +53,18 @@ public class ProfileService {
      */
     @Transactional
     public void deleteUser(String userId) {
-        requireUuid(userId);
-        stats.deleteById(userId);
-        profiles.deleteById(userId);
-        if (!deletedUsers.existsById(userId)) {
-            deletedUsers.save(new DeletedUser(userId, Instant.now(clock)));
+        String safeUserId = validateAndSanitizeUserId(userId);
+        stats.deleteById(safeUserId);
+        profiles.deleteById(safeUserId);
+        if (!deletedUsers.existsById(safeUserId)) {
+            deletedUsers.save(new DeletedUser(safeUserId, Instant.now(clock)));
         }
     }
 
-    private static void requireUuid(String userId) {
-        if (!Ids.isUuid(userId)) {
-            throw ApiException.validation("userId debe ser un UUID");
+    private String validateAndSanitizeUserId(String userId) {
+        if (!SanitizeUtil.isValidUuid(userId)) {
+            throw ApiException.validation("userId debe ser un UUID válido");
         }
+        return userId;
     }
 }

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { fetchAnalysisResult, fetchAnalysisStatus, requestAnalysis } from './api';
 import type { AnalysisResultData, AnalysisStatus } from './types';
+import { escapeHtml, sanitizeFreeText, isValidUuid } from '../utils/sanitize';
 
 interface AnalysisModalProps {
   gameId: string;
@@ -169,7 +170,7 @@ export default function AnalysisModal({ gameId, onClose }: AnalysisModalProps) {
                 </span>
               </div>
               <p className="font-body-sm text-body-sm text-on-surface-variant font-mono">
-                Partida {gameId.slice(0, 8)}…
+                Partida {isValidUuid(gameId) ? escapeHtml(gameId.slice(0, 8)) : 'desconocida'}…
               </p>
             </div>
           </div>
@@ -271,7 +272,7 @@ export default function AnalysisModal({ gameId, onClose }: AnalysisModalProps) {
                   <h3 className="font-headline-sm text-headline-sm text-on-surface">Explicación del Tutor IA</h3>
                 </div>
                 <div className="font-body-md text-body-md text-on-surface leading-relaxed whitespace-pre-line bg-surface p-4 rounded-xl border border-outline-variant/20">
-                  {state.result.explanation || 'El análisis pedagógico de la partida concluyó satisfactoriamente.'}
+                  {sanitizeFreeText(state.result.explanation || 'El análisis pedagógico de la partida concluyó satisfactoriamente.')}
                 </div>
               </section>
 
@@ -388,6 +389,11 @@ export default function AnalysisModal({ gameId, onClose }: AnalysisModalProps) {
                       <tbody className="divide-y divide-outline-variant/20 font-mono text-[13px]">
                         {state.result.moves.map((m, idx) => {
                           const cls = m.classification ? CLASSIFICATION_LABEL[m.classification] : null;
+                          // Sanitizar datos de jugadas para prevenir XSS
+                          const safeSan = sanitizeFreeText(m.san || '');
+                          const safeUci = sanitizeFreeText(m.uci || '');
+                          const safeBestMoveSan = m.bestMove?.san ? sanitizeFreeText(m.bestMove.san) : '';
+
                           return (
                             <tr key={idx} className="hover:bg-surface-container-low transition-colors">
                               <td className="py-2 px-3 text-on-surface-variant">
@@ -399,22 +405,22 @@ export default function AnalysisModal({ gameId, onClose }: AnalysisModalProps) {
                                     m.color === 'white' ? 'bg-[#fdf6ea]' : 'bg-[#2a170c]'
                                   }`}
                                 ></span>
-                                {m.san || m.uci}
+                                {safeSan || safeUci}
                               </td>
                               <td className="py-2 px-3 font-sans">
                                 {cls ? (
                                   <span
                                     className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold border ${cls.badge}`}
                                   >
-                                    {cls.label}
+                                    {escapeHtml(cls.label)}
                                   </span>
                                 ) : (
                                   <span className="text-on-surface-variant text-[11px]">—</span>
                                 )}
                               </td>
                               <td className="py-2 px-3 text-on-surface-variant font-sans">
-                                {m.bestMove?.san ? (
-                                  <span className="text-primary font-semibold font-mono">{m.bestMove.san}</span>
+                                {safeBestMoveSan ? (
+                                  <span className="text-primary font-semibold font-mono">{safeBestMoveSan}</span>
                                 ) : (
                                   '—'
                                 )}
