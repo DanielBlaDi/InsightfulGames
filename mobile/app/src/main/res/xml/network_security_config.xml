@@ -1,4 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Release (y cualquier variante sin un archivo propio): solo HTTPS y solo CA del sistema.
+  El servidor de producción debe presentar un certificado de una CA pública para su dominio (BASE_URL).
+-->
 <network-security-config>
-    <base-config cleartextTrafficPermitted="false" />
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
 </network-security-config>

@@ -1,4 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  SOLO para la variante debug (este archivo reemplaza al de main en esa variante).
+  Secure Channel (docs/secure-channel-tls.md): también en desarrollo la app usa HTTPS, nunca HTTP en claro.
+  Confía en las CA del sistema y en las que el usuario instaló en el dispositivo o emulador (la CA de
+  desarrollo de mkcert). No acepta certificados arbitrarios: la cadena y el nombre se siguen verificando.
+-->
 <network-security-config>
-    <base-config cleartextTrafficPermitted="true" />
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
 </network-security-config>
