@@ -5,6 +5,15 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
+/** URL base desde una propiedad de Gradle; debe ser https:// y terminar en "/" (Secure Channel). */
+fun httpsBaseUrl(property: String, default: String): String {
+    val url = (project.findProperty(property) as String?)?.trim()?.takeIf { it.isNotEmpty() } ?: default
+    require(url.startsWith("https://") && url.endsWith("/")) {
+        "$property debe empezar por https:// y terminar en / (recibido: $url)"
+    }
+    return url
+}
+
 android {
     namespace = "com.insightfulgames.app"
     compileSdk = 34
@@ -19,16 +28,18 @@ android {
 
     buildTypes {
         debug {
-            // 10.0.2.2 = el localhost del PC visto desde el emulador de Android.
-            // Apunta al GATEWAY MÓVIL (MOBILE_GATEWAY_PORT, 8090), no al gateway web.
-            // En un dispositivo físico: http://<IP-del-PC-en-la-LAN>:8090/
+            // Secure Channel (docs/secure-channel-tls.md): la app habla HTTPS con reverse-proxy-mobile.
+            // 10.0.2.2 = el localhost del PC visto desde el emulador; 8444 = MOBILE_HTTPS_PORT.
+            // El certificado de desarrollo debe incluir 10.0.2.2 y su CA instalarse en el emulador.
+            // En un dispositivo físico: -PinsightfulDebugBaseUrl=https://<IP-o-nombre-del-PC>:8444/
             // La URL debe terminar en "/" y no lleva el prefijo /api.
-            buildConfigField("String", "BASE_URL", "\"http://10.0.2.2:8090/\"")
+            buildConfigField("String", "BASE_URL", "\"${httpsBaseUrl("insightfulDebugBaseUrl", "https://10.0.2.2:8444/")}\"")
         }
         release {
             isMinifyEnabled = false
-            // Producción: HTTPS obligatorio (el network_security_config de main bloquea HTTP).
-            buildConfigField("String", "BASE_URL", "\"https://CAMBIAR-POR-TU-DOMINIO/\"")
+            // Producción: dominio real con certificado de una CA pública (el release solo confía en las del sistema).
+            // -PinsightfulReleaseBaseUrl=https://api.tu-dominio.com/  (o en gradle.properties)
+            buildConfigField("String", "BASE_URL", "\"${httpsBaseUrl("insightfulReleaseBaseUrl", "https://CAMBIAR-POR-TU-DOMINIO/")}\"")
         }
     }
 

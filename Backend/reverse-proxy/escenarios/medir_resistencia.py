@@ -3,7 +3,11 @@
     python medir_resistencia.py                # escribe resultados.json junto a este archivo
 
 Necesita el stack levantado (docker compose up -d), httpx y el CLI de docker. Por cada entrada del proxy
-(web :FRONTEND_PORT y móvil :MOBILE_GATEWAY_PORT) ejecuta:
+(web :FRONTEND_HTTPS_PORT y móvil :MOBILE_HTTPS_PORT) ejecuta:
+
+Con el Secure Channel (escenario 1) las entradas son HTTPS: define TLS_CA_FILE con la CA que firmó el
+certificado (p. ej. "$(mkcert -CAROOT)/rootCA.pem"). Todas las conexiones validan certificado y nombre; con
+PROXY_SCHEME=http el script mide un stack sin TLS como antes.
 
   S1  Fuerza bruta en el login: N intentos con contraseña errónea lo más rápido posible desde el host, mientras
       un usuario legítimo inicia sesión desde OTRA IP (un contenedor de la red interna). Cuenta cuántos frena
@@ -19,6 +23,7 @@ import asyncio
 import json
 import os
 import socket
+import ssl
 import statistics
 import subprocess
 import time
@@ -29,8 +34,19 @@ from pathlib import Path
 import httpx
 
 HOST = os.getenv("PROXY_HOST", "127.0.0.1")  # no "localhost": en Windows prueba IPv6 primero y retrasa ~1,5 s la primera conexión
-WEB_PORT = int(os.getenv("FRONTEND_PORT", "80"))
-MOBILE_PORT = int(os.getenv("MOBILE_GATEWAY_PORT", "8090"))
+SCHEME = os.getenv("PROXY_SCHEME", "https")  # https con el Secure Channel; http para un stack sin TLS
+TLS = SCHEME == "https"
+WEB_PORT = int(os.getenv("FRONTEND_HTTPS_PORT", "8443") if TLS else os.getenv("FRONTEND_PORT", "80"))
+MOBILE_PORT = int(os.getenv("MOBILE_HTTPS_PORT", "8444") if TLS else os.getenv("MOBILE_GATEWAY_PORT", "8090"))
+CA_FILE = os.getenv("TLS_CA_FILE", "")
+if TLS and not Path(CA_FILE).is_file():
+    raise SystemExit('Con PROXY_SCHEME=https define TLS_CA_FILE (p. ej. "$(mkcert -CAROOT)/rootCA.pem").')
+# Contexto TLS que confía solo en la CA indicada y comprueba el nombre (nunca se desactiva la verificación).
+SSL_CTX = ssl.create_default_context(cafile=CA_FILE) if TLS else None
+# El usuario legítimo de S1 entra DIRECTO al proxy desde la red Docker. Con el WAF delante, el proxy presenta
+# el certificado interno: define INTERNAL_TLS_CA_FILE=./certs/internal/ca/ca.crt (por defecto, la misma CA).
+INTERNAL_CA_FILE = os.getenv("INTERNAL_TLS_CA_FILE", CA_FILE)
+INTERNAL_CA_PEM = Path(INTERNAL_CA_FILE).read_text(encoding="utf-8") if TLS else ""
 BRUTE_FORCE_ATTEMPTS = int(os.getenv("BRUTE_FORCE_ATTEMPTS", "300"))
 BRUTE_FORCE_CONCURRENCY = 50
 LEGIT_CONTAINER = os.getenv("LEGIT_CONTAINER", "api-gateway-mobile")  # cliente legítimo con otra IP
@@ -50,14 +66,14 @@ ENTRIES = {
     "web": {
         "port": WEB_PORT,
         "proxy_container": "reverse-proxy-web",  # contenedor de nginx de esta entrada (red private_api)
-        "internal_port": 8000,  # puerto de nginx dentro de la red de Docker
+        "internal_port": 8443 if TLS else 8000,  # puerto de nginx dentro de la red de Docker
         "prefix": "/api",
         "protected": ["/api/profile/me", "/api/stats/me", "/api/games"],
     },
     "movil": {
         "port": MOBILE_PORT,
         "proxy_container": "reverse-proxy-mobile",
-        "internal_port": 8090,
+        "internal_port": 8443 if TLS else 8090,
         "prefix": "",
         "protected": ["/profile/me", "/stats/me", "/games", "/home"],
     },
@@ -81,7 +97,12 @@ def percentile(values, p):
 
 
 def base(entry):
-    return f"http://{HOST}:{ENTRIES[entry]['port']}"
+    return f"{SCHEME}://{HOST}:{ENTRIES[entry]['port']}"
+
+
+def verify():
+    """Para httpx: la CA del proyecto con TLS; sin TLS no aplica."""
+    return SSL_CTX if TLS else True
 
 
 # ----------------------------------------------------------------------------------------- usuarios
@@ -90,7 +111,7 @@ def base(entry):
 def make_user(entry, prefix):
     """Registra un usuario y devuelve {username, userId, token}. Usa la entrada móvil (Bearer, sin cookie)."""
     username = prefix + uuid.uuid4().hex[:8]
-    with httpx.Client(base_url=base("movil"), timeout=20) as client:
+    with httpx.Client(base_url=base("movil"), timeout=20, verify=verify()) as client:
         r = client.post("/auth/register", json={"username": username, "password": PASSWORD})
         r.raise_for_status()
         r = client.post("/auth/login", json={"username": username, "password": PASSWORD})
@@ -101,7 +122,7 @@ def make_user(entry, prefix):
 
 def seed_victim_game(victim):
     """La víctima tiene una partida, así su historial se distingue del del atacante."""
-    with httpx.Client(base_url=base("movil"), timeout=20) as client:
+    with httpx.Client(base_url=base("movil"), timeout=20, verify=verify()) as client:
         r = client.post("/games", json={"mode": "local", "timeControl": None},
                         headers={"Authorization": f"Bearer {victim['token']}"})
         r.raise_for_status()
@@ -111,15 +132,17 @@ def seed_victim_game(victim):
 # --------------------------------------------------------------------------------------- S1 fuerza bruta
 
 LEGIT_CLIENT = r"""
-import json, sys, time, urllib.request, urllib.error
+import json, ssl, sys, time, urllib.request, urllib.error
 url, user, pwd, n = sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4])
+# Con TLS valida el certificado del proxy con la CA recibida (argv[5]); sin CA, contexto por defecto
+ctx = ssl.create_default_context(cadata=sys.argv[5]) if len(sys.argv) > 5 and sys.argv[5] else None
 out = []
 for _ in range(n):
     req = urllib.request.Request(url, data=json.dumps({"username": user, "password": pwd}).encode(),
                                  headers={"Content-Type": "application/json"}, method="POST")
     t = time.perf_counter()
     try:
-        with urllib.request.urlopen(req, timeout=10) as r:
+        with urllib.request.urlopen(req, timeout=10, context=ctx) as r:
             status = r.status
     except urllib.error.HTTPError as e:
         status = e.code
@@ -134,12 +157,12 @@ print(json.dumps(out))
 async def brute_force(entry, victim):
     cfg = ENTRIES[entry]
     url = f"{base(entry)}{cfg['prefix']}/auth/login"
-    internal_url = f"http://{cfg['proxy_container']}:{cfg['internal_port']}{cfg['prefix']}/auth/login"
+    internal_url = f"{SCHEME}://{cfg['proxy_container']}:{cfg['internal_port']}{cfg['prefix']}/auth/login"
 
     # Usuario legítimo desde otra IP (contenedor de la red interna), en paralelo con el ataque
     legit = await asyncio.create_subprocess_exec(
         "docker", "exec", LEGIT_CONTAINER, "python", "-c", LEGIT_CLIENT,
-        internal_url, victim["username"], PASSWORD, "20",
+        internal_url, victim["username"], PASSWORD, "20", INTERNAL_CA_PEM,
         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
     )
     await asyncio.sleep(0.3)
@@ -148,7 +171,7 @@ async def brute_force(entry, victim):
     sem = asyncio.Semaphore(BRUTE_FORCE_CONCURRENCY)
     limits = httpx.Limits(max_connections=BRUTE_FORCE_CONCURRENCY)
 
-    async with httpx.AsyncClient(timeout=30, limits=limits) as client:
+    async with httpx.AsyncClient(timeout=30, limits=limits, verify=verify()) as client:
         async def attempt(i):
             async with sem:
                 t = time.perf_counter()
@@ -232,7 +255,7 @@ def internal_variants(prefix):
 async def raw_request(port, method, path, extra_headers=""):
     """HTTP/1.1 crudo: la ruta viaja tal cual (httpx normalizaría '..' y '.')."""
     t = time.perf_counter()
-    reader, writer = await asyncio.open_connection(HOST, port)
+    reader, writer = await asyncio.open_connection(HOST, port, ssl=SSL_CTX, server_hostname=HOST if TLS else None)
     body = "{}" if method in ("POST", "PUT") else ""
     req = (f"{method} {path} HTTP/1.1\r\nHost: {HOST}\r\nConnection: close\r\n{extra_headers}"
            f"Content-Type: application/json\r\nContent-Length: {len(body)}\r\n\r\n{body}")
@@ -312,7 +335,7 @@ SPOOF_HEADERS = ["X-User-Id", "x-user-id", "X-USER-ID", "X_User_Id"]
 def spoofing(entry, attacker, victim, victim_game):
     cfg = ENTRIES[entry]
     rows = []
-    with httpx.Client(base_url=base(entry), timeout=20) as client:
+    with httpx.Client(base_url=base(entry), timeout=20, verify=verify()) as client:
         for path in cfg["protected"]:
             for header in SPOOF_HEADERS:
                 # Con el token del atacante y la identidad de la víctima en la cabecera

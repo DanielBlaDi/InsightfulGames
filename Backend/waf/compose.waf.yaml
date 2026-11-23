@@ -1,0 +1,152 @@
+﻿# =============================================================================================
+# WAF (ModSecurity + OWASP CRS) + Secure Channel. Integrated deployment:
+#
+#   docker compose -f compose.yaml -f Backend/waf/compose.waf.yaml up --build -d
+#
+#   Browser ==HTTPS/WSS (public cert)==> waf-web:8443    ==HTTPS (internal CA, name verified)==> reverse-proxy-web:8443
+#   Android ==HTTPS (public cert)======> waf-mobile:8443 ==HTTPS (internal CA, name verified)==> reverse-proxy-mobile:8443
+#   reverse proxies -> frontend / gateways: HTTP inside private_api (outside the Secure Channel scope)
+#
+# Only the WAFs publish ports. TLS variables of owasp/modsecurity-crs:nginx verified against the image sources
+# (nginx/Dockerfile, proxy_backend_ssl.conf.template, 93-update-proxy-ssl-config.sh, check-proxy-client-cert):
+# with PROXY_SSL=on and no client certificate the image verifies the upstream without mTLS ("no-cert").
+# Certificates: docs/secure-channel-tls.md (public: mkcert; internal: generar_certs_internos.py).
+# =============================================================================================
+
+x-waf-tls-env: &waf-tls-env
+  # Client -> WAF: TLS terminated here so ModSecurity/CRS can inspect the HTTP request
+  SSL_PORT: "8443"
+  SSL_CERT_FILE: /etc/nginx/edge-certs/tls.crt
+  SSL_CERT_KEY_FILE: /etc/nginx/edge-certs/tls.key
+  SSL_PROTOCOLS: "TLSv1.2 TLSv1.3"
+  # Same ECDHE + AEAD list as Backend/reverse-proxy/nginx/common.conf (the image default also allows DHE)
+  SSL_CIPHERS: "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305"
+  SSL_OCSP_STAPLING: "off"             # development certificates have no OCSP responder
+  # Plain HTTP is never proxied: 301 to HTTPS before ModSecurity or the reverse proxy see the request
+  NGINX_ALWAYS_TLS_REDIRECT: "on"
+  # WAF -> reverse proxy: new TLS connection, certificate chain AND name verified
+  PROXY_SSL: "on"
+  PROXY_SSL_VERIFY: "on"
+  PROXY_SSL_VERIFY_DEPTH: "1"          # leaf signed directly by the internal CA
+  PROXY_SSL_SERVER_NAME: "on"          # SNI; the name checked is the host of BACKEND
+  PROXY_SSL_PROTOCOLS: "TLSv1.2 TLSv1.3"
+  PROXY_SSL_CIPHERS: "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305"
+  PROXY_SSL_CA_CERT_FILE: /etc/nginx/upstream-ca/ca.crt   # ONLY the internal CA (not the system store)
+
+x-edge-cert: &edge-cert
+  type: bind
+  source: ${EDGE_TLS_DIR:?}            # tls.crt + tls.key (mkcert: localhost, 127.0.0.1, ::1, 10.0.2.2)
+  target: /etc/nginx/edge-certs
+  read_only: true
+  bind:
+    create_host_path: false
+
+x-internal-ca: &internal-ca
+  type: bind
+  source: ${INTERNAL_CA_CERT:?}        # certs/internal/ca/ca.crt (public certificate only, never ca.key)
+  target: /etc/nginx/upstream-ca/ca.crt
+  read_only: true
+  bind:
+    create_host_path: false
+
+services:
+  reverse-proxy-web:
+    ports: !override []
+    networks:
+      waf-edge:
+        ipv4_address: 172.30.250.2
+    # !override: the internal certificate replaces the public one mounted by compose.yaml (same target)
+    volumes: !override
+      - ./Backend/waf/real-ip.conf:/etc/nginx/conf.d/real-ip.conf:ro
+      - type: bind
+        source: ${INTERNAL_WEB_TLS_DIR:?}      # certs/internal/reverse-proxy-web (SAN reverse-proxy-web)
+        target: /etc/nginx/certs
+        read_only: true
+        bind:
+          create_host_path: false
+
+  reverse-proxy-mobile:
+    ports: !override []
+    networks:
+      waf-edge:
+        ipv4_address: 172.30.250.5
+    volumes: !override
+      - ./Backend/waf/real-ip.conf:/etc/nginx/conf.d/real-ip.conf:ro
+      - type: bind
+        source: ${INTERNAL_MOBILE_TLS_DIR:?}   # certs/internal/reverse-proxy-mobile (SAN reverse-proxy-mobile)
+        target: /etc/nginx/certs
+        read_only: true
+        bind:
+          create_host_path: false
+
+  waf-web:
+    image: owasp/modsecurity-crs:nginx
+    container_name: waf-web
+    restart: unless-stopped
+
+    environment:
+      <<: *waf-tls-env
+      BACKEND: "https://reverse-proxy-web:8443"
+      PORT: "8080"
+      SSL_REDIRECT_PORT: ${FRONTEND_HTTPS_PORT:?}   # public HTTPS port used in the 301
+      MODSEC_RULE_ENGINE: "On"
+      MODSEC_AUDIT_ENGINE: "RelevantOnly"
+      MODSEC_AUDIT_LOG: "/dev/stdout"
+      # Approved by the WAF owner: CRS default (GET HEAD POST OPTIONS) + PATCH and DELETE used by the web
+      # gateway (DELETE /api/auth/account, PATCH /api/games|matches/{id}/visibility). Rule 911100 stays
+      # active for any other method; paranoia level and anomaly thresholds unchanged.
+      ALLOWED_METHODS: "GET HEAD POST OPTIONS PATCH DELETE"
+
+    ports:
+      - "${FRONTEND_PORT:?}:8080"          # HTTP: only 301 to HTTPS
+      - "${FRONTEND_HTTPS_PORT:?}:8443"    # HTTPS + WSS
+
+    volumes:
+      - *edge-cert
+      - *internal-ca
+
+    networks:
+      waf-edge:
+        ipv4_address: 172.30.250.3
+
+    depends_on:
+      reverse-proxy-web:
+        condition: service_healthy
+
+  waf-mobile:
+    image: owasp/modsecurity-crs:nginx
+    container_name: waf-mobile
+    restart: unless-stopped
+
+    environment:
+      <<: *waf-tls-env
+      BACKEND: "https://reverse-proxy-mobile:8443"
+      PORT: "8080"
+      SSL_REDIRECT_PORT: ${MOBILE_HTTPS_PORT:?}
+      MODSEC_RULE_ENGINE: "On"
+      MODSEC_AUDIT_ENGINE: "RelevantOnly"
+      MODSEC_AUDIT_LOG: "/dev/stdout"
+      # Approved by the WAF owner: CRS default + DELETE (DELETE /auth/account); the mobile gateway has no PATCH.
+      ALLOWED_METHODS: "GET HEAD POST OPTIONS DELETE"
+
+    ports:
+      - "${MOBILE_HTTPS_PORT:?}:8443"      # HTTPS only: mobile HTTP is not published
+
+    volumes:
+      - *edge-cert
+      - *internal-ca
+
+    networks:
+      waf-edge:
+        ipv4_address: 172.30.250.4
+
+    depends_on:
+      reverse-proxy-mobile:
+        condition: service_healthy
+
+networks:
+  waf-edge:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.250.0/24

@@ -191,3 +191,48 @@ Profile and statistics come from the Profile/Stats service. Right after register
 
 Tests: `cd Backend/api-gateway-mobile && pip install -r requirements-dev.txt && pytest -q` and `cd Backend/api-gateway && pip install -r requirements-dev.txt && pytest -q`.
 
+
+## Seguridad perimetral: WAF Web y Mobile + Secure Channel
+
+InsightfulGames utiliza dos WAF independientes basados en OWASP ModSecurity CRS. Cada WAF termina TLS para
+poder inspeccionar las peticiones y abre una nueva conexión HTTPS, con certificado y nombre verificados, hacia
+su reverse proxy.
+
+Arquitectura Web:
+Navegador -> HTTPS/WSS -> WAF Web (8443; 8080 solo redirige a HTTPS) -> HTTPS -> Reverse Proxy Web -> Frontend / API Gateway Web
+
+Arquitectura Mobile:
+Android -> HTTPS -> WAF Mobile (8444; sin HTTP) -> HTTPS -> Reverse Proxy Mobile -> API Gateway Mobile
+
+Los puertos son los de `.env` (`FRONTEND_PORT`, `FRONTEND_HTTPS_PORT`, `MOBILE_HTTPS_PORT`). Del reverse proxy
+hacia los gateways el tráfico sigue en HTTP dentro de las redes privadas.
+
+### Iniciar el proyecto con los WAF
+
+Antes, crea los certificados (público de desarrollo e internos) y las variables de `.env` según
+`docs/secure-channel-tls.md` (sección 11.4). Después, desde la raíz del repositorio:
+
+    docker compose -f compose.yaml -f Backend/waf/compose.waf.yaml up --build -d
+
+IMPORTANTE: es el despliegue integrado y usa ambos archivos Compose. `docker compose up -d` solo con
+`compose.yaml` es el modo directo, sin WAF: los reverse proxies quedan publicados y solo debe usarse para
+probarlos (escenario 2).
+
+### Controles de seguridad
+
+- ModSecurity con OWASP Core Rule Set activado (paranoia y umbrales por defecto).
+- Bloqueo de patrones SQL Injection y XSS.
+- Métodos permitidos: web `GET HEAD POST OPTIONS PATCH DELETE`; móvil `GET HEAD POST OPTIONS DELETE`.
+- TLS 1.2/1.3 del cliente al WAF y del WAF al reverse proxy (CA interna y nombre verificados).
+- Certificados público e interno separados, montados en solo lectura y fuera de Git.
+- WAF y reverse proxies independientes para Web y Mobile.
+- Protección de rutas internas, `X-User-Id` filtrado y rate limiting en los reverse proxies.
+- Soporte WebSocket seguro (WSS) en el canal Web.
+
+### Archivos relacionados
+
+- Backend/waf/compose.waf.yaml
+- Backend/waf/real-ip.conf
+- Backend/reverse-proxy/nginx/
+- Backend/reverse-proxy/secure-channel/ (certificados internos, validación y verificación)
+- docs/secure-channel-tls.md
