@@ -1,0 +1,30 @@
+# =============================================================================================
+# PROPOSAL for the WAF scenario (owner: Kevin) - requires his approval before it becomes part of
+# compose.waf.yaml. Kept as a separate layer so compose.waf.yaml is not edited without coordination.
+#
+# Problem: OWASP CRS only allows "GET HEAD POST OPTIONS" by default (crs-setup.conf, rule 900200,
+# tx.allowed_methods). Rule 911100 (paranoia level 1, critical) blocks any other method, but the
+# system uses:
+#   - DELETE /api/auth/account                   web gateway (account-deletion saga)
+#   - PATCH  /api/games/{id}/visibility          web gateway
+#   - PATCH  /api/matches/{id}/visibility        web gateway
+#   - DELETE /auth/account                       mobile gateway (Android app)
+#
+# Change: add PATCH and DELETE to tx.allowed_methods through the image variable ALLOWED_METHODS
+# (src/opt/modsecurity/configure-rules.v4.conf maps it to rule 900200). Rule 911100 stays active and
+# still blocks PUT, TRACE, CONNECT, PROPFIND, etc.; no rule is disabled and the paranoia level and
+# anomaly thresholds are unchanged. Narrower alternative (per-path exclusion rules in
+# REQUEST-900-EXCLUSION-RULES-BEFORE-CRS.conf) is described in docs/secure-channel-tls.md.
+#
+#   docker compose -f compose.yaml -f Backend/waf/compose.waf.yaml -f Backend/waf/compose.waf-tls.yaml \
+#                  -f Backend/waf/compose.waf-methods.yaml up --build -d
+# =============================================================================================
+
+services:
+  waf-web:
+    environment:
+      ALLOWED_METHODS: "GET HEAD POST OPTIONS PATCH DELETE"
+
+  waf-mobile:
+    environment:
+      ALLOWED_METHODS: "GET HEAD POST OPTIONS DELETE"   # the mobile gateway exposes no PATCH route
