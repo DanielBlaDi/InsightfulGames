@@ -33,8 +33,12 @@ services:
   # =============================================================================================
   # REVERSE PROXIES (PUBLIC SUBNETWORK 1 - 10.20.1.0/24) (PRIVATE SUBNETWORK 1 - 10.20.2.0/24)
   # Routing:
-  #   - reverse-proxy-web (:8000)    -> frontend-component:80 and api-gateway-component:8080
-  #   - reverse-proxy-mobile (:8090) -> api-gateway-mobile:8090
+  #   - reverse-proxy-web (:8443 HTTPS/WSS)    -> frontend-component:80 and api-gateway-component:8080
+  #                       (:8000 HTTP)         -> only /health and 308 redirect to HTTPS
+  #   - reverse-proxy-mobile (:8443 HTTPS)     -> api-gateway-mobile:8090
+  #                          (:8090 HTTP)      -> only /health (healthcheck), not published
+  # Secure Channel Pattern (Prototype 3, scenario 1): TLS ends here; see docs/secure-channel-tls.md.
+  # Certificates are mounted read-only from the host (never baked into the image or committed).
   # =============================================================================================
 
   reverse-proxy-web:
@@ -49,9 +53,21 @@ services:
     image: reverse-proxy-web:dev
     # Temporary mock / bypass without WAF: comment these lines out when enabling `waf-component`.
     ports:
-      - "${FRONTEND_PORT:?}:8000"
+      - "${FRONTEND_PORT:?}:8000"          # HTTP: only /health and redirect to HTTPS
+      - "${FRONTEND_HTTPS_PORT:?}:8443"    # HTTPS + WSS
     expose:
       - "8000"
+      - "8443"
+    environment:
+      PUBLIC_HTTPS_PORT: ${FRONTEND_HTTPS_PORT:?}   # port used in the HTTP -> HTTPS redirect
+      HSTS_MAX_AGE: ${HSTS_MAX_AGE:?}
+    volumes:
+      - type: bind
+        source: ${WEB_TLS_DIR:?}               # tls.crt + tls.key
+        target: /etc/nginx/certs
+        read_only: true
+        bind:
+          create_host_path: false
     networks:
       public_network:
         ipv4_address: 10.20.1.11
@@ -74,10 +90,21 @@ services:
         HEALTH_PORT: "8090"
     image: reverse-proxy-mobile:dev
     # Temporary mock / bypass without WAF: comment these lines out when enabling `waf-component`.
+    # Only HTTPS is published: the Android app never uses plain HTTP (8090 stays internal for /health).
     ports:
-      - "${MOBILE_GATEWAY_PORT:?}:8090"
+      - "${MOBILE_HTTPS_PORT:?}:8443"
     expose:
       - "8090"
+      - "8443"
+    environment:
+      HSTS_MAX_AGE: ${HSTS_MAX_AGE:?}
+    volumes:
+      - type: bind
+        source: ${MOBILE_TLS_DIR:?}            # tls.crt + tls.key
+        target: /etc/nginx/certs
+        read_only: true
+        bind:
+          create_host_path: false
     networks:
       public_network:
         ipv4_address: 10.20.1.12
