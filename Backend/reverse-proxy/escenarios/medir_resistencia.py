@@ -43,7 +43,10 @@ if TLS and not Path(CA_FILE).is_file():
     raise SystemExit('Con PROXY_SCHEME=https define TLS_CA_FILE (p. ej. "$(mkcert -CAROOT)/rootCA.pem").')
 # Contexto TLS que confía solo en la CA indicada y comprueba el nombre (nunca se desactiva la verificación).
 SSL_CTX = ssl.create_default_context(cafile=CA_FILE) if TLS else None
-CA_PEM = Path(CA_FILE).read_text(encoding="utf-8") if TLS else ""
+# El usuario legítimo de S1 entra DIRECTO al proxy desde la red Docker. Con el WAF delante, el proxy presenta
+# el certificado interno: define INTERNAL_TLS_CA_FILE=./certs/internal/ca/ca.crt (por defecto, la misma CA).
+INTERNAL_CA_FILE = os.getenv("INTERNAL_TLS_CA_FILE", CA_FILE)
+INTERNAL_CA_PEM = Path(INTERNAL_CA_FILE).read_text(encoding="utf-8") if TLS else ""
 BRUTE_FORCE_ATTEMPTS = int(os.getenv("BRUTE_FORCE_ATTEMPTS", "300"))
 BRUTE_FORCE_CONCURRENCY = 50
 LEGIT_CONTAINER = os.getenv("LEGIT_CONTAINER", "api-gateway-mobile")  # cliente legítimo con otra IP
@@ -159,7 +162,7 @@ async def brute_force(entry, victim):
     # Usuario legítimo desde otra IP (contenedor de la red interna), en paralelo con el ataque
     legit = await asyncio.create_subprocess_exec(
         "docker", "exec", LEGIT_CONTAINER, "python", "-c", LEGIT_CLIENT,
-        internal_url, victim["username"], PASSWORD, "20", CA_PEM,
+        internal_url, victim["username"], PASSWORD, "20", INTERNAL_CA_PEM,
         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
     )
     await asyncio.sleep(0.3)
