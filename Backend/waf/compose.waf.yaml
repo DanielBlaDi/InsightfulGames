@@ -1,0 +1,61 @@
+﻿
+services:
+  reverse-proxy:
+    ports: !override []
+    networks:
+      app: {}
+      waf-edge:
+        ipv4_address: 172.30.250.2
+    volumes:
+      - ./Backend/waf/real-ip.conf:/etc/nginx/conf.d/real-ip.conf:ro
+
+  waf-web:
+    image: owasp/modsecurity-crs:nginx
+    container_name: waf-web
+    restart: unless-stopped
+
+    environment:
+      BACKEND: "http://reverse-proxy:8000"
+      PORT: "8080"
+      MODSEC_RULE_ENGINE: "On"
+      MODSEC_AUDIT_ENGINE: "RelevantOnly"
+      MODSEC_AUDIT_LOG: "/dev/stdout"
+
+    ports:
+      - "80:8080"
+
+    networks:
+      waf-edge:
+        ipv4_address: 172.30.250.3
+
+    depends_on:
+      - reverse-proxy
+
+  waf-mobile:
+    image: owasp/modsecurity-crs:nginx
+    container_name: waf-mobile
+    restart: unless-stopped
+
+    environment:
+      BACKEND: "http://reverse-proxy:8090"
+      PORT: "8080"
+      MODSEC_RULE_ENGINE: "On"
+      MODSEC_AUDIT_ENGINE: "RelevantOnly"
+      MODSEC_AUDIT_LOG: "/dev/stdout"
+
+    ports:
+      - "${MOBILE_GATEWAY_PORT:?}:8080"
+
+    networks:
+      waf-edge:
+        ipv4_address: 172.30.250.4
+
+    depends_on:
+      - reverse-proxy
+
+networks:
+  waf-edge:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.250.0/24
