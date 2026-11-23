@@ -11,10 +11,10 @@ contra los contenedores.
 
 Dos modos, con resultados separados:
   - "directo": compose.yaml solo (los proxies son la entrada pública, sin WAF).
-  - "waf": compose.yaml + Backend/waf/compose.waf.yaml (Kevin) + Backend/waf/compose.waf-tls.yaml
-    (+ compose.waf-methods.yaml si existe), fusionados con las reglas de Compose (!override, merge de
-    environment/depends_on, volúmenes por destino). Comprueba las variables del WAF contra las que
-    define la imagen owasp/modsecurity-crs:nginx.
+  - "waf" (despliegue integrado): compose.yaml + Backend/waf/compose.waf.yaml (WAF + Secure Channel),
+    fusionados con las reglas de Compose (!override, merge de environment/depends_on, volúmenes por
+    destino). Comprueba las variables del WAF contra las que define la imagen owasp/modsecurity-crs:nginx
+    y que se conservan los ajustes de ModSecurity del WAF.
 """
 
 import subprocess
@@ -270,10 +270,10 @@ WAF_IMAGE_VARS = {
 }
 AEAD = re.compile(r"^ECDHE-(ECDSA|RSA)-(AES(128|256)-GCM-SHA(256|384)|CHACHA20-POLY1305)$")
 
-layers = [COMPOSE, WAF_DIR / "compose.waf.yaml", WAF_DIR / "compose.waf-tls.yaml"]
-if (WAF_DIR / "compose.waf-methods.yaml").is_file():
-    layers.append(WAF_DIR / "compose.waf-methods.yaml")
+layers = [COMPOSE, WAF_DIR / "compose.waf.yaml"]
 section = "waf"
+leftovers = sorted(p.name for p in WAF_DIR.glob("compose.waf-*.yaml"))
+check("sin capas de Compose adicionales (todo el WAF + TLS en compose.waf.yaml)", not leftovers, str(leftovers))
 print("\n== Modo integrado (WAF + Secure Channel): " + " + ".join(str(p.relative_to(ROOT)) for p in layers))
 m = merge_files(layers)
 svc = m["services"]
@@ -294,7 +294,11 @@ for waf, proxy in (("waf-web", "reverse-proxy-web"), ("waf-mobile", "reverse-pro
     check("todas las variables existen en la imagen del WAF (sin errores tipográficos)", not unknown, str(unknown))
     check("ModSecurity activo (MODSEC_RULE_ENGINE=On) y sin bajar paranoia ni umbrales",
           env.get("MODSEC_RULE_ENGINE", "").lower() == "on"
-          and not {"BLOCKING_PARANOIA", "ANOMALY_INBOUND"} & set(env), env.get("MODSEC_RULE_ENGINE"))
+          and not {"BLOCKING_PARANOIA", "ANOMALY_INBOUND", "ANOMALY_OUTBOUND"} & set(env), env.get("MODSEC_RULE_ENGINE"))
+    check("ajustes del WAF conservados: imagen CRS, audit log RelevantOnly a stdout, PORT 8080, contenedor y restart",
+          s.get("image") == "owasp/modsecurity-crs:nginx" and s.get("container_name") == waf
+          and s.get("restart") == "unless-stopped" and env.get("PORT") == "8080"
+          and env.get("MODSEC_AUDIT_ENGINE") == "RelevantOnly" and env.get("MODSEC_AUDIT_LOG") == "/dev/stdout")
     check("cliente -> WAF: TLS 1.2/1.3 en :8443", env.get("SSL_PORT") == "8443" and env.get("SSL_PROTOCOLS") == "TLSv1.2 TLSv1.3")
     check("cliente -> WAF: cifrados ECDHE + AEAD", all(AEAD.match(c) for c in env.get("SSL_CIPHERS", "x").split(":")))
     edge = vols.get("/etc/nginx/edge-certs", {})
@@ -320,11 +324,9 @@ for waf, proxy in (("waf-web", "reverse-proxy-web"), ("waf-mobile", "reverse-pro
     check(f"espera a que {proxy} esté healthy", as_mapping(s.get("depends_on")).get(proxy, {}).get("condition") == "service_healthy")
     check("WAF solo en waf-edge, con su IP de compose.waf.yaml",
           list(s["networks"]) == ["waf-edge"] and s["networks"]["waf-edge"]["ipv4_address"] in ("172.30.250.3", "172.30.250.4"))
-    methods = env.get("ALLOWED_METHODS")
-    if methods is not None:
-        allowed = set(methods.split())
-        check("ALLOWED_METHODS: solo añade PATCH/DELETE a los de CRS (PUT, TRACE, CONNECT siguen bloqueados)",
-              allowed <= {"GET", "HEAD", "POST", "OPTIONS", "PATCH", "DELETE"} and {"GET", "POST", "HEAD", "OPTIONS"} <= allowed, methods)
+    approved = {"waf-web": "GET HEAD POST OPTIONS PATCH DELETE", "waf-mobile": "GET HEAD POST OPTIONS DELETE"}[waf]
+    check(f"ALLOWED_METHODS aprobados ({approved}); PUT, TRACE, CONNECT siguen bloqueados por la 911100",
+          set(env.get("ALLOWED_METHODS", "").split()) == set(approved.split()), env.get("ALLOWED_METHODS"))
 
     p = svc[proxy]
     pv = {v["target"] if isinstance(v, dict) else v.split(":")[1]: v for v in p.get("volumes", [])}

@@ -25,7 +25,7 @@ python medir_resistencia.py
 
 El cliente legítimo de S1 corre dentro del contenedor `api-gateway-mobile` (otra IP para nginx) y llega a
 `https://reverse-proxy-mobile:8443` validando con la misma CA (por eso el certificado incluye ese nombre).
-Con el WAF delante (`Backend/waf/compose.waf-tls.yaml`) las entradas públicas son los WAF y el proxy presenta
+En el despliegue integrado (`-f compose.yaml -f Backend/waf/compose.waf.yaml`) las entradas públicas son los WAF y el proxy presenta
 el certificado interno: define además `INTERNAL_TLS_CA_FILE=./certs/internal/ca/ca.crt` para ese cliente.
 Las variantes de S2 que bloquee el WAF (403) cuentan como bloqueadas: nunca llegan a un gateway.
 Variables opcionales: `PROXY_HOST`, `PROXY_SCHEME` (`https` por defecto; `http` para un stack sin TLS),

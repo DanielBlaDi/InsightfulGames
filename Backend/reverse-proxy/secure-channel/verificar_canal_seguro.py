@@ -3,11 +3,11 @@
     pip install websockets
     $env:TLS_CA_FILE = "$(mkcert -CAROOT)\\rootCA.pem"     # CA que firmó el certificado PÚBLICO (nunca la clave)
 
-    # Sin WAF: los reverse proxies son la entrada pública (docker compose up -d)
-    python Backend/reverse-proxy/secure-channel/verificar_canal_seguro.py --modo directo
-
-    # Con WAF: compose.yaml + Backend/waf/compose.waf.yaml + Backend/waf/compose.waf-tls.yaml (+ compose.waf-methods.yaml)
+    # Despliegue integrado: docker compose -f compose.yaml -f Backend/waf/compose.waf.yaml up --build -d
     python Backend/reverse-proxy/secure-channel/verificar_canal_seguro.py --modo waf
+
+    # Modo directo, solo para probar los reverse proxies sin WAF (escenario 2): docker compose up -d
+    python Backend/reverse-proxy/secure-channel/verificar_canal_seguro.py --modo directo
     python Backend/reverse-proxy/secure-channel/verificar_canal_seguro.py --modo waf --control-negativo-upstream
 
 Variables: PROXY_HOST (localhost), FRONTEND_PORT, FRONTEND_HTTPS_PORT, MOBILE_HTTPS_PORT, TLS_CA_FILE y, para el
@@ -51,9 +51,7 @@ INTERNAL_PORTS = {8000: "nginx web (interno)", 8090: "nginx móvil HTTP", 8091: 
                   8084: "multiplayer", 8085: "tutor", 8086: "botcito", 8087: "profile-stats",
                   27017: "mongo", 3306: "mysql", 5432: "postgres", 5672: "rabbitmq", 15672: "rabbitmq admin"}
 
-WAF_LAYERS = ["compose.yaml", "Backend/waf/compose.waf.yaml", "Backend/waf/compose.waf-tls.yaml"]
-if (ROOT / "Backend/waf/compose.waf-methods.yaml").is_file():
-    WAF_LAYERS.append("Backend/waf/compose.waf-methods.yaml")
+WAF_LAYERS = ["compose.yaml", "Backend/waf/compose.waf.yaml"]  # despliegue integrado (WAF + Secure Channel)
 
 results = []
 
