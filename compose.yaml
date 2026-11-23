@@ -2,56 +2,115 @@ name: InsightfulGames
 
 x-service: &service
   restart: unless-stopped
-  networks:
-    - app
 
 services:
+  # =============================================================================================
+  # WAF (COMMENTED FOR NOW - UNCOMMENT WHEN READY)
+  # When enabled:
+  #   1. Uncomment the `waf-component` block.
+  #   2. Comment out `ports:` in `reverse-proxy-web` and `reverse-proxy-mobile` so only the WAF
+  #      publishes ports to the host.
+  # =============================================================================================
+  # waf-component:
+  #   <<: *service
+  #   container_name: waf-component
+  #   build:
+  #     context: ./Backend/waf
+  #     dockerfile: Dockerfile
+  #   image: waf-component:dev
+  #   ports:
+  #     - "${FRONTEND_PORT:?}:8000"
+  #     - "${MOBILE_GATEWAY_PORT:?}:8090"
+  #   networks:
+  #     public_network:
+  #       ipv4_address: 10.20.1.10
+  #   depends_on:
+  #     reverse-proxy-web:
+  #       condition: service_healthy
+  #     reverse-proxy-mobile:
+  #       condition: service_healthy
 
+  # =============================================================================================
+  # REVERSE PROXIES (PUBLIC SUBNETWORK 1 - 10.20.1.0/24) (PRIVATE SUBNETWORK 1 - 10.20.2.0/24)
+  # Routing:
+  #   - reverse-proxy-web (:8000)    -> frontend-component:80 and api-gateway-component:8080
+  #   - reverse-proxy-mobile (:8090) -> api-gateway-mobile:8090
+  # =============================================================================================
 
-# proxy inverso (único servicio que publica puertos) ------------------------------------------------------
-
-  # Reverse Proxy Pattern. Entradas: FRONTEND_PORT -> navegador (frontend + /api + /api/ws) y
-  # MOBILE_GATEWAY_PORT -> app Android (gateway móvil). El resto de servicios solo se alcanza
-  # por la red interna; para depurar con curl usa compose.debug.yaml.
-  reverse-proxy:
+  reverse-proxy-web:
     <<: *service
-    container_name: reverse-proxy
+    container_name: reverse-proxy-web
     build:
       context: ./Backend/reverse-proxy
       dockerfile: Dockerfile
-    image: reverse-proxy:dev
+      args:
+        ENTRY: web            # nginx/common.conf + nginx/web.conf
+        HEALTH_PORT: "8000"
+    image: reverse-proxy-web:dev
+    # Temporary mock / bypass without WAF: comment these lines out when enabling `waf-component`.
     ports:
       - "${FRONTEND_PORT:?}:8000"
-      - "${MOBILE_GATEWAY_PORT:?}:8090"
+    expose:
+      - "8000"
+    networks:
+      public_network:
+        ipv4_address: 10.20.1.11
+      private_api:
+        ipv4_address: 10.20.2.10
     depends_on:
       frontend:
         condition: service_healthy
       api-gateway-component:
         condition: service_healthy
+
+  reverse-proxy-mobile:
+    <<: *service
+    container_name: reverse-proxy-mobile
+    build:
+      context: ./Backend/reverse-proxy
+      dockerfile: Dockerfile
+      args:
+        ENTRY: mobile         # nginx/common.conf + nginx/mobile.conf
+        HEALTH_PORT: "8090"
+    image: reverse-proxy-mobile:dev
+    # Temporary mock / bypass without WAF: comment these lines out when enabling `waf-component`.
+    ports:
+      - "${MOBILE_GATEWAY_PORT:?}:8090"
+    expose:
+      - "8090"
+    networks:
+      public_network:
+        ipv4_address: 10.20.1.12
+      private_api:
+        ipv4_address: 10.20.2.11
+    depends_on:
       api-gateway-mobile:
         condition: service_healthy
 
-# presetacion----------------------------------------------------------------------------------------------------------------------------
-
+  # =============================================================================================
+  # PRESENTATION (PRIVATE SUBNETWORK 1 - 10.20.2.0/24)
+  # =============================================================================================
   frontend:
     <<: *service
-    # profiles: ["pendiente"]
     container_name: frontend-component
     build:
       context: ./Frontend
       dockerfile: Dockerfile
     image: frontend:dev
+    expose:
+      - "80"
     environment:
       API_GATEWAY_URL: http://api-gateway-component:8080
+    networks:
+      private_api:
+        ipv4_address: 10.20.2.12
     depends_on:
       api-gateway-component:
         condition: service_healthy
 
-
-# apis gateway
-
-# bff
-
+  # =============================================================================================
+  # API GATEWAYS (PRIVATE SUBNETWORK 1 - 10.20.2.0/24) (PRIVATE SUBNETWORK 2 - 10.20.3.0/24)
+  # =============================================================================================
   api-gateway-mobile:
     <<: *service
     container_name: api-gateway-mobile
@@ -59,6 +118,8 @@ services:
       context: ./Backend
       dockerfile: api-gateway-mobile/Dockerfile
     image: api-gateway-mobile:dev
+    expose:
+      - "8090"
     environment:
       PORT: "8090"
       AUTH_URL: http://auth-component:8081
@@ -70,18 +131,31 @@ services:
       JWT_ALGORITHM: ${JWT_ALGORITHM:?}
       HTTP_TIMEOUT: ${HTTP_TIMEOUT:?}
       LOG_LEVEL: ${LOG_LEVEL:?}
+    networks:
+      private_api:
+        ipv4_address: 10.20.2.13
+      private_back:
+        ipv4_address: 10.20.3.10
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/health')"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
-
-# api gateway
+    depends_on:
+      auth-component:
+        condition: service_healthy
+      game-logic-component:
+        condition: service_healthy
+      profile-stats-component:
+        condition: service_healthy
+      tutor-component:
+        condition: service_healthy
+      single-player-component:
+        condition: service_healthy
 
   api-gateway-component:
     <<: *service
-
     container_name: api-gateway-component
     build:
       context: ./Backend
@@ -105,26 +179,36 @@ services:
       COOKIE_SECURE: ${COOKIE_SECURE:?}
       WS_ALLOWED_ORIGINS: ${WS_ALLOWED_ORIGINS:?}
       CORS_ORIGINS: http://localhost:80,http://localhost:5173,http://localhost:3000
+    networks:
+      private_api:
+        ipv4_address: 10.20.2.14
+      private_back:
+        ipv4_address: 10.20.3.11
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 20s
-
-
     depends_on:
-      - auth-component
-      - profile-stats-component
-      - single-player-component
-      - multiplayer-component
-      - tutor-component
-      - game-logic-component
-      - botcito-component
+      auth-component:
+        condition: service_healthy
+      profile-stats-component:
+        condition: service_healthy
+      single-player-component:
+        condition: service_healthy
+      multiplayer-component:
+        condition: service_healthy
+      tutor-component:
+        condition: service_healthy
+      game-logic-component:
+        condition: service_healthy
+      botcito-component:
+        condition: service_healthy
 
-
-# logica ------------------------------------------
-
+  # =============================================================================================
+  # BUSINESS LOGIC (PRIVATE SUBNETWORK 2 - 10.20.3.0/24)
+  # =============================================================================================
   auth-component:
     <<: *service
     container_name: auth-component
@@ -143,7 +227,16 @@ services:
       JWT_SECRET: ${JWT_SECRET:?}
       RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:?}:${RABBITMQ_DEFAULT_PASS:?}@rabbitmq:5672
       OUTBOX_RELAY_INTERVAL_MS: ${OUTBOX_RELAY_INTERVAL_MS:?}
-
+    networks:
+      private_back:
+        ipv4_address: 10.20.3.12
+    healthcheck:
+      # eclipse-temurin JRE image does not include curl or wget; bash checks HTTP 200 on /health.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8081 && printf 'GET /health HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3 && head -n 1 <&3 | grep -q '200'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
     depends_on:
       mysql:
         condition: service_healthy
@@ -164,8 +257,11 @@ services:
       MONGO_URL: mongodb://${MONGO_USER:?}:${MONGO_PASSWORD:?}@mongo:27017/${MONGO_DATABASE:?}?authSource=${MONGO_DATABASE:?}
       RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:?}:${RABBITMQ_DEFAULT_PASS:?}@rabbitmq:5672
       WAITING_TIMEOUT_MINUTES: ${WAITING_TIMEOUT_MINUTES:?}
+    networks:
+      private_back:
+        ipv4_address: 10.20.3.13
     healthcheck:
-      # La imagen eclipse-temurin JRE no trae curl ni wget: bash abre el socket directamente.
+      # eclipse-temurin JRE image does not include curl or wget; bash opens the TCP socket directly.
       test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8082 && printf 'GET /health HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3 && grep -q '\"ok\"' <&3"]
       interval: 10s
       timeout: 5s
@@ -176,7 +272,6 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-
 
   single-player-component:
     <<: *service
@@ -191,16 +286,24 @@ services:
       SERVER_PORT: "8083"
       GAME_LOGIC_URL: http://game-logic-component:8082
       RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:?}:${RABBITMQ_DEFAULT_PASS:?}@rabbitmq:5672
+    networks:
+      private_back:
+        ipv4_address: 10.20.3.14
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8083 && printf 'GET /health HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3 && head -n 1 <&3 | grep -q '200'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
     depends_on:
+      game-logic-component:
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
 
-
   multiplayer-component:
     <<: *service
-    # profiles: ["pendiente"]
     container_name: multiplayer-component
-    restart: unless-stopped
     build:
       context: ./Backend/multiplayer-component
       dockerfile: Dockerfile
@@ -214,7 +317,20 @@ services:
       RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:?}:${RABBITMQ_DEFAULT_PASS:?}@rabbitmq:5672
       RECONNECT_WINDOW_SECONDS: ${RECONNECT_WINDOW_SECONDS:?}
       LOG_LEVEL: ${LOG_LEVEL:?}
-
+    networks:
+      private_back:
+        ipv4_address: 10.20.3.15
+    healthcheck:
+      test: ["CMD", "sh", "-c", "nc -z 127.0.0.1 8084 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    depends_on:
+      game-logic-component:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
 
   tutor-component:
     <<: *service
@@ -237,13 +353,21 @@ services:
       LLM_PROVIDER: ${LLM_PROVIDER:?}
       HTTP_TIMEOUT: ${HTTP_TIMEOUT:?}
       LOG_LEVEL: ${LOG_LEVEL:?}
+    networks:
+      private_back:
+        ipv4_address: 10.20.3.16
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8085/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     depends_on:
       mongo-analysis:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
 
-  
   botcito-component:
     <<: *service
     container_name: botcito-component
@@ -261,11 +385,18 @@ services:
       ENGINE_THREADS: "1"
       ENGINE_TIMEOUT_MS: "2000"
       LOG_LEVEL: ${LOG_LEVEL:?}
-
+    networks:
+      private_back:
+        ipv4_address: 10.20.3.17
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8086/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   botcito-analysis-component:
     <<: *service
-    # profiles: ["pendiente"]
     container_name: botcito-analysis-component
     build:
       context: ./Backend/botcito-component
@@ -282,6 +413,15 @@ services:
       ENGINE_TIMEOUT_MS: "10000"
       ANALYSIS_DEPTH_MAX: ${ANALYSIS_DEPTH_MAX:?}
       LOG_LEVEL: ${LOG_LEVEL:?}
+    networks:
+      private_back:
+        ipv4_address: 10.20.3.18
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8091/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   profile-stats-component:
     <<: *service
@@ -298,8 +438,11 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:?}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
       RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:?}:${RABBITMQ_DEFAULT_PASS:?}@rabbitmq:5672
+    networks:
+      private_back:
+        ipv4_address: 10.20.3.19
     healthcheck:
-      # La imagen eclipse-temurin JRE no trae curl ni wget: bash abre el socket directamente.
+      # eclipse-temurin JRE image does not include curl or wget; bash opens the TCP socket directly.
       test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8087 && printf 'GET /health HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3 && grep -q '\"ok\"' <&3"]
       interval: 10s
       timeout: 5s
@@ -311,11 +454,11 @@ services:
       rabbitmq:
         condition: service_healthy
 
-# workers ------------------------------------------------------------------------------------------------
-
+  # =============================================================================================
+  # WORKERS (PRIVATE SUBNETWORK 2 - 10.20.3.0/24)
+  # =============================================================================================
   timeout-worker:
     <<: *service
-    # profiles: ["pendiente"]
     container_name: timeout-worker
     build:
       context: ./Backend/timeout-worker
@@ -329,6 +472,9 @@ services:
       TIMEOUT_POLL_INTERVAL_SECONDS: ${TIMEOUT_POLL_INTERVAL_SECONDS:?}
       TIMEOUT_BATCH_LIMIT: ${TIMEOUT_BATCH_LIMIT:?}
       LOG_LEVEL: ${LOG_LEVEL:?}
+    networks:
+      private_back:
+        ipv4_address: 10.20.3.20
     healthcheck:
       test: ["CMD", "/app/timeout-worker", "-health"]
       interval: 15s
@@ -339,11 +485,8 @@ services:
       game-logic-component:
         condition: service_healthy
 
-
-
   analysis-worker:
     <<: *service
-    # profiles: ["pendiente"]
     container_name: analysis-worker
     build:
       context: ./Backend/analysis-worker
@@ -366,15 +509,46 @@ services:
       POLL_INTERVAL_SECONDS: ${POLL_INTERVAL_SECONDS:?}
       ANALYSIS_STALE_MINUTES: ${ANALYSIS_STALE_MINUTES:?}
       LOG_LEVEL: ${LOG_LEVEL:?}
+    networks:
+      private_back:
+        ipv4_address: 10.20.3.21
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8089/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     depends_on:
       mongo-analysis:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
 
-
-
-# Bases de datos
+  # =============================================================================================
+  # BROKER AND DATABASES (PRIVATE SUBNETWORK 2 - 10.20.3.0/24)
+  # =============================================================================================
+  rabbitmq:
+    <<: *service
+    image: rabbitmq:3.13-management
+    container_name: rabbitmq-broker
+    # Fixed hostname: RabbitMQ stores node state in a directory derived from the node name.
+    hostname: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:?}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:?}
+    expose:
+      - "5672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      private_back:
+        ipv4_address: 10.20.3.22
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 30s
 
   mongo:
     <<: *service
@@ -397,18 +571,15 @@ services:
         read_only: true
         bind:
           create_host_path: false
+    networks:
+      private_back:
+        ipv4_address: 10.20.3.23
     healthcheck:
-      test:
-        - CMD
-        - mongosh
-        - --quiet
-        - --eval
-        - "db.adminCommand('ping').ok"
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
       interval: 15s
       timeout: 5s
       retries: 5
       start_period: 30s
-
 
   mongo-analysis:
     <<: *service
@@ -431,19 +602,15 @@ services:
         read_only: true
         bind:
           create_host_path: false
+    networks:
+      private_back:
+        ipv4_address: 10.20.3.24
     healthcheck:
-      test: 
-        - CMD
-        - mongosh
-        - --quiet
-        - --eval
-        - "db.adminCommand('ping').ok"
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
       interval: 15s
       timeout: 5s
       retries: 5
       start_period: 30s
-
-
 
   mysql:
     <<: *service
@@ -464,10 +631,11 @@ services:
         read_only: true
         bind:
           create_host_path: false
+    networks:
+      private_back:
+        ipv4_address: 10.20.3.25
     healthcheck:
-      test:
-        - CMD-SHELL
-        - 'mysqladmin ping -h 127.0.0.1 -u root -p"$${MYSQL_ROOT_PASSWORD}" --silent'
+      test: ["CMD-SHELL", 'mysqladmin ping -h 127.0.0.1 -u root -p"$${MYSQL_ROOT_PASSWORD}" --silent']
       interval: 15s
       timeout: 5s
       retries: 10
@@ -491,42 +659,37 @@ services:
         read_only: true
         bind:
           create_host_path: false
+    networks:
+      private_back:
+        ipv4_address: 10.20.3.26
     healthcheck:
-      test:
-        - CMD-SHELL
-        - 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"'
+      test: ["CMD-SHELL", 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 20s
 
-
-  rabbitmq:
-    <<: *service
-    image: rabbitmq:3.13-management
-    container_name: rabbitmq-broker
-    # Nombre fijo: RabbitMQ guarda sus datos en un directorio derivado del nombre del nodo.
-    hostname: rabbitmq
-    environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:?}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:?}
-    expose:
-      - "5672"
-    volumes:
-      - rabbitmq-data:/var/lib/rabbitmq
-    healthcheck:
-      test:
-        - CMD
-        - rabbitmq-diagnostics
-        - -q
-        - ping
-      interval: 15s
-      timeout: 10s
-      retries: 8
-      start_period: 30s
-
 networks:
-  app:
+  public_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.20.1.0/24
+          gateway: 10.20.1.1
+  private_api:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 10.20.2.0/24
+          gateway: 10.20.2.1
+  private_back:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 10.20.3.0/24
+          gateway: 10.20.3.1
 
 volumes:
   mongo-data:

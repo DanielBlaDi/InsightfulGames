@@ -1,11 +1,17 @@
-﻿
-services:
-  reverse-proxy:
+﻿services:
+  reverse-proxy-web:
     ports: !override []
     networks:
-      app: {}
       waf-edge:
         ipv4_address: 172.30.250.2
+    volumes:
+      - ./Backend/waf/real-ip.conf:/etc/nginx/conf.d/real-ip.conf:ro
+
+  reverse-proxy-mobile:
+    ports: !override []
+    networks:
+      waf-edge:
+        ipv4_address: 172.30.250.5
     volumes:
       - ./Backend/waf/real-ip.conf:/etc/nginx/conf.d/real-ip.conf:ro
 
@@ -15,7 +21,7 @@ services:
     restart: unless-stopped
 
     environment:
-      BACKEND: "http://reverse-proxy:8000"
+      BACKEND: "http://reverse-proxy-web:8000"
       PORT: "8080"
       MODSEC_RULE_ENGINE: "On"
       MODSEC_AUDIT_ENGINE: "RelevantOnly"
@@ -29,7 +35,7 @@ services:
         ipv4_address: 172.30.250.3
 
     depends_on:
-      - reverse-proxy
+      - reverse-proxy-web
 
   waf-mobile:
     image: owasp/modsecurity-crs:nginx
@@ -37,7 +43,7 @@ services:
     restart: unless-stopped
 
     environment:
-      BACKEND: "http://reverse-proxy:8090"
+      BACKEND: "http://reverse-proxy-mobile:8090"
       PORT: "8080"
       MODSEC_RULE_ENGINE: "On"
       MODSEC_AUDIT_ENGINE: "RelevantOnly"
@@ -51,7 +57,7 @@ services:
         ipv4_address: 172.30.250.4
 
     depends_on:
-      - reverse-proxy
+      - reverse-proxy-mobile
 
 networks:
   waf-edge:

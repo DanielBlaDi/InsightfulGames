@@ -49,12 +49,14 @@ def allowed_by(t):
 ENTRIES = {
     "web": {
         "port": WEB_PORT,
+        "proxy_container": "reverse-proxy-web",  # contenedor de nginx de esta entrada (red private_api)
         "internal_port": 8000,  # puerto de nginx dentro de la red de Docker
         "prefix": "/api",
         "protected": ["/api/profile/me", "/api/stats/me", "/api/games"],
     },
     "movil": {
         "port": MOBILE_PORT,
+        "proxy_container": "reverse-proxy-mobile",
         "internal_port": 8090,
         "prefix": "",
         "protected": ["/profile/me", "/stats/me", "/games", "/home"],
@@ -132,7 +134,7 @@ print(json.dumps(out))
 async def brute_force(entry, victim):
     cfg = ENTRIES[entry]
     url = f"{base(entry)}{cfg['prefix']}/auth/login"
-    internal_url = f"http://reverse-proxy:{cfg['internal_port']}{cfg['prefix']}/auth/login"
+    internal_url = f"http://{cfg['proxy_container']}:{cfg['internal_port']}{cfg['prefix']}/auth/login"
 
     # Usuario legítimo desde otra IP (contenedor de la red interna), en paralelo con el ataque
     legit = await asyncio.create_subprocess_exec(
@@ -351,7 +353,7 @@ async def main():
         "fecha": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "proxy": {"web": base("web"), "movil": base("movil")},
         "parametros": {"intentos_fuerza_bruta": BRUTE_FORCE_ATTEMPTS, "concurrencia": BRUTE_FORCE_CONCURRENCY,
-                       "limite_nginx": "10 r/s por IP, ráfaga 20 (zona auth_zone compartida por ambas entradas)"},
+                       "limite_nginx": "10 r/s por IP, ráfaga 20 (una zona auth_zone por contenedor de proxy)"},
         "S2_puertos": port_scan(),
     }
     for entry in ENTRIES:
