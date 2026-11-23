@@ -3,6 +3,14 @@
 .env.*
 !.env.example
 
+# === TLS (Secure Channel): certificados y claves locales, nunca en Git ===
+certs/
+*.key
+*.pem
+*.p12
+*.pfx
+*.crt
+
 # === Python ===
 __pycache__/
 *.py[cod]

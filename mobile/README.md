@@ -7,10 +7,14 @@ reloj de 10 min) y **borrado de cuenta**. No juega contra el bot ni multijugador
 
 ## Cómo abrirla
 1. Android Studio (Koala o más nuevo) → *Open* → esta carpeta.
-2. Levantar el **gateway móvil** (puerto 8090) y revisar `BASE_URL` en `app/build.gradle.kts`:
-   - Emulador: `http://10.0.2.2:8090/` (ya configurado).
-   - Dispositivo físico: `http://<IP-del-PC>:8090/` (mismo Wi-Fi, firewall abierto).
-   - Siempre con `/` al final y **sin** `/api`. La app habla con el gateway móvil, no con el web.
+2. Levantar el stack y revisar `BASE_URL` (Secure Channel, `docs/secure-channel-tls.md`: la app solo usa HTTPS):
+   - Emulador: `https://10.0.2.2:8444/` (ya configurado; `8444` = `MOBILE_HTTPS_PORT`). Antes, instala en el
+     emulador la CA de desarrollo (`mkcert -CAROOT` → `rootCA.pem`, sección 8.5 de la guía): la variante debug
+     confía en las CA instaladas por el usuario; el certificado debe incluir `10.0.2.2`.
+   - Dispositivo físico: `.\gradlew installDebug -PinsightfulDebugBaseUrl=https://<IP-del-PC>:8444/` con un
+     certificado que incluya esa IP.
+   - Siempre con `/` al final y **sin** `/api`. La app habla con el gateway móvil (a través de
+     `reverse-proxy-mobile`), no con el web. El build falla si la URL no empieza por `https://`.
 3. **Backend real: validado el 2026-11-21** (MOB-01) en un emulador Android 14 contra `docker compose up` completo
    (app → nginx :8090 → gateway móvil → Auth, Profile/Stats, Game Logic). Funcionó todo esto:
    - registro con login automático, login y validación del formulario;
@@ -80,4 +84,5 @@ El emulador necesita la aceleración WHPX (Windows Hypervisor Platform); compru�
 
 ## Pendiente
 - Logo, tipografías (Playfair Display / Plus Jakarta Sans) y modo oscuro.
-- Release: poner el dominio HTTPS en `BASE_URL` (el release bloquea HTTP).
+- Release: `.\gradlew assembleRelease -PinsightfulReleaseBaseUrl=https://<tu-dominio>/` (certificado de una CA
+  pública; el release solo confía en las CA del sistema y bloquea HTTP).

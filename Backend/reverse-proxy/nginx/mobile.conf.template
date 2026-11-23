@@ -1,12 +1,37 @@
 # Entrada MÓVIL (contenedor reverse-proxy-mobile). Se carga después de common.conf.
+# Plantilla: al arrancar, la imagen de Nginx sustituye ${HSTS_MAX_AGE} (envsubst).
 #
-#   :8090 (MOBILE_GATEWAY_PORT)  /*  -> api-gateway-mobile:8090   (la app usa BASE_URL = raíz, sin prefijo)
+#   :8443 HTTPS (MOBILE_HTTPS_PORT)  /*  -> api-gateway-mobile:8090   (la app usa BASE_URL = raíz, sin prefijo)
+#   :8090 HTTP                       solo /health para el healthcheck interno; NO se publica en el host.
 #
 # /internal/* responde 404 aquí, sin llegar al gateway móvil.
 
+# HTTP en claro: solo salud. La app nunca habla por aquí (su release bloquea HTTP).
 server {
     listen 8090;
     server_name _;
+
+    location = /health {
+        access_log off;
+        default_type application/json;
+        return 200 '{"status":"ok"}';
+    }
+
+    location / {
+        default_type application/json;
+        return 403 '{"error":{"code":"HTTPS_REQUIRED","message":"Usa https://"}}';
+    }
+}
+
+# HTTPS: único canal con datos de la app Android.
+server {
+    listen 8443 ssl;
+    server_name _;
+
+    ssl_certificate     /etc/nginx/certs/tls.crt;
+    ssl_certificate_key /etc/nginx/certs/tls.key;
+
+    add_header Strict-Transport-Security "max-age=${HSTS_MAX_AGE}" always;
 
     client_max_body_size 1m;
 
