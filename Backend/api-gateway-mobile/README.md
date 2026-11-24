@@ -109,7 +109,7 @@ LOGIC_URL=http://localhost:8082 PROFILE_URL=http://localhost:8087 \
 no tiene historial). `PROFILE_URL` hace que espere hasta 20 s (`E2E_PROFILE_WAIT`) a que RabbitMQ cree el perfil. Sin
 ninguna de las dos, todo es simulado y las pruebas pasan sin Docker.
 
-La app: emulador con `BASE_URL=http://10.0.2.2:8090/` (ya configurado).
+La app: emulador con `BASE_URL=https://10.0.2.2:8444/` (ya configurado), que llega al gateway móvil a través de `waf-mobile` y `reverse-proxy-mobile`. Requiere la CA de desarrollo instalada en el emulador (`docs/secure-channel-tls.md`, sección 8.5).
 
 Notas: con Auth real y Profile simulado, el perfil no existe porque el simulado no conoce a usuarios que registró Auth.
 Para ver "No disponible" en Inicio con el simulado puro: `MOCK_FAIL=stats,recentGames`.

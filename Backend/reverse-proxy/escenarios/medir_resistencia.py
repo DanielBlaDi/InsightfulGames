@@ -2,12 +2,13 @@
 
     python medir_resistencia.py                # escribe resultados.json junto a este archivo
 
-Necesita el stack levantado (docker compose up -d), httpx y el CLI de docker. Por cada entrada del proxy
-(web :FRONTEND_HTTPS_PORT y móvil :MOBILE_HTTPS_PORT) ejecuta:
+Necesita el stack levantado (docker compose up -d), httpx y el CLI de docker. Las entradas públicas son los WAF
+(web :FRONTEND_HTTPS_PORT y móvil :MOBILE_HTTPS_PORT), delante de los reverse proxies; por cada una ejecuta S1-S3.
 
-Con el Secure Channel (escenario 1) las entradas son HTTPS: define TLS_CA_FILE con la CA que firmó el
-certificado (p. ej. "$(mkcert -CAROOT)/rootCA.pem"). Todas las conexiones validan certificado y nombre; con
-PROXY_SCHEME=http el script mide un stack sin TLS como antes.
+Las entradas son HTTPS: define TLS_CA_FILE con la CA que firmó el certificado público (p. ej.
+"$(mkcert -CAROOT)/rootCA.pem"). Todas las conexiones validan certificado y nombre. El usuario legítimo de S1
+entra directo al proxy desde la red Docker y valida su certificado interno con INTERNAL_TLS_CA_FILE (por defecto
+certs/internal/ca/ca.crt). Con PROXY_SCHEME=http el script mide un stack antiguo sin TLS.
 
   S1  Fuerza bruta en el login: N intentos con contraseña errónea lo más rápido posible desde el host, mientras
       un usuario legítimo inicia sesión desde OTRA IP (un contenedor de la red interna). Cuenta cuántos frena
@@ -43,9 +44,13 @@ if TLS and not Path(CA_FILE).is_file():
     raise SystemExit('Con PROXY_SCHEME=https define TLS_CA_FILE (p. ej. "$(mkcert -CAROOT)/rootCA.pem").')
 # Contexto TLS que confía solo en la CA indicada y comprueba el nombre (nunca se desactiva la verificación).
 SSL_CTX = ssl.create_default_context(cafile=CA_FILE) if TLS else None
-# El usuario legítimo de S1 entra DIRECTO al proxy desde la red Docker. Con el WAF delante, el proxy presenta
-# el certificado interno: define INTERNAL_TLS_CA_FILE=./certs/internal/ca/ca.crt (por defecto, la misma CA).
-INTERNAL_CA_FILE = os.getenv("INTERNAL_TLS_CA_FILE", CA_FILE)
+# El usuario legítimo de S1 entra DIRECTO al proxy desde la red Docker. El proxy (detrás del WAF) presenta el
+# certificado interno, firmado por la CA interna de generar_certs_internos.py.
+ROOT = Path(__file__).resolve().parents[3]
+INTERNAL_CA_FILE = os.getenv("INTERNAL_TLS_CA_FILE", str(ROOT / "certs" / "internal" / "ca" / "ca.crt"))
+if TLS and not Path(INTERNAL_CA_FILE).is_file():
+    raise SystemExit("Falta la CA interna: genera certs/internal con secure-channel/generar_certs_internos.py "
+                     "o define INTERNAL_TLS_CA_FILE.")
 INTERNAL_CA_PEM = Path(INTERNAL_CA_FILE).read_text(encoding="utf-8") if TLS else ""
 BRUTE_FORCE_ATTEMPTS = int(os.getenv("BRUTE_FORCE_ATTEMPTS", "300"))
 BRUTE_FORCE_CONCURRENCY = 50
@@ -293,7 +298,8 @@ async def internal_access(entry):
         rows.append({"metodo": method, "ruta": path, "estado": status, "ms": round(ms, 1)})
     await asyncio.sleep(1.5)
     hits = gateway_log_hits(since)
-    blocked = [r for r in rows if r["estado"] in (400, 404)]
+    # Bloqueada = rechazada en el borde: 404 del proxy, 403 del WAF (CRS), 400/405 del nginx del WAF
+    blocked = [r for r in rows if r["estado"] in (400, 403, 404, 405)]
     return {
         "peticiones": len(rows),
         "bloqueadas": len(blocked),

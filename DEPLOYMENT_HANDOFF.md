@@ -51,7 +51,8 @@ Cambios de `compose.yaml` que conviene revisar:
 |---|---|
 | `WS_ALLOWED_ORIGINS` | Debe coincidir con el origen real del navegador |
 | `COOKIE_SECURE` | `true` con HTTPS |
-| `FRONTEND_PORT`, `MOBILE_GATEWAY_PORT` | Conflictos en la máquina destino. `FRONTEND_PORT` cambia `WS_ALLOWED_ORIGINS` |
+| `FRONTEND_PORT`, `FRONTEND_HTTPS_PORT`, `MOBILE_HTTPS_PORT` | Conflictos en la máquina destino. `FRONTEND_HTTPS_PORT` cambia `WS_ALLOWED_ORIGINS`. `MOBILE_GATEWAY_PORT` ya no se usa |
+| `EDGE_TLS_DIR`, `INTERNAL_CA_CERT`, `INTERNAL_WEB_TLS_DIR`, `INTERNAL_MOBILE_TLS_DIR` | Certificados creados en la máquina destino (`docs/secure-channel-tls.md`, sección 8.1); nunca se copian por Git |
 | `ENGINE_VERSION` | Confirmar `Stockfish 15.1` dentro de la imagen |
 | `ENGINE_POOL_SIZE`, `ENGINE_TIMEOUT_MS`, `ANALYSIS_STALE_MINUTES`, `TIMEOUT_BATCH_LIMIT`, `ANALYSIS_MAX_REACTIVATIONS` | Valores propuestos, por medir (DP-17) |
 

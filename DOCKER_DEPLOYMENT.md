@@ -23,16 +23,17 @@ Hito alcanzable con este paquete: **H0** del plan, que es Compose arriba y regis
 
 | Grupo | Servicios | Publicado en el host |
 |---|---|---|
-| Por defecto | `waf-web`, `waf-mobile` | `${FRONTEND_PORT}` y `${FRONTEND_HTTPS_PORT}` (web), `${MOBILE_HTTPS_PORT}` (móvil) |
+| Por defecto | `waf-web`, `waf-mobile` (únicos puntos de entrada, ver `docs/secure-channel-tls.md`) | `${FRONTEND_PORT}` (web, solo redirige a HTTPS), `${FRONTEND_HTTPS_PORT}` (web) y `${MOBILE_HTTPS_PORT}` (móvil) |
+| Por defecto | `reverse-proxy-web`, `reverse-proxy-mobile` (detrás de los WAF, ver `docs/proxy-inverso.md`) | No |
 | Por defecto | `api-gateway-mobile` | No |
 | Por defecto | `api-gateway-component`, `auth-component`, `game-logic-component`, `single-player-component`, `tutor-component`, `botcito-component`, `profile-stats-component` | No |
 | Por defecto | `mysql`, `mongo`, `mongo-analysis`, `postgres-profile`, `rabbitmq` | No |
-| Perfil `pendiente` | `frontend` | No (se accede por `reverse-proxy`) |
+| Perfil `pendiente` | `frontend` | No (se accede por `waf-web` y `reverse-proxy-web`) |
 | Perfil `pendiente` | `multiplayer-component`, `botcito-analysis-component`, `timeout-worker`, `analysis-worker` | No |
 
-Redes: `public_network`, `private_api` y `private_back`. Volúmenes: `mysql-data`, `mongo-data`, `mongo-analysis-data`, `postgres-data`, `rabbitmq-data`.
+Redes: `public_network`, `private_api` y `private_back` (ver `docs/proxy-inverso.md`). Volúmenes: `mysql-data`, `mongo-data`, `mongo-analysis-data`, `postgres-data`, `rabbitmq-data`.
 
-Android se conecta por HTTPS a `waf-mobile`, que llega a `api-gateway-mobile` a través de `reverse-proxy-mobile`.
+Android no es un contenedor: se conecta por HTTPS a `waf-mobile` en `${MOBILE_HTTPS_PORT}`, que reenvía a `reverse-proxy-mobile` y este a `api-gateway-mobile`. Antes de arrancar hay que crear los certificados (`docs/secure-channel-tls.md`, sección 8).
 Para consultar un servicio interno, usa `docker compose exec` desde un contenedor de su misma red.
 
 ## 3. Requisitos
@@ -263,12 +264,14 @@ Cambiarla en `.env` no la cambia dentro de una base ya inicializada: la aplicaci
 | `api-gateway-component` no arranca | Espera a todos sus servicios | `docker compose ps` indica cuál falla |
 | Healthcheck Java falla con `bash: not found` | La imagen no trae `bash` | Hay que cambiar la comprobación. Se validará en el primer arranque |
 | Perfil no aparece tras registrar | Cola sin consumidor o broker caído | Revisar logs de Auth y Profile/Stats. El evento queda en `outbox_events` |
-| Puerto HTTPS móvil ocupado | Otro proceso lo usa | Actualizar `MOBILE_HTTPS_PORT` y la URL de la app |
+| Puerto 8443 u 8444 ocupado | Otro proceso lo usa | Cambiar `FRONTEND_HTTPS_PORT` o `MOBILE_HTTPS_PORT` (y `WS_ALLOWED_ORIGINS`) |
+| `waf-web` o un reverse proxy no arranca por un montaje | Faltan los certificados | Crearlos según `docs/secure-channel-tls.md`, sección 8.1 |
 
 ## 10. Producción
 
 No hay dominio definido. Antes de desplegar:
 - Fijar `WS_ALLOWED_ORIGINS` con el dominio real y `https`.
-- Usar `COOKIE_SECURE=true`.
+- Usar `COOKIE_SECURE=true`, un certificado de una CA pública en `EDGE_TLS_DIR` y `HSTS_MAX_AGE=31536000`
+  (`docs/secure-channel-tls.md`, sección 8.4).
 - Generar secretos nuevos, sin reutilizar los locales.
 - Limitar quién accede al grupo `docker`.

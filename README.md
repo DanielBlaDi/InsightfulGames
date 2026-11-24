@@ -175,12 +175,17 @@ docker compose up --build -d
 
 ## Mobile app (Android)
 
-The Android app lives in `mobile/` and reaches the mobile gateway through the mobile WAF and reverse proxy.
+The Android app lives in `mobile/` and talks only to the **mobile gateway** (`Backend/api-gateway-mobile/`), reached over HTTPS through `waf-mobile` and `reverse-proxy-mobile` (port `MOBILE_HTTPS_PORT`, 8444 by default). The gateway calls Auth, Profile/Stats and Game Logic directly (it does not go through the web gateway). It shows profile, statistics, game history and game details, plays local (two players, same phone) games and can delete the account; it does not play vs the bot or online multiplayer.
 
-1. Configure `.env` and the TLS certificates as described in `docs/secure-channel-tls.md` (section 11.4).
-2. Run `docker compose up -d --build`.
-3. Check `https://localhost:<MOBILE_HTTPS_PORT>/health`.
-4. Open `mobile/` in Android Studio. Configure the emulator to use `https://10.0.2.2:<MOBILE_HTTPS_PORT>/` and trust the development CA. See `mobile/README.md`.
+```
+Android app ══HTTPS :8444══▶ waf-mobile ══HTTPS══▶ reverse-proxy-mobile ──▶ api-gateway-mobile ──▶ Auth · Profile/Stats · Game Logic · Tutor (account deletion) · Single Player hub (publish)
+Browser     ══HTTPS :8443══▶ waf-web    ══HTTPS══▶ reverse-proxy-web    ──▶ frontend / api-gateway-component ──▶ services
+```
+
+1. Create the certificates and the `.env` values as described in `docs/secure-channel-tls.md` (section 8).
+2. `docker compose up -d --build`
+3. Install the development CA in the emulator (`docs/secure-channel-tls.md`, section 8.5).
+4. Open `mobile/` in Android Studio and run it (emulator: `BASE_URL` is already `https://10.0.2.2:8444/`). See `mobile/README.md`.
 
 Profile and statistics come from the Profile/Stats service. Right after registering, the profile appears once the `user.registered` event is consumed (about a second); until then the app shows "No disponible en este momento" with a retry button.
 
@@ -205,11 +210,12 @@ hacia los gateways el tráfico sigue en HTTP dentro de las redes privadas.
 ### Iniciar el proyecto con los WAF
 
 Antes, crea los certificados (público de desarrollo e internos) y las variables de `.env` según
-`docs/secure-channel-tls.md` (sección 11.4). Después, desde la raíz del repositorio:
+`docs/secure-channel-tls.md` (sección 8). Después, desde la raíz del repositorio:
 
     docker compose up --build -d
 
-Los WAF y los reverse proxies comparten `public_network` (`10.20.1.0/24`). Solo los WAF publican puertos en el host.
+`compose.yaml` ya incluye los dos WAF: solo ellos publican puertos y los reverse proxies quedan detrás. No hay
+otro modo de despliegue.
 
 ### Controles de seguridad
 
@@ -224,7 +230,7 @@ Los WAF y los reverse proxies comparten `public_network` (`10.20.1.0/24`). Solo 
 
 ### Archivos relacionados
 
-- compose.yaml
+- compose.yaml (servicios `waf-web` y `waf-mobile`)
 - Backend/waf/real-ip.conf
 - Backend/reverse-proxy/nginx/
 - Backend/reverse-proxy/secure-channel/ (certificados internos, validación y verificación)

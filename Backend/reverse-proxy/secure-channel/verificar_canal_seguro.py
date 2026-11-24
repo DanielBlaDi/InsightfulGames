@@ -1,17 +1,16 @@
-"""Verificación del Secure Channel (Prototype 3, escenario 1) contra el stack en Docker.
+"""Verificación del Secure Channel y del WAF (Prototype 3, escenario 1) contra el stack en Docker.
 
-    pip install websockets
+    pip install "websockets<14"     # la API extra_headers (el proyecto usa websockets 12)
     $env:TLS_CA_FILE = "$(mkcert -CAROOT)\\rootCA.pem"     # CA que firmó el certificado PÚBLICO (nunca la clave)
 
-    # Despliegue integrado: docker compose up --build -d
-    python Backend/reverse-proxy/secure-channel/verificar_canal_seguro.py --modo waf
-
-    python Backend/reverse-proxy/secure-channel/verificar_canal_seguro.py --modo waf --control-negativo-upstream
+    docker compose up --build -d        # compose.yaml ya incluye los WAF delante de los reverse proxies
+    python Backend/reverse-proxy/secure-channel/verificar_canal_seguro.py
+    python Backend/reverse-proxy/secure-channel/verificar_canal_seguro.py --control-negativo-upstream
 
 Variables: PROXY_HOST (localhost), FRONTEND_PORT, FRONTEND_HTTPS_PORT, MOBILE_HTTPS_PORT, TLS_CA_FILE y, para el
 control negativo, EDGE_TLS_DIR e INTERNAL_NEGATIVE_TLS_DIR (certs/internal/negative-wrong-name).
 Todas las conexiones TLS VALIDAN el certificado y el nombre del host: ninguna prueba desactiva la verificación.
-Escribe resultados-canal-seguro-<modo>.json junto a este archivo (evidencia para el informe).
+Escribe resultados-canal-seguro.json junto a este archivo (evidencia para el informe).
 
 --control-negativo-upstream RECREA reverse-proxy-web dos veces con un certificado incorrecto (otra CA; CA interna
 con otro nombre), comprueba que el WAF responde 502 y lo deja como estaba. Solo para el entorno de pruebas.
@@ -49,7 +48,7 @@ INTERNAL_PORTS = {8000: "nginx web (interno)", 8090: "nginx móvil HTTP", 8091: 
                   8084: "multiplayer", 8085: "tutor", 8086: "botcito", 8087: "profile-stats",
                   27017: "mongo", 3306: "mysql", 5432: "postgres", 5672: "rabbitmq", 15672: "rabbitmq admin"}
 
-WAF_LAYERS = ["compose.yaml"]  # despliegue integrado (WAF + Secure Channel)
+WAFS = {"waf-web": "reverse-proxy-web", "waf-mobile": "reverse-proxy-mobile"}
 
 results = []
 
@@ -128,7 +127,7 @@ def tls_checks(label, port):
     check(label, "nombre de host que no está en el certificado -> rechazado", not ok and "CERTIFICATE_VERIFY_FAILED" in v, v)
 
 
-# ------------------------------------------------------------------------------------- Docker (modo waf)
+# ------------------------------------------------------------------------------------------------ Docker
 def docker(*args, env=None, timeout=120):
     r = subprocess.run(["docker", *args], capture_output=True, text=True, encoding="utf-8", errors="replace",
                        env=env, timeout=timeout, cwd=ROOT)
@@ -136,8 +135,23 @@ def docker(*args, env=None, timeout=120):
 
 
 def compose(*args, env=None):
-    files = [a for f in WAF_LAYERS for a in ("-f", f)]
-    return docker("compose", *files, *args, env=env, timeout=600)
+    return docker("compose", *args, env=env, timeout=600)
+
+
+def container_ips(container):
+    """{red: IP} del contenedor (nombre de red sin el prefijo del proyecto)."""
+    _, out = docker("inspect", "-f", "{{range $k, $v := .NetworkSettings.Networks}}{{$k}}={{$v.IPAddress}} {{end}}", container)
+    return {k.split("_", 1)[-1]: v for k, _, v in (item.partition("=") for item in out.split())}
+
+
+def network_members(suffix):
+    """Contenedores conectados a la red del proyecto que termina en `suffix` (p. ej. public_network)."""
+    _, nets = docker("network", "ls", "--filter", f"name={suffix}", "--format", "{{.Name}}")
+    net = next((n for n in nets.splitlines() if n.endswith(suffix)), "")
+    if not net:
+        return net, []
+    _, members = docker("network", "inspect", net, "-f", "{{range .Containers}}{{.Name}} {{end}}")
+    return net, sorted(members.split())
 
 
 def logs_since(container, since):
@@ -197,12 +211,14 @@ def waf_checks(session):
             rc, _ = docker("exec", waf, "getent", "hosts", target)
             check(g, f"segmentación: el WAF no resuelve {target}", rc != 0)
 
-    print("\n== Red public_network y puertos publicados")
-    _, net = docker("inspect", "-f",
-                    "{{range $name, $_ := .NetworkSettings.Networks}}{{$name}}{{end}}", "waf-web")
-    _, members = docker("network", "inspect", net, "-f", "{{range .Containers}}{{.Name}} {{end}}")
-    check("red", f"{net}: solo los 2 WAF y los 2 proxies", sorted(members.split()) ==
-          ["reverse-proxy-mobile", "reverse-proxy-web", "waf-mobile", "waf-web"], members)
+    print("\n== Redes y puertos publicados")
+    net, members = network_members("public_network")
+    check("red", f"{net or 'public_network'}: solo los 2 WAF y los 2 proxies",
+          members == ["reverse-proxy-mobile", "reverse-proxy-web", "waf-mobile", "waf-web"], members)
+    for waf in WAFS:
+        nets = container_ips(waf)
+        check("red", f"{waf} solo está en public_network (no en private_api ni private_back)",
+              list(nets) == ["public_network"], nets)
     _, gw_ips = docker("inspect", "-f", "{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}", "api-gateway-component")
     for ip in gw_ips.split():
         rc, _ = docker("exec", "waf-web", "curl", "-sS", "-m", "3", f"http://{ip}:8080/health")
@@ -247,8 +263,10 @@ def waf_checks(session):
     time.sleep(1)
     line = next((l for l in logs_since("reverse-proxy-web", since).splitlines() if probe in l), "")
     client = line.split(" ", 1)[0] if line else ""
+    waf_ip = container_ips("waf-web").get("public_network", "")
+    # Ni la IP inventada por el cliente ni la del propio WAF: la del cliente tal como la vio el WAF
     check("ip real", "el proxy registra la IP que vio el WAF, no la cabecera del cliente",
-          line and client != "203.0.113.77" and client != "10.20.1.13", client or "sin línea en el log")
+          line and client not in ("203.0.113.77", waf_ip), client or "sin línea en el log")
 
 
 def upstream_negative_control():
@@ -270,7 +288,8 @@ def upstream_negative_control():
             time.sleep(1)
             log = logs_since("waf-web", since)
             check("negativo", f"{desc} -> el WAF no conecta (502) y registra el fallo de verificación",
-                  healthy and status == 502 and re.search(r"upstream SSL certificate verify error|certificate verify failed", log),
+                  healthy and status == 502 and re.search(r"upstream SSL certificate verify error|certificate verify failed"
+                                                         r"|upstream SSL certificate does not match", log),
                   f"status {status}; " + (re.search(r"upstream SSL[^\n]{0,120}", log) or re.search(r"verify[^\n]{0,80}", log) or ["-"])[0])
     finally:
         rc, out = compose("up", "-d", "--no-deps", "--force-recreate", "reverse-proxy-web")
@@ -281,19 +300,20 @@ def upstream_negative_control():
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--modo", choices=("waf",), default="waf")
     ap.add_argument("--control-negativo-upstream", action="store_true")
+    # Compatibilidad: antes existían --modo directo/waf. Hoy solo hay un despliegue (WAF delante de los proxies),
+    # así que se acepta --modo waf y no cambia nada.
+    ap.add_argument("--modo", choices=("waf",), help=argparse.SUPPRESS)
     args = ap.parse_args()
     if not CA_FILE or not Path(CA_FILE).is_file():
         print("Define TLS_CA_FILE con el certificado de la CA (p. ej. \"$(mkcert -CAROOT)\\rootCA.pem\").")
         sys.exit(2)
-    entry = "WAF web"
 
-    # ------------------------------------------------------------------ web: TLS cliente -> entrada pública
-    tls_checks(f"{entry} TLS", HTTPS_PORT)
+    # ------------------------------------------------------------------ web: TLS cliente -> WAF
+    tls_checks("WAF web TLS", HTTPS_PORT)
     status, headers, _, _ = https(HTTPS_PORT, "GET", "/health")
     hsts = headers.get("Strict-Transport-Security", "")
-    check(f"{entry} TLS", "HSTS presente en HTTPS", status == 200 and hsts.startswith("max-age="), hsts)
+    check("WAF web TLS", "HSTS presente en HTTPS", status == 200 and hsts.startswith("max-age="), hsts)
 
     # ------------------------------------------------------------------ web: REST y cookie
     user = "tls_" + uuid.uuid4().hex[:8]
@@ -355,8 +375,8 @@ def main():
     # ------------------------------------------------------------------ borde: rutas internas
     for path in ("/api/internal/auth/login", "/API/Internal/logic/games", "/api//internal/x", "/api/%69nternal/x"):
         status, _, body, _ = https(HTTPS_PORT, "GET", path)
-        # Con WAF, CRS puede bloquear antes (403); lo exigido es que no se sirva (nunca 2xx/3xx)
-        check("borde", f"{path} por HTTPS -> 404 o 403 del WAF",
+        # CRS puede bloquear antes (403); lo exigido es que no se sirva (nunca 2xx/3xx)
+        check("borde", f"{path} por HTTPS -> 404 del proxy o 403 del WAF",
               status == 404 or is_waf_block(status, body), status)
 
     # ------------------------------------------------------------------ móvil
@@ -364,7 +384,7 @@ def main():
     status, _, body, version = https(MOBILE_PORT, "POST", "/auth/login", {"username": user, "password": PASSWORD})
     check("móvil REST", f"login de la app por HTTPS ({version})", status == 200 and "accessToken" in body, status)
     status, _, body, _ = https(MOBILE_PORT, "GET", "/internal/auth/login")
-    check("borde", "móvil /internal por HTTPS -> 404", status == 404 or is_waf_block(status, body), status)
+    check("borde", "móvil /internal por HTTPS -> 404 del proxy o 403 del WAF", status == 404 or is_waf_block(status, body), status)
     mob = "tls_mdel_" + uuid.uuid4().hex[:8]
     https(MOBILE_PORT, "POST", "/auth/register", {"username": mob, "password": PASSWORD})
     _, _, body, _ = https(MOBILE_PORT, "POST", "/auth/login", {"username": mob, "password": PASSWORD})
@@ -387,11 +407,11 @@ def main():
         upstream_negative_control()
 
     ok = sum(r["ok"] for r in results)
-    print(f"\n[{args.modo}] {ok}/{len(results)} comprobaciones superadas")
-    out = Path(__file__).with_name(f"resultados-canal-seguro-{args.modo}.json")
+    print(f"\n{ok}/{len(results)} comprobaciones superadas")
+    out = Path(__file__).with_name("resultados-canal-seguro.json")
     out.write_text(json.dumps({
-        "fecha": datetime.now(timezone.utc).isoformat(timespec="seconds"), "modo": args.modo,
-        "compose": WAF_LAYERS,
+        "fecha": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "compose": ["compose.yaml"], "control_negativo_upstream": args.control_negativo_upstream,
         "host": HOST, "puertos": {"http_web": HTTP_PORT, "https_web": HTTPS_PORT, "https_movil": MOBILE_PORT},
         "openssl_cliente": ssl.OPENSSL_VERSION, "superadas": ok, "total": len(results), "resultados": results,
     }, ensure_ascii=False, indent=2), encoding="utf-8")

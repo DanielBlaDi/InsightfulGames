@@ -1,4 +1,4 @@
-"""Validación ESTÁTICA del Secure Channel (Prototype 3, escenario 1). No necesita Docker.
+"""Validación ESTÁTICA del Secure Channel y del WAF (Prototype 3, escenario 1). No necesita Docker.
 
     pip install crossplane pyyaml
     python Backend/reverse-proxy/secure-channel/validar_config.py
@@ -9,7 +9,9 @@ estricto: directivas conocidas, contexto y número de argumentos. Después compr
 compose.yaml. NO sustituye a `nginx -t` (no carga certificados ni módulos): eso lo hace verificar_canal_seguro.py
 contra los contenedores.
 
-Valida los proxies y los WAF definidos en el Compose único del despliegue.
+Un solo despliegue: compose.yaml define los dos WAF (waf-web, waf-mobile) delante de los dos reverse proxies.
+Solo los WAF publican puertos; los proxies presentan el certificado interno y leen la IP real que envía el WAF.
+Comprueba las variables del WAF contra las que define la imagen owasp/modsecurity-crs:nginx.
 """
 
 import subprocess
@@ -28,11 +30,10 @@ COMPOSE = ROOT / "compose.yaml"
 WAF_DIR = ROOT / "Backend" / "waf"
 
 results = []
-section = "proxy"
 
 
 def check(name, ok, detail=""):
-    results.append((section, bool(ok)))
+    results.append(bool(ok))
     print(("OK   " if ok else "FAIL ") + name + (f" — {detail}" if detail else ""))
 
 
@@ -159,19 +160,31 @@ for entry, http_port in (("web", "8000"), ("mobile", "8090")):
         check("HTTP móvil: todo salvo /health -> 403 HTTPS_REQUIRED",
               rest and find(rest[0]["block"], "return")[0]["args"][0] == "403")
 
-print("\n== compose.yaml")
-compose = yaml.safe_load(COMPOSE.read_text(encoding="utf-8"))
+print("\n== compose.yaml: entradas públicas")
+compose = yaml.safe_load(COMPOSE.read_text(encoding="utf-8-sig"))
 svc = compose["services"]
-nets = compose["networks"]
-check("redes conservadas (10.20.1/2/3.0/24; private_* internas)",
-      [nets[n]["ipam"]["config"][0]["subnet"] for n in ("public_network", "private_api", "private_back")]
-      == ["10.20.1.0/24", "10.20.2.0/24", "10.20.3.0/24"]
-      and nets["private_api"].get("internal") and nets["private_back"].get("internal") and not nets["public_network"].get("internal"))
-check("IP fijas de los proxies conservadas",
-      svc["reverse-proxy-web"]["networks"] == {"public_network": {"ipv4_address": "10.20.1.11"}, "private_api": {"ipv4_address": "10.20.2.10"}}
-      and svc["reverse-proxy-mobile"]["networks"] == {"public_network": {"ipv4_address": "10.20.1.12"}, "private_api": {"ipv4_address": "10.20.2.11"}})
-gw = svc["api-gateway-component"]["environment"]
-check("gateway web: COOKIE_SECURE y WS_ALLOWED_ORIGINS desde .env", gw["COOKIE_SECURE"] == "${COOKIE_SECURE:?}" and gw["WS_ALLOWED_ORIGINS"] == "${WS_ALLOWED_ORIGINS:?}")
+published = {n: v.get("ports") for n, v in svc.items() if v.get("ports")}
+check("solo los dos WAF publican puertos (proxies y servicios internos, ninguno)",
+      set(published) == {"waf-web", "waf-mobile"}, str(set(published)))
+check("waf-web: HTTP (solo 301) y HTTPS",
+      published.get("waf-web") == ["${FRONTEND_PORT:?}:8080", "${FRONTEND_HTTPS_PORT:?}:8443"], str(published.get("waf-web")))
+check("waf-mobile: solo HTTPS (el HTTP móvil no se publica)",
+      published.get("waf-mobile") == ["${MOBILE_HTTPS_PORT:?}:8443"], str(published.get("waf-mobile")))
+leftovers = sorted(p.name for p in WAF_DIR.glob("compose.waf*.yaml"))
+check("sin capas de Compose del WAF aparte (todo está en compose.yaml)", not leftovers, str(leftovers))
+
+
+def as_mapping(value):
+    """depends_on / environment en forma de lista -> mapa (como normaliza Compose)."""
+    if isinstance(value, list):
+        out = {}
+        for item in value:
+            k, _, v = str(item).partition("=")
+            out[k] = v if "=" in str(item) else {"condition": "service_started"}
+        return out
+    return value or {}
+
+
 # Variables que define la imagen owasp/modsecurity-crs:nginx (nginx/Dockerfile y configure-rules.v4.conf
 # de coreruleset/modsecurity-crs-docker). Una variable fuera de esta lista sería un error tipográfico que
 # la imagen ignoraría en silencio.
@@ -184,16 +197,9 @@ WAF_IMAGE_VARS = {
     "ANOMALY_INBOUND", "ANOMALY_OUTBOUND", "REAL_IP_HEADER", "REAL_IP_PROXY_HEADER", "SET_REAL_IP_FROM",
 }
 AEAD = re.compile(r"^ECDHE-(ECDSA|RSA)-(AES(128|256)-GCM-SHA(256|384)|CHACHA20-POLY1305)$")
-
-section = "waf"
-print("\n== WAF + Secure Channel")
-published = {n: v.get("ports") for n, v in svc.items() if v.get("ports")}
-check("solo los dos WAF publican puertos (proxies y servicios internos, ninguno)",
-      set(published) == {"waf-web", "waf-mobile"}, str(published))
-check("waf-web: HTTP (solo 301) y HTTPS en los puertos públicos de siempre",
-      published.get("waf-web") == ["${FRONTEND_PORT:?}:8080", "${FRONTEND_HTTPS_PORT:?}:8443"], str(published.get("waf-web")))
-check("waf-mobile: solo HTTPS (el HTTP móvil no se publica)",
-      published.get("waf-mobile") == ["${MOBILE_HTTPS_PORT:?}:8443"], str(published.get("waf-mobile")))
+PROXY_NETS = {"reverse-proxy-web": {"public_network": "10.20.1.11", "private_api": "10.20.2.10"},
+              "reverse-proxy-mobile": {"public_network": "10.20.1.12", "private_api": "10.20.2.11"}}
+WAF_IPS = {"waf-web": "10.20.1.13", "waf-mobile": "10.20.1.14"}
 
 for waf, proxy in (("waf-web", "reverse-proxy-web"), ("waf-mobile", "reverse-proxy-mobile")):
     print(f"\n-- {waf} -> {proxy}")
@@ -205,14 +211,14 @@ for waf, proxy in (("waf-web", "reverse-proxy-web"), ("waf-mobile", "reverse-pro
     check("ModSecurity activo (MODSEC_RULE_ENGINE=On) y sin bajar paranoia ni umbrales",
           env.get("MODSEC_RULE_ENGINE", "").lower() == "on"
           and not {"BLOCKING_PARANOIA", "ANOMALY_INBOUND", "ANOMALY_OUTBOUND"} & set(env), env.get("MODSEC_RULE_ENGINE"))
-    check("ajustes del WAF conservados: imagen CRS, audit log RelevantOnly a stdout, PORT 8080, contenedor y restart",
+    check("imagen CRS, audit log RelevantOnly a stdout, PORT 8080, contenedor y restart",
           s.get("image") == "owasp/modsecurity-crs:nginx" and s.get("container_name") == waf
           and s.get("restart") == "unless-stopped" and env.get("PORT") == "8080"
           and env.get("MODSEC_AUDIT_ENGINE") == "RelevantOnly" and env.get("MODSEC_AUDIT_LOG") == "/dev/stdout")
     check("cliente -> WAF: TLS 1.2/1.3 en :8443", env.get("SSL_PORT") == "8443" and env.get("SSL_PROTOCOLS") == "TLSv1.2 TLSv1.3")
     check("cliente -> WAF: cifrados ECDHE + AEAD", all(AEAD.match(c) for c in env.get("SSL_CIPHERS", "x").split(":")))
     edge = vols.get("/etc/nginx/edge-certs", {})
-    check("certificado público de desarrollo montado en solo lectura, sin crear la ruta",
+    check("certificado público (EDGE_TLS_DIR) montado en solo lectura, sin crear la ruta",
           env.get("SSL_CERT_FILE") == "/etc/nginx/edge-certs/tls.crt" and env.get("SSL_CERT_KEY_FILE") == "/etc/nginx/edge-certs/tls.key"
           and edge.get("source") == "${EDGE_TLS_DIR:?}" and edge.get("read_only") is True
           and edge.get("bind", {}).get("create_host_path") is False)
@@ -231,10 +237,10 @@ for waf, proxy in (("waf-web", "reverse-proxy-web"), ("waf-mobile", "reverse-pro
     check("sin mTLS: no se cambian PROXY_SSL_CERT_FILE/KEY (la imagen usa el modo 'no-cert')",
           "PROXY_SSL_CERT_FILE" not in env and "PROXY_SSL_CERT_KEY_FILE" not in env)
     check("ninguna clave de CA montada en el WAF", not any("ca.key" in str(v.get("source", "")) for v in vols.values()))
-    check(f"espera a que {proxy} esté healthy", s.get("depends_on", {}).get(proxy, {}).get("condition") == "service_healthy")
-    waf_ip = {"waf-web": "10.20.1.13", "waf-mobile": "10.20.1.14"}[waf]
-    check("WAF solo en public_network con su IP fija",
-          s["networks"] == {"public_network": {"ipv4_address": waf_ip}})
+    check(f"espera a que {proxy} esté healthy", as_mapping(s.get("depends_on")).get(proxy, {}).get("condition") == "service_healthy")
+    check(f"WAF solo en public_network ({WAF_IPS[waf]}): no alcanza frontend, gateways ni servicios",
+          {k: (v or {}).get("ipv4_address") for k, v in s["networks"].items()} == {"public_network": WAF_IPS[waf]},
+          str(s["networks"]))
     approved = {"waf-web": "GET HEAD POST OPTIONS PATCH DELETE", "waf-mobile": "GET HEAD POST OPTIONS DELETE"}[waf]
     check(f"ALLOWED_METHODS aprobados ({approved}); PUT, TRACE, CONNECT siguen bloqueados por la 911100",
           set(env.get("ALLOWED_METHODS", "").split()) == set(approved.split()), env.get("ALLOWED_METHODS"))
@@ -243,32 +249,44 @@ for waf, proxy in (("waf-web", "reverse-proxy-web"), ("waf-mobile", "reverse-pro
     pv = {v["target"] if isinstance(v, dict) else v.split(":")[1]: v for v in p.get("volumes", [])}
     var = "INTERNAL_WEB_TLS_DIR" if proxy.endswith("web") else "INTERNAL_MOBILE_TLS_DIR"
     cert = pv.get("/etc/nginx/certs", {})
-    check(f"{proxy}: certificado INTERNO (SAN = nombre del servicio) en solo lectura",
-          cert.get("source") == "${%s:?}" % var and cert.get("read_only") is True and cert.get("bind", {}).get("create_host_path") is False)
-    check(f"{proxy}: real-ip.conf de Kevin conservado", "/etc/nginx/conf.d/real-ip.conf" in pv)
-print("\n-- red y cabecera de IP real")
-check("el despliegue usa exactamente las tres redes definidas",
-      set(nets) == {"public_network", "private_api", "private_back"})
+    check(f"{proxy}: sin puertos publicados (solo se llega a través de {waf})", not p.get("ports"))
+    check(f"{proxy}: certificado INTERNO (SAN = nombre del servicio) en solo lectura, sin crear la ruta",
+          cert.get("source") == "${%s:?}" % var and cert.get("read_only") is True
+          and cert.get("bind", {}).get("create_host_path") is False)
+    rip = pv.get("/etc/nginx/conf.d/real-ip.conf")
+    check(f"{proxy}: real-ip.conf montado en solo lectura",
+          rip is not None and (rip.endswith(":ro") if isinstance(rip, str) else rip.get("read_only") is True))
+    check(f"{proxy}: redes e IP conservadas (public_network, private_api)",
+          {k: v["ipv4_address"] for k, v in p["networks"].items()} == PROXY_NETS[proxy], str(p["networks"]))
+
+print("\n-- redes y cabecera de IP real")
+nets = compose["networks"]
+check("subredes 10.20.1/2/3.0/24; private_api y private_back internas; public_network no",
+      [nets[n]["ipam"]["config"][0]["subnet"] for n in ("public_network", "private_api", "private_back")]
+      == ["10.20.1.0/24", "10.20.2.0/24", "10.20.3.0/24"]
+      and nets["private_api"].get("internal") and nets["private_back"].get("internal")
+      and not nets["public_network"].get("internal"))
+check("sin redes de borde aparte (waf-edge eliminada)", set(nets) == {"public_network", "private_api", "private_back"}, str(set(nets)))
 members = sorted(n for n, s in svc.items() if "public_network" in (s.get("networks") or {}))
 check("public_network solo une los 2 WAF con los 2 proxies",
       members == ["reverse-proxy-mobile", "reverse-proxy-web", "waf-mobile", "waf-web"], str(members))
 real_ip = (WAF_DIR / "real-ip.conf").read_text(encoding="utf-8-sig")
 trusted = re.findall(r"set_real_ip_from\s+([\d./]+);", real_ip)
-check("los proxies solo aceptan la IP real de los WAF (10.20.1.13/.14) por X-Real-IP",
-      sorted(trusted) == ["10.20.1.13", "10.20.1.14"] and re.search(r"real_ip_header\s+X-Real-IP;", real_ip))
+check(f"los proxies solo aceptan la IP real de los WAF ({', '.join(sorted(WAF_IPS.values()))}) por X-Real-IP",
+      sorted(trusted) == sorted(WAF_IPS.values()) and re.search(r"real_ip_header\s+X-Real-IP;", real_ip), str(trusted))
 check("el WAF reescribe X-Real-IP con su $remote_addr (REAL_IP_PROXY_HEADER y SET_REAL_IP_FROM por defecto)",
-      not any({"REAL_IP_PROXY_HEADER", "SET_REAL_IP_FROM", "REAL_IP_HEADER"} & set(svc[w]["environment"]) for w in ("waf-web", "waf-mobile")))
+      not any({"REAL_IP_PROXY_HEADER", "SET_REAL_IP_FROM", "REAL_IP_HEADER"} & set(svc[w]["environment"]) for w in WAF_IPS))
 for n in ("frontend", "api-gateway-component", "api-gateway-mobile"):
-    if n in svc:
-        check(f"{n}: sigue sin puertos publicados y fuera de public_network",
-              not svc[n].get("ports") and "public_network" not in (svc[n].get("networks") or {}))
+    check(f"{n}: sin puertos publicados y fuera de public_network",
+          not svc[n].get("ports") and "public_network" not in (svc[n].get("networks") or {}))
+gw = svc["api-gateway-component"]["environment"]
+check("gateway web: COOKIE_SECURE y WS_ALLOWED_ORIGINS desde .env",
+      gw["COOKIE_SECURE"] == "${COOKIE_SECURE:?}" and gw["WS_ALLOWED_ORIGINS"] == "${WS_ALLOWED_ORIGINS:?}")
 
 print("\n-- secretos")
 tracked = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True).stdout.splitlines()
 secrets = [f for f in tracked if re.search(r"(\.(key|pem|p12|pfx|crt)$)|(^|/)certs/", f)]
 check("ningún certificado, clave o carpeta certs/ versionado en Git", not secrets, str(secrets[:5]))
 
-for name in ("proxy", "waf"):
-    part = [ok for s, ok in results if s == name]
-    print(f"\n[{name}] {sum(part)}/{len(part)} comprobaciones estáticas superadas")
-sys.exit(0 if all(ok for _, ok in results) else 1)
+print(f"\n{sum(results)}/{len(results)} comprobaciones estáticas superadas")
+sys.exit(0 if all(results) else 1)

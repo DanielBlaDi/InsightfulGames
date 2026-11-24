@@ -1,5 +1,10 @@
 # Verificación del sistema completo con Docker
 
+> **Guía anterior al Secure Channel y al WAF.** Hoy el stack exige además certificados y variables de TLS
+> (`FRONTEND_HTTPS_PORT`, `MOBILE_HTTPS_PORT`, `HSTS_MAX_AGE`, `EDGE_TLS_DIR`, `INTERNAL_*`), y las entradas son
+> `https://localhost:8443` (web) y `:8444` (app). Prepáralos con `docs/secure-channel-tls.md`, sección 8, antes de
+> seguir esta guía. `MOBILE_GATEWAY_PORT` ya no se usa.
+
 Para quien tenga Docker Desktop. Prueba la rama `fix/full-stack-startup` con todos los servicios
 reales y devuelve los resultados (sección 8) para corregir lo que falle. Tiempo estimado: 30–45 min
 (la primera construcción de imágenes es la parte lenta).

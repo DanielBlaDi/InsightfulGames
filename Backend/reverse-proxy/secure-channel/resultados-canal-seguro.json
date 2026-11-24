@@ -1,10 +1,9 @@
 {
-  "fecha": "2026-11-24T02:20:00+00:00",
-  "modo": "waf",
+  "fecha": "2026-11-24T04:22:42+00:00",
   "compose": [
-    "compose.yaml",
-    "Backend/waf/compose.waf.yaml"
+    "compose.yaml"
   ],
+  "control_negativo_upstream": false,
   "host": "localhost",
   "puertos": {
     "http_web": 80,
@@ -12,8 +11,8 @@
     "https_movil": 8444
   },
   "openssl_cliente": "OpenSSL 3.0.16 11 Feb 2025",
-  "superadas": 82,
-  "total": 82,
+  "superadas": 84,
+  "total": 84,
   "resultados": [
     {
       "grupo": "WAF web TLS",
@@ -49,7 +48,7 @@
       "grupo": "WAF web TLS",
       "prueba": "cliente sin la CA: certificado no confiable -> rechazado",
       "ok": true,
-      "detalle": "SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1010)"
+      "detalle": "SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1010)"
     },
     {
       "grupo": "WAF web TLS",
@@ -97,7 +96,7 @@
       "grupo": "web WSS",
       "prueba": "partida por WSS: el primer mensaje es el state",
       "ok": true,
-      "detalle": "('ok', {'type': 'state', 'state': {'gameId': '9b8c7d66-cb6e-47a9-8862-893d53383702', 'mode': 'local', 'visibility': 'pri"
+      "detalle": "('ok', {'type': 'state', 'state': {'gameId': 'dcefd99f-7517-4854-80d4-278de57b2884', 'mode': 'local', 'visibility': 'pri"
     },
     {
       "grupo": "web WSS",
@@ -109,7 +108,7 @@
       "grupo": "métodos",
       "prueba": "PATCH /api/games/{id}/visibility (partida terminada) -> 2xx",
       "ok": true,
-      "detalle": "200 {\"gameId\":\"9b8c7d66-cb6e-47a9-8862-893d53383702\",\"mode\":\"local\",\"visibility\":\"sh"
+      "detalle": "200 {\"gameId\":\"dcefd99f-7517-4854-80d4-278de57b2884\",\"mode\":\"local\",\"visibility\":\"sh"
     },
     {
       "grupo": "métodos",
@@ -119,25 +118,25 @@
     },
     {
       "grupo": "borde",
-      "prueba": "/api/internal/auth/login por HTTPS -> 404 o 403 del WAF",
+      "prueba": "/api/internal/auth/login por HTTPS -> 404 del proxy o 403 del WAF",
       "ok": true,
       "detalle": "404"
     },
     {
       "grupo": "borde",
-      "prueba": "/API/Internal/logic/games por HTTPS -> 404 o 403 del WAF",
+      "prueba": "/API/Internal/logic/games por HTTPS -> 404 del proxy o 403 del WAF",
       "ok": true,
       "detalle": "404"
     },
     {
       "grupo": "borde",
-      "prueba": "/api//internal/x por HTTPS -> 404 o 403 del WAF",
+      "prueba": "/api//internal/x por HTTPS -> 404 del proxy o 403 del WAF",
       "ok": true,
       "detalle": "404"
     },
     {
       "grupo": "borde",
-      "prueba": "/api/%69nternal/x por HTTPS -> 404 o 403 del WAF",
+      "prueba": "/api/%69nternal/x por HTTPS -> 404 del proxy o 403 del WAF",
       "ok": true,
       "detalle": "404"
     },
@@ -175,7 +174,7 @@
       "grupo": "WAF móvil TLS",
       "prueba": "cliente sin la CA: certificado no confiable -> rechazado",
       "ok": true,
-      "detalle": "SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1010)"
+      "detalle": "SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1010)"
     },
     {
       "grupo": "WAF móvil TLS",
@@ -191,7 +190,7 @@
     },
     {
       "grupo": "borde",
-      "prueba": "móvil /internal por HTTPS -> 404",
+      "prueba": "móvil /internal por HTTPS -> 404 del proxy o 403 del WAF",
       "ok": true,
       "detalle": "404"
     },
@@ -431,9 +430,21 @@
     },
     {
       "grupo": "red",
-      "prueba": "insightfulgames_waf-edge: solo los 2 WAF y los 2 proxies",
+      "prueba": "insightfulgames_public_network: solo los 2 WAF y los 2 proxies",
       "ok": true,
-      "detalle": "waf-web reverse-proxy-web waf-mobile reverse-proxy-mobile"
+      "detalle": "['reverse-proxy-mobile', 'reverse-proxy-web', 'waf-mobile', 'waf-web']"
+    },
+    {
+      "grupo": "red",
+      "prueba": "waf-web solo está en public_network (no en private_api ni private_back)",
+      "ok": true,
+      "detalle": "{'public_network': '10.20.1.13'}"
+    },
+    {
+      "grupo": "red",
+      "prueba": "waf-mobile solo está en public_network (no en private_api ni private_back)",
+      "ok": true,
+      "detalle": "{'public_network': '10.20.1.14'}"
     },
     {
       "grupo": "red",
@@ -451,13 +462,13 @@
       "grupo": "puertos",
       "prueba": "solo los WAF publican puertos (HTTP web solo redirige; móvil solo HTTPS)",
       "ok": true,
-      "detalle": "{'waf-web': {80, 8443}, 'waf-mobile': {8444}}"
+      "detalle": "{'waf-mobile': {8444}, 'waf-web': {80, 8443}}"
     },
     {
       "grupo": "waf HTTP",
       "prueba": "páginas por HTTP -> 301 a HTTPS conservando ruta y consulta",
       "ok": true,
-      "detalle": "301 https://localhost:8443/estadisticas?x=2d1a2a0506b249e594e61ca2fe27a93d"
+      "detalle": "301 https://localhost:8443/estadisticas?x=0a6399df9e8b4741a61a8d244f1addfc"
     },
     {
       "grupo": "waf HTTP",
@@ -505,7 +516,7 @@
       "grupo": "ip real",
       "prueba": "el proxy registra la IP que vio el WAF, no la cabecera del cliente",
       "ok": true,
-      "detalle": "172.30.250.1"
+      "detalle": "10.20.1.1"
     }
   ]
 }
