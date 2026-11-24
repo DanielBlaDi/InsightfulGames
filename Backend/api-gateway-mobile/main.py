@@ -32,6 +32,13 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from orchestration import single_player
 from orchestration.context import BackgroundTasks, Ctx, GameLocks
 from orchestration.errors import GatewayError as FlowGatewayError
+from rate_limit import (
+    RATE_LIMIT_REQUESTS,
+    RATE_LIMIT_WINDOW_SECONDS,
+    RateLimitExceeded,
+    SlidingWindowRateLimiter,
+    enforce_rate_limit,
+)
 
 # --------------------------------------------------------------------------- #
 # Configuración
@@ -87,6 +94,7 @@ async def lifespan(app: FastAPI):
     app.state.client = httpx.AsyncClient(timeout=HTTP_TIMEOUT, follow_redirects=False)
     app.state.locks = GameLocks()
     app.state.tasks = BackgroundTasks()
+    app.state.rate_limiter = SlidingWindowRateLimiter()
     logger.info("Gateway móvil listo; servicios: %s", UPSTREAMS)
     try:
         yield
@@ -132,6 +140,17 @@ def error_response(status: int, code: str, message: str) -> JSONResponse:
 @app.exception_handler(GatewayError)
 async def gateway_error_handler(_: Request, exc: GatewayError):
     return error_response(exc.status, exc.code, exc.message)
+
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_error_handler(_: Request, exc: RateLimitExceeded):
+    response = error_response(
+        429,
+        "RATE_LIMIT_EXCEEDED",
+        f"Maximo {RATE_LIMIT_REQUESTS} solicitudes cada {RATE_LIMIT_WINDOW_SECONDS} segundos",
+    )
+    response.headers["Retry-After"] = str(exc.retry_after)
+    return response
 
 
 @app.exception_handler(FlowGatewayError)
@@ -549,6 +568,7 @@ def _game_not_found() -> JSONResponse:
 @app.post("/games")
 async def create_game(request: Request, user_id: str = Depends(current_user)):
     """Crea una partida local (los dos colores para el usuario). La app no crea vs_bot ni multiplayer."""
+    await enforce_rate_limit(request, user_id, "create-game")
     raw = await request.body()
     body = _json_body(raw)
     if isinstance(body, dict) and body.get("mode") != "local":

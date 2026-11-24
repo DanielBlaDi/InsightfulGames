@@ -37,6 +37,13 @@ from orchestration.errors import (
     payload_of,
     translate_error,
 )
+from rate_limit import (
+    RATE_LIMIT_REQUESTS,
+    RATE_LIMIT_WINDOW_SECONDS,
+    RateLimitExceeded,
+    SlidingWindowRateLimiter,
+    enforce_rate_limit,
+)
 
 # --------------------------------------------------------------------------- #
 # Configuración
@@ -109,6 +116,7 @@ async def lifespan(app: FastAPI):
     app.state.client = httpx.AsyncClient(timeout=HTTP_TIMEOUT, follow_redirects=False)
     app.state.locks = GameLocks()
     app.state.tasks = BackgroundTasks()
+    app.state.rate_limiter = SlidingWindowRateLimiter()
     logger.info("Gateway web listo; orígenes WebSocket: %s", sorted(WS_ALLOWED_ORIGINS))
     try:
         yield
@@ -132,6 +140,17 @@ def error_response(status: int, code: str, message: str) -> JSONResponse:
 @app.exception_handler(GatewayError)
 async def gateway_error_handler(_: Request, exc: GatewayError):
     return error_response(exc.status, exc.code, exc.message)
+
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_error_handler(_: Request, exc: RateLimitExceeded):
+    response = error_response(
+        429,
+        "RATE_LIMIT_EXCEEDED",
+        f"Maximo {RATE_LIMIT_REQUESTS} solicitudes cada {RATE_LIMIT_WINDOW_SECONDS} segundos",
+    )
+    response.headers["Retry-After"] = str(exc.retry_after)
+    return response
 
 
 @app.exception_handler(RequestValidationError)
@@ -370,6 +389,7 @@ async def delete_account(request: Request, user_id: str = Depends(current_user))
 
 @app.post("/games")
 async def create_game(request: Request, user_id: str = Depends(current_user)):
+    await enforce_rate_limit(request, user_id, "create-game")
     state = await single_player.create(_ctx(request), user_id, await request.body())
     return JSONResponse(status_code=201, content=state)
 
@@ -463,6 +483,7 @@ async def match_visibility(match_id: str, request: Request, user_id: str = Depen
 
 @app.post("/tutor/analyses")
 async def create_analysis(request: Request, user_id: str = Depends(current_user)):
+    await enforce_rate_limit(request, user_id, "create-analysis")
     # El gateway lee la partida en Game Logic y comprueba la visibilidad: el Tutor no llama a nadie
     response = await analyses.create(
         request.app.state.client, UPSTREAMS, user_id, await request.body(), timeout=HTTP_TIMEOUT

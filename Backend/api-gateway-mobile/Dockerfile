@@ -10,6 +10,7 @@ COPY api-gateway-mobile/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY api-gateway-mobile/main.py .
+COPY Rate_limiting/escenario/rate_limit.py .
 COPY gateway-shared/orchestration orchestration
 
 RUN useradd --create-home --uid 10001 appuser

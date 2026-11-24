@@ -10,6 +10,7 @@ COPY api-gateway/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY api-gateway/main.py .
+COPY Rate_limiting/escenario/rate_limit.py .
 COPY gateway-shared/orchestration orchestration
 
 RUN useradd -r -u 1001 app && chown -R app /app

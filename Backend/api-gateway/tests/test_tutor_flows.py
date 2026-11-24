@@ -105,6 +105,23 @@ def test_create_reads_game_logic_then_posts_a_snapshot_with_the_user_id(env):
     }
 
 
+def test_create_analysis_rate_limit_returns_429_without_reaching_services(env):
+    client, s = env
+    s.games[G1] = game(users=(A,))
+    s.tutor[POST] = (202, ANALYSIS)
+    app.state.rate_limiter = app.state.rate_limiter.__class__(max_requests=5, window_seconds=60)
+
+    for _ in range(5):
+        assert client.post("/tutor/analyses", json={"gameId": G1}).status_code == 202
+
+    blocked = client.post("/tutor/analyses", json={"gameId": G1})
+    assert blocked.status_code == 429
+    assert blocked.json()["error"]["code"] == "RATE_LIMIT_EXCEEDED"
+    assert int(blocked.headers["Retry-After"]) >= 1
+    assert len(s.tutor_calls()) == 5
+
+
+
 def test_snapshot_is_rebuilt_from_validated_fields_never_a_copy_of_the_game(env):
     client, s = env
     s.games[G1] = game(users=(A, A))

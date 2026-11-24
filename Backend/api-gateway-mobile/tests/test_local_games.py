@@ -44,6 +44,29 @@ def test_create_local_game_for_both_colors(env):
     assert body["timeControl"] == {"minutes": 10} and body["visibility"] == "private"
 
 
+def test_create_game_rate_limit_returns_429_before_game_logic(env):
+    client, internal = env
+    internal.on("POST", LOGIC_GAMES, 201, local_state())
+
+    for _ in range(5):
+        r = client.post(
+            "/games",
+            json={"mode": "local", "timeControl": {"minutes": 10}},
+            headers=auth(),
+        )
+        assert r.status_code == 201
+
+    blocked = client.post(
+        "/games",
+        json={"mode": "local", "timeControl": {"minutes": 10}},
+        headers=auth(),
+    )
+    assert blocked.status_code == 429
+    assert blocked.json()["error"]["code"] == "RATE_LIMIT_EXCEEDED"
+    assert int(blocked.headers["Retry-After"]) >= 1
+    assert len([call for call in internal.calls if call.url.path == LOGIC_GAMES]) == 5
+
+
 @pytest.mark.parametrize(
     "payload",
     [
