@@ -5,3 +5,23 @@
   canal web                    p50 41 ms · p95 877 ms · p99 1010 ms [p(95)<1000 OK]
   canal móvil                  p50 18 ms · p95 208 ms · p99 560 ms [p(95)<800 OK]
 time="2026-11-23T23:52:28-05:00" level=error msg="thresholds on metrics 'http_req_duration{tipo:lectura}' have been crossed"
+== carga: 9810 peticiones (24.9/s), fallidas 0.32 %, checks 99.61 %
+  páginas (SSR)                p50 11 ms · p95 294 ms · p99 1557 ms [p(95)<1000 OK]
+  API lecturas                 p50 16 ms · p95 575 ms · p99 15585 ms [p(95)<500 NO CUMPLE]
+  API escrituras               p50 18 ms · p95 444 ms · p99 4767 ms [p(95)<800 OK]
+  canal web                    p50 16 ms · p95 408 ms · p99 15483 ms [p(95)<1000 OK]
+  canal móvil                  p50 14 ms · p95 450 ms · p99 3999 ms [p(95)<800 OK]
+time="2026-11-24T00:00:25-05:00" level=error msg="thresholds on metrics 'http_req_duration{tipo:lectura}' have been crossed"
+== estres: 61749 peticiones (81.0/s), fallidas 1.47 %, checks 98.49 %
+  páginas (SSR)                p50 12 ms · p95 1591 ms · p99 6257 ms [p(95)<1000 NO CUMPLE]
+  API lecturas                 p50 25 ms · p95 5757 ms · p99 34181 ms [p(95)<500 NO CUMPLE]
+  API escrituras               p50 23 ms · p95 3146 ms · p99 17339 ms [p(95)<800 NO CUMPLE]
+  canal web                    p50 20 ms · p95 5347 ms · p99 36679 ms [p(95)<1000 NO CUMPLE]
+  canal móvil                  p50 21 ms · p95 2427 ms · p99 10421 ms [p(95)<800 NO CUMPLE]
+time="2026-11-24T00:14:25-05:00" level=error msg="thresholds on metrics 'checks, http_req_duration{canal:movil}, http_req_duration{canal:web}, http_req_duration{tipo:escritura}, http_req_duration{tipo:lectura}, http_req_duration{tipo:pagina}, http_req_failed' have been crossed"
+== pico: 12687 peticiones (68.2/s), fallidas 0.00 %, checks 100.00 %
+  páginas (SSR)                p50 11 ms · p95 89 ms · p99 485 ms [p(95)<1000 OK]
+  API lecturas                 p50 28 ms · p95 149 ms · p99 662 ms [p(95)<500 OK]
+  API escrituras               p50 18 ms · p95 70 ms · p99 225 ms [p(95)<800 OK]
+  canal web                    p50 22 ms · p95 154 ms · p99 698 ms [p(95)<1000 OK]
+  canal móvil                  p50 17 ms · p95 84 ms · p99 248 ms [p(95)<800 OK]
