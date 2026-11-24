@@ -96,7 +96,7 @@ Convención de **ID de jugador** que se guarda en Game Logic:
 | Botcito | `0` |
 | Modo LOCAL | blancas y negras usan el mismo ID (mismo dispositivo y cuenta) |
 
-Además se agregó `Backend/docker-compose.dev.yml` (Mongo + Game Logic + Game Service) solo para pruebas locales; el compose oficial lo mantiene Infra.
+El Compose raíz incluye estos servicios para pruebas locales e integración.
 
 ## 4. Contrato para el Frontend (WebSocket)
 
@@ -256,7 +256,7 @@ Variable de Game Logic: `MONGODB_URI` (por defecto `mongodb://localhost:27017/ch
 Todo junto (requiere Docker Desktop), desde `Backend/`:
 
 ```powershell
-docker compose -f docker-compose.dev.yml up --build
+docker compose up --build -d
 ```
 
 Para probar el modo BOT con el Botcito falso desde Docker en Windows, la línea `BOTCITO_URL` del compose debe ser `http://host.docker.internal:8000` y el script debe estar corriendo en la PC (`python fake_botcito.py`).
@@ -277,7 +277,7 @@ Todas manuales. **No hay pruebas automáticas todavía.** Estado: ✅ pasó · �
 
 | # | Prueba | Cómo | Resultado | Estado |
 |---|---|---|---|---|
-| 1 | Arranque de los tres contenedores | `docker compose -f docker-compose.dev.yml up --build` | Game Logic (Boot 4.1.1) conectó a Mongo; Game Service arrancó en 8083 | ✅ |
+| 1 | Arranque de los tres contenedores | `docker compose up --build -d` | Game Logic (Boot 4.1.1) conectó a Mongo; Game Service arrancó en 8083 | ✅ |
 | 2 | Health del Game Service | `GET /actuator/health` | `{"status":"UP"}` | ✅ |
 | 3 | Partida inexistente | `GET /matches/prueba` | "Could not find match prueba" | ✅ |
 | 4 | Crear partida en Game Logic | `POST /matches` | Devolvió ID `6acbc1b0fb75ceb2ebdbf823` | ✅ |

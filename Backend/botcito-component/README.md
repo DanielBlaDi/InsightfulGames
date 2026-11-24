@@ -110,75 +110,22 @@ temporalmente por compatibilidad hasta completar la migración
 de Single Player y el gateway.
 
 
-## Arranque independiente con Docker Compose
+## Arranque de Botcito con Docker Compose
 
-Botcito-juego y Botcito-análisis pueden ejecutarse mediante un único
-archivo Docker Compose, utilizando la misma imagen con Stockfish 15.1.
-
-Cada servicio tiene su propio contenedor, pool de motores y configuración.
-
-### Iniciar ambos servicios
-
-Desde la raíz del repositorio:
+Desde la raíz del repositorio, con el `.env` preparado:
 
 ```bash
-docker compose -f Backend/botcito-component/compose.yaml up -d --build
+docker compose up -d --build botcito-component botcito-analysis-component
+docker compose ps botcito-component botcito-analysis-component
 ```
 
-Los servicios disponibles son:
-
-| Servicio | Rol | Puerto |
-|---|---|---|
-| botcito | game | 8086 |
-| botcito-analysis | analysis | 8091 |
-
-Los puertos se publican únicamente en `127.0.0.1` para pruebas locales.
-
-### Verificar el estado
+Botcito-juego escucha en el puerto interno `8086` y Botcito-análisis en `8091`.
+Para consultar su estado, ejecuta la petición dentro del contenedor:
 
 ```bash
-docker compose -f Backend/botcito-component/compose.yaml ps
+docker compose exec botcito-component python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8086/health').read().decode())"
+docker compose exec botcito-analysis-component python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8091/health').read().decode())"
 ```
-
-Ambos contenedores deben encontrarse en estado `healthy`.
-
-Verificar los endpoints de salud:
-
-```bash
-curl http://localhost:8086/health
-curl http://localhost:8091/health
-```
-
-Respuesta esperada de ambos servicios:
-
-```json
-{"status":"ok"}
-```
-
-La documentación interactiva está disponible localmente en:
-
-- Botcito-juego: http://localhost:8086/docs
-- Botcito-análisis: http://localhost:8091/docs
-
-Los contenedores utilizan Python 3.12 y Stockfish 15.1,
-instalado desde el paquete Debian `stockfish=15.1-4`.
-
-No requieren bases de datos ni credenciales para su arranque independiente.
-
-### Detener ambos servicios
-
-Desde la raíz del repositorio:
-
-```bash
-docker compose -f Backend/botcito-component/compose.yaml down
-```
-
-Esto detiene y elimina los contenedores administrados por Compose,
-sin eliminar el código ni las imágenes Docker.
-
-Esta configuración corresponde al entorno independiente de desarrollo.
-La integración en el Docker Compose principal del proyecto y las
-llamadas desde el gateway web y el Analysis Worker requieren validaciones adicionales.
 
 ## Contrato de compatibilidad (temporal)
 

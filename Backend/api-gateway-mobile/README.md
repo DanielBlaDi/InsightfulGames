@@ -92,7 +92,7 @@ uvicorn --app-dir tools fake_services:app --port 8080
 AUTH_URL=http://localhost:8080 PROFILE_URL=http://localhost:8080 GAME_LOGIC_URL=http://localhost:8080 \
   uvicorn main:app --port 8090
 
-# Mezcla: Auth y Game Logic reales (publicados con compose.debug.yaml), Profile simulado
+# Mezcla: Auth y Game Logic reales (accesibles desde la red privada del backend), Profile simulado
 AUTH_URL=http://localhost:8081 GAME_LOGIC_URL=http://localhost:8082 PROFILE_URL=http://localhost:8080 \
   uvicorn main:app --port 8090
 ```

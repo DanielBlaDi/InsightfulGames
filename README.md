@@ -175,17 +175,12 @@ docker compose up --build -d
 
 ## Mobile app (Android)
 
-The Android app lives in `mobile/` and talks only to the **mobile gateway** (`Backend/api-gateway-mobile/`, port `MOBILE_GATEWAY_PORT`, 8090 by default), which calls Auth, Profile/Stats and Game Logic directly (it does not go through the web gateway). It shows profile, statistics, game history and game details, plays local (two players, same phone) games and can delete the account; it does not play vs the bot or online multiplayer.
+The Android app lives in `mobile/` and reaches the mobile gateway through the mobile WAF and reverse proxy.
 
-```
-Android app ──▶ reverse-proxy-mobile :8090 ──▶ api-gateway-mobile ──▶ Auth · Profile/Stats · Game Logic · Tutor (account deletion) · Single Player hub (publish)
-Browser     ──▶ reverse-proxy-web    :80   ──▶ frontend / api-gateway-component ──▶ services
-```
-
-1. `cp .env.example .env` and fill in the values (`MOBILE_GATEWAY_PORT=8090`).
-2. `docker compose up -d --build`
-3. Check `http://localhost:8090/health` → `{"status":"ok"}`.
-4. Open `mobile/` in Android Studio and run it (emulator: `BASE_URL` is already `http://10.0.2.2:8090/`). See `mobile/README.md`.
+1. Configure `.env` and the TLS certificates as described in `docs/secure-channel-tls.md` (section 11.4).
+2. Run `docker compose up -d --build`.
+3. Check `https://localhost:<MOBILE_HTTPS_PORT>/health`.
+4. Open `mobile/` in Android Studio. Configure the emulator to use `https://10.0.2.2:<MOBILE_HTTPS_PORT>/` and trust the development CA. See `mobile/README.md`.
 
 Profile and statistics come from the Profile/Stats service. Right after registering, the profile appears once the `user.registered` event is consumed (about a second); until then the app shows "No disponible en este momento" with a retry button.
 
@@ -212,11 +207,9 @@ hacia los gateways el tráfico sigue en HTTP dentro de las redes privadas.
 Antes, crea los certificados (público de desarrollo e internos) y las variables de `.env` según
 `docs/secure-channel-tls.md` (sección 11.4). Después, desde la raíz del repositorio:
 
-    docker compose -f compose.yaml -f Backend/waf/compose.waf.yaml up --build -d
+    docker compose up --build -d
 
-IMPORTANTE: es el despliegue integrado y usa ambos archivos Compose. `docker compose up -d` solo con
-`compose.yaml` es el modo directo, sin WAF: los reverse proxies quedan publicados y solo debe usarse para
-probarlos (escenario 2).
+Los WAF y los reverse proxies comparten `public_network` (`10.20.1.0/24`). Solo los WAF publican puertos en el host.
 
 ### Controles de seguridad
 
@@ -231,7 +224,7 @@ probarlos (escenario 2).
 
 ### Archivos relacionados
 
-- Backend/waf/compose.waf.yaml
+- compose.yaml
 - Backend/waf/real-ip.conf
 - Backend/reverse-proxy/nginx/
 - Backend/reverse-proxy/secure-channel/ (certificados internos, validación y verificación)

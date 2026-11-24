@@ -9,10 +9,10 @@ servicios que publican puertos** al exterior. Los clientes nunca hablan con el f
 
 | Contenedor | Cliente | Entrada | Destino interno |
 |---|---|---|---|
-| `reverse-proxy-web` | Navegador | `http://host:${FRONTEND_PORT}/` | `frontend-component:80` (páginas y estáticos) |
+| `reverse-proxy-web` | Navegador | `https://host:${FRONTEND_HTTPS_PORT}/` | `frontend-component:80` (páginas y estáticos) |
 | | | `/api/*` | `api-gateway-component:8080/*` (se quita `/api`) |
 | | | `/api/ws/*` | `api-gateway-component:8080/ws/*` (WebSocket) |
-| `reverse-proxy-mobile` | App Android | `http://host:${MOBILE_GATEWAY_PORT}/*` | `api-gateway-mobile:8090/*` |
+| `reverse-proxy-mobile` | App Android | `https://host:${MOBILE_HTTPS_PORT}/*` | `api-gateway-mobile:8090/*` |
 
 Cada contenedor carga solo la configuración de su entrada: el proxy web no escucha en 8090 y el móvil no escucha en 8000.
 Si uno se cae o recibe un ataque, el otro sigue funcionando.
@@ -48,7 +48,7 @@ no se usa en producción, pero sirve para `npm run dev` y sus pruebas.
 `compose.yaml` define tres subredes. Cada contenedor solo ve a sus vecinos directos:
 
 ```
-            Internet / host (FRONTEND_PORT y MOBILE_GATEWAY_PORT)
+            Internet / host (HTTPS publicado en los WAF)
                               │
  ┌─ public_network 10.20.1.0/24 ─────────────────────────────────────┐
  │  (waf-component .10, comentado) · reverse-proxy-web .11 · reverse-proxy-mobile .12 │
@@ -70,11 +70,7 @@ no se usa en producción, pero sirve para `npm run dev` y sus pruebas.
 - **Los gateways son el único puente** entre `private_api` y `private_back`. La regla de capas (cliente → proxy →
   gateways → servicios) la impone la red, no solo el código.
 - Cada contenedor tiene una IP fija, útil para reglas de firewall y para leer logs.
-- **WAF:** `waf-component` está preparado en `compose.yaml` pero comentado. Para activarlo:
-  1. descomentar su bloque;
-  2. quitar los `ports` de los dos proxies, para que el WAF sea lo único publicado.
-
-  Su código (`Backend/waf`) aún no existe.
+- **WAF:** `waf-web` y `waf-mobile` publican los puertos de entrada y reenvían tráfico por TLS a sus proxies en `public_network`.
 
 ## Para el informe (sección Seguridad)
 
@@ -107,23 +103,11 @@ como máximo 10 intentos de login por segundo y por IP llegan a Auth. Los valore
 
 ```bash
 docker compose up --build -d
-curl -i  http://localhost:${FRONTEND_PORT}/health                    # 200, lo responde reverse-proxy-web
-curl -i  http://localhost:${FRONTEND_PORT}/api/internal/auth/login   # 404 desde el proxy
-curl -i  http://localhost:${MOBILE_GATEWAY_PORT}/health              # 200, lo responde reverse-proxy-mobile
-curl -i  http://localhost:${MOBILE_GATEWAY_PORT}/internal/auth/login # 404 desde el proxy
-curl -i  http://localhost:8081/health                                # falla: Auth no está publicado
-docker exec reverse-proxy-web wget -qO- http://127.0.0.1:8090/health # falla: el proxy web no atiende la entrada móvil
+curl -i "http://localhost:${FRONTEND_PORT}/health"
+curl -i "https://localhost:${FRONTEND_HTTPS_PORT}/health"
+curl -i "https://localhost:${MOBILE_HTTPS_PORT}/health"
 ```
 
-La app Android no cambia: `BASE_URL = http://10.0.2.2:8090/` (debug) apunta a `reverse-proxy-mobile`. En release,
-`BASE_URL` es el dominio HTTPS del proxy móvil.
+En el emulador Android, la URL base usa HTTPS hacia el WAF móvil (por ejemplo, `https://10.0.2.2:8444/`).
 
-**Depuración saltándose el proxy:** `docker compose -f compose.yaml -f compose.debug.yaml up -d`, con los puertos
-solo en 127.0.0.1. Para poder publicar esos puertos, el override también conecta cada servicio a `public_network`,
-lo que rompe el aislamiento de red. Solo sirve para depurar en local.
-
-## Qué queda para los otros escenarios
-
-- **Secure Channel (escenario 1):** terminar TLS en los proxies (o en el WAF) con `listen ... ssl`, poner
-  `COOKIE_SECURE=true` y `WS_ALLOWED_ORIGINS=https://...`.
-- **WAF:** implementar `Backend/waf` y activarlo delante de los dos proxies, como se describe arriba.
+Para consultar un endpoint interno durante la depuración, usa `docker compose exec` desde un contenedor de su red.
