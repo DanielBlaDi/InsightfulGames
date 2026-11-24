@@ -9,12 +9,7 @@ estricto: directivas conocidas, contexto y número de argumentos. Después compr
 compose.yaml. NO sustituye a `nginx -t` (no carga certificados ni módulos): eso lo hace verificar_canal_seguro.py
 contra los contenedores.
 
-Dos modos, con resultados separados:
-  - "directo": compose.yaml solo (los proxies son la entrada pública, sin WAF).
-  - "waf" (despliegue integrado): compose.yaml + Backend/waf/compose.waf.yaml (WAF + Secure Channel),
-    fusionados con las reglas de Compose (!override, merge de environment/depends_on, volúmenes por
-    destino). Comprueba las variables del WAF contra las que define la imagen owasp/modsecurity-crs:nginx
-    y que se conservan los ajustes de ModSecurity del WAF.
+Valida los proxies y los WAF definidos en el Compose único del despliegue.
 """
 
 import subprocess
@@ -33,7 +28,7 @@ COMPOSE = ROOT / "compose.yaml"
 WAF_DIR = ROOT / "Backend" / "waf"
 
 results = []
-section = "directo"
+section = "proxy"
 
 
 def check(name, ok, detail=""):
@@ -167,15 +162,6 @@ for entry, http_port in (("web", "8000"), ("mobile", "8090")):
 print("\n== compose.yaml")
 compose = yaml.safe_load(COMPOSE.read_text(encoding="utf-8"))
 svc = compose["services"]
-published = {n: v.get("ports") for n, v in svc.items() if v.get("ports")}
-check("solo los dos reverse proxies publican puertos", set(published) == {"reverse-proxy-web", "reverse-proxy-mobile"}, str(set(published)))
-check("web publica HTTP (redirección) y HTTPS", published.get("reverse-proxy-web") == ["${FRONTEND_PORT:?}:8000", "${FRONTEND_HTTPS_PORT:?}:8443"])
-check("móvil publica solo HTTPS", published.get("reverse-proxy-mobile") == ["${MOBILE_HTTPS_PORT:?}:8443"])
-for name, var in (("reverse-proxy-web", "WEB_TLS_DIR"), ("reverse-proxy-mobile", "MOBILE_TLS_DIR")):
-    vols = svc[name].get("volumes", [])
-    ok = len(vols) == 1 and vols[0]["source"] == "${%s:?}" % var and vols[0]["target"] == "/etc/nginx/certs" \
-        and vols[0]["read_only"] is True and vols[0]["bind"]["create_host_path"] is False
-    check(f"{name}: certificados montados en solo lectura, sin crear la ruta", ok)
 nets = compose["networks"]
 check("redes conservadas (10.20.1/2/3.0/24; private_* internas)",
       [nets[n]["ipam"]["config"][0]["subnet"] for n in ("public_network", "private_api", "private_back")]
@@ -186,77 +172,6 @@ check("IP fijas de los proxies conservadas",
       and svc["reverse-proxy-mobile"]["networks"] == {"public_network": {"ipv4_address": "10.20.1.12"}, "private_api": {"ipv4_address": "10.20.2.11"}})
 gw = svc["api-gateway-component"]["environment"]
 check("gateway web: COOKIE_SECURE y WS_ALLOWED_ORIGINS desde .env", gw["COOKIE_SECURE"] == "${COOKIE_SECURE:?}" and gw["WS_ALLOWED_ORIGINS"] == "${WS_ALLOWED_ORIGINS:?}")
-check("compose.yaml no define WAF propio (el WAF va en las capas de Backend/waf)", "waf-component" not in svc
-      and not any(n.startswith("waf") for n in svc))
-
-
-# =============================================================================================
-# Modo integrado: WAF (Kevin) + Secure Channel
-# =============================================================================================
-class Override:
-    def __init__(self, value):
-        self.value = value
-
-
-class ComposeLoader(yaml.SafeLoader):
-    pass
-
-
-ComposeLoader.add_constructor("!override", lambda l, n: Override(
-    l.construct_sequence(n, deep=True) if isinstance(n, yaml.SequenceNode) else
-    l.construct_mapping(n, deep=True) if isinstance(n, yaml.MappingNode) else l.construct_scalar(n)))
-ComposeLoader.add_constructor("!reset", lambda l, n: Override(None))
-
-
-def load_compose(path):
-    return yaml.load(path.read_text(encoding="utf-8-sig"), Loader=ComposeLoader)
-
-
-def as_mapping(value):
-    """depends_on / environment en forma de lista -> mapa (como normaliza Compose)."""
-    if isinstance(value, list):
-        out = {}
-        for item in value:
-            k, _, v = str(item).partition("=")
-            out[k] = v if "=" in str(item) else {"condition": "service_started"}
-        return out
-    return value or {}
-
-
-def merge_service(base, over):
-    out = dict(base)
-    for key, val in over.items():
-        if isinstance(val, Override):
-            out[key] = val.value
-        elif key in ("environment", "depends_on", "networks"):
-            merged = dict(as_mapping(out.get(key)))
-            for k, v in as_mapping(val).items():
-                merged[k] = {**merged[k], **v} if isinstance(merged.get(k), dict) and isinstance(v, dict) else v
-            out[key] = merged
-        elif key == "volumes":
-            by_target = {(v["target"] if isinstance(v, dict) else v.split(":")[1]): v for v in out.get(key, [])}
-            for v in val:
-                by_target[v["target"] if isinstance(v, dict) else v.split(":")[1]] = v
-            out[key] = list(by_target.values())
-        elif key == "ports":
-            out[key] = list(out.get(key, [])) + [p for p in val if p not in out.get(key, [])]
-        elif isinstance(val, dict) and isinstance(out.get(key), dict):
-            out[key] = {**out[key], **val}
-        else:
-            out[key] = val
-    return out
-
-
-def merge_files(paths):
-    merged = {"services": {}, "networks": {}}
-    for p in paths:
-        doc = load_compose(p) or {}
-        for name, s in (doc.get("services") or {}).items():
-            merged["services"][name] = merge_service(merged["services"].get(name, {}), s)
-        merged["networks"].update(doc.get("networks") or {})
-    return merged
-
-
 # Variables que define la imagen owasp/modsecurity-crs:nginx (nginx/Dockerfile y configure-rules.v4.conf
 # de coreruleset/modsecurity-crs-docker). Una variable fuera de esta lista sería un error tipográfico que
 # la imagen ignoraría en silencio.
@@ -270,13 +185,8 @@ WAF_IMAGE_VARS = {
 }
 AEAD = re.compile(r"^ECDHE-(ECDSA|RSA)-(AES(128|256)-GCM-SHA(256|384)|CHACHA20-POLY1305)$")
 
-layers = [COMPOSE, WAF_DIR / "compose.waf.yaml"]
 section = "waf"
-leftovers = sorted(p.name for p in WAF_DIR.glob("compose.waf-*.yaml"))
-check("sin capas de Compose adicionales (todo el WAF + TLS en compose.waf.yaml)", not leftovers, str(leftovers))
-print("\n== Modo integrado (WAF + Secure Channel): " + " + ".join(str(p.relative_to(ROOT)) for p in layers))
-m = merge_files(layers)
-svc = m["services"]
+print("\n== WAF + Secure Channel")
 published = {n: v.get("ports") for n, v in svc.items() if v.get("ports")}
 check("solo los dos WAF publican puertos (proxies y servicios internos, ninguno)",
       set(published) == {"waf-web", "waf-mobile"}, str(published))
@@ -321,9 +231,10 @@ for waf, proxy in (("waf-web", "reverse-proxy-web"), ("waf-mobile", "reverse-pro
     check("sin mTLS: no se cambian PROXY_SSL_CERT_FILE/KEY (la imagen usa el modo 'no-cert')",
           "PROXY_SSL_CERT_FILE" not in env and "PROXY_SSL_CERT_KEY_FILE" not in env)
     check("ninguna clave de CA montada en el WAF", not any("ca.key" in str(v.get("source", "")) for v in vols.values()))
-    check(f"espera a que {proxy} esté healthy", as_mapping(s.get("depends_on")).get(proxy, {}).get("condition") == "service_healthy")
-    check("WAF solo en waf-edge, con su IP de compose.waf.yaml",
-          list(s["networks"]) == ["waf-edge"] and s["networks"]["waf-edge"]["ipv4_address"] in ("172.30.250.3", "172.30.250.4"))
+    check(f"espera a que {proxy} esté healthy", s.get("depends_on", {}).get(proxy, {}).get("condition") == "service_healthy")
+    waf_ip = {"waf-web": "10.20.1.13", "waf-mobile": "10.20.1.14"}[waf]
+    check("WAF solo en public_network con su IP fija",
+          s["networks"] == {"public_network": {"ipv4_address": waf_ip}})
     approved = {"waf-web": "GET HEAD POST OPTIONS PATCH DELETE", "waf-mobile": "GET HEAD POST OPTIONS DELETE"}[waf]
     check(f"ALLOWED_METHODS aprobados ({approved}); PUT, TRACE, CONNECT siguen bloqueados por la 911100",
           set(env.get("ALLOWED_METHODS", "").split()) == set(approved.split()), env.get("ALLOWED_METHODS"))
@@ -335,36 +246,29 @@ for waf, proxy in (("waf-web", "reverse-proxy-web"), ("waf-mobile", "reverse-pro
     check(f"{proxy}: certificado INTERNO (SAN = nombre del servicio) en solo lectura",
           cert.get("source") == "${%s:?}" % var and cert.get("read_only") is True and cert.get("bind", {}).get("create_host_path") is False)
     check(f"{proxy}: real-ip.conf de Kevin conservado", "/etc/nginx/conf.d/real-ip.conf" in pv)
-    check(f"{proxy}: redes e IP conservadas (public_network, private_api) + waf-edge",
-          {k: v["ipv4_address"] for k, v in p["networks"].items()} == (
-              {"public_network": "10.20.1.11", "private_api": "10.20.2.10", "waf-edge": "172.30.250.2"} if proxy.endswith("web")
-              else {"public_network": "10.20.1.12", "private_api": "10.20.2.11", "waf-edge": "172.30.250.5"}))
-
 print("\n-- red y cabecera de IP real")
-nets = m["networks"]
-check("waf-edge conserva su subred 172.30.250.0/24; redes 10.20.x sin cambios",
-      nets["waf-edge"]["ipam"]["config"][0]["subnet"] == "172.30.250.0/24"
-      and [nets[n]["ipam"]["config"][0]["subnet"] for n in ("public_network", "private_api", "private_back")]
-      == ["10.20.1.0/24", "10.20.2.0/24", "10.20.3.0/24"])
-members = sorted(n for n, s in svc.items() if "waf-edge" in (s.get("networks") or {}))
-check("waf-edge solo une los 2 WAF con los 2 proxies", members == ["reverse-proxy-mobile", "reverse-proxy-web", "waf-mobile", "waf-web"], str(members))
+check("el despliegue usa exactamente las tres redes definidas",
+      set(nets) == {"public_network", "private_api", "private_back"})
+members = sorted(n for n, s in svc.items() if "public_network" in (s.get("networks") or {}))
+check("public_network solo une los 2 WAF con los 2 proxies",
+      members == ["reverse-proxy-mobile", "reverse-proxy-web", "waf-mobile", "waf-web"], str(members))
 real_ip = (WAF_DIR / "real-ip.conf").read_text(encoding="utf-8-sig")
 trusted = re.findall(r"set_real_ip_from\s+([\d./]+);", real_ip)
-check("los proxies solo aceptan la IP real de los WAF (172.30.250.3/.4) por X-Real-IP",
-      sorted(trusted) == ["172.30.250.3", "172.30.250.4"] and re.search(r"real_ip_header\s+X-Real-IP;", real_ip))
+check("los proxies solo aceptan la IP real de los WAF (10.20.1.13/.14) por X-Real-IP",
+      sorted(trusted) == ["10.20.1.13", "10.20.1.14"] and re.search(r"real_ip_header\s+X-Real-IP;", real_ip))
 check("el WAF reescribe X-Real-IP con su $remote_addr (REAL_IP_PROXY_HEADER y SET_REAL_IP_FROM por defecto)",
       not any({"REAL_IP_PROXY_HEADER", "SET_REAL_IP_FROM", "REAL_IP_HEADER"} & set(svc[w]["environment"]) for w in ("waf-web", "waf-mobile")))
 for n in ("frontend", "api-gateway-component", "api-gateway-mobile"):
     if n in svc:
-        check(f"{n}: sigue sin puertos publicados y fuera de waf-edge",
-              not svc[n].get("ports") and "waf-edge" not in (svc[n].get("networks") or {}))
+        check(f"{n}: sigue sin puertos publicados y fuera de public_network",
+              not svc[n].get("ports") and "public_network" not in (svc[n].get("networks") or {}))
 
 print("\n-- secretos")
 tracked = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True).stdout.splitlines()
 secrets = [f for f in tracked if re.search(r"(\.(key|pem|p12|pfx|crt)$)|(^|/)certs/", f)]
 check("ningún certificado, clave o carpeta certs/ versionado en Git", not secrets, str(secrets[:5]))
 
-for name in ("directo", "waf"):
+for name in ("proxy", "waf"):
     part = [ok for s, ok in results if s == name]
     print(f"\n[{name}] {sum(part)}/{len(part)} comprobaciones estáticas superadas")
 sys.exit(0 if all(ok for _, ok in results) else 1)

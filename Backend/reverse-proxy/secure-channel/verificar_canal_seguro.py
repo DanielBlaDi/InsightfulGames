@@ -3,11 +3,9 @@
     pip install websockets
     $env:TLS_CA_FILE = "$(mkcert -CAROOT)\\rootCA.pem"     # CA que firmó el certificado PÚBLICO (nunca la clave)
 
-    # Despliegue integrado: docker compose -f compose.yaml -f Backend/waf/compose.waf.yaml up --build -d
+    # Despliegue integrado: docker compose up --build -d
     python Backend/reverse-proxy/secure-channel/verificar_canal_seguro.py --modo waf
 
-    # Modo directo, solo para probar los reverse proxies sin WAF (escenario 2): docker compose up -d
-    python Backend/reverse-proxy/secure-channel/verificar_canal_seguro.py --modo directo
     python Backend/reverse-proxy/secure-channel/verificar_canal_seguro.py --modo waf --control-negativo-upstream
 
 Variables: PROXY_HOST (localhost), FRONTEND_PORT, FRONTEND_HTTPS_PORT, MOBILE_HTTPS_PORT, TLS_CA_FILE y, para el
@@ -51,7 +49,7 @@ INTERNAL_PORTS = {8000: "nginx web (interno)", 8090: "nginx móvil HTTP", 8091: 
                   8084: "multiplayer", 8085: "tutor", 8086: "botcito", 8087: "profile-stats",
                   27017: "mongo", 3306: "mysql", 5432: "postgres", 5672: "rabbitmq", 15672: "rabbitmq admin"}
 
-WAF_LAYERS = ["compose.yaml", "Backend/waf/compose.waf.yaml"]  # despliegue integrado (WAF + Secure Channel)
+WAF_LAYERS = ["compose.yaml"]  # despliegue integrado (WAF + Secure Channel)
 
 results = []
 
@@ -199,9 +197,9 @@ def waf_checks(session):
             rc, _ = docker("exec", waf, "getent", "hosts", target)
             check(g, f"segmentación: el WAF no resuelve {target}", rc != 0)
 
-    print("\n== Red waf-edge y puertos publicados")
-    _, nets = docker("network", "ls", "--filter", "name=waf-edge", "--format", "{{.Name}}")
-    net = nets.splitlines()[0] if nets else ""
+    print("\n== Red public_network y puertos publicados")
+    _, net = docker("inspect", "-f",
+                    "{{range $name, $_ := .NetworkSettings.Networks}}{{$name}}{{end}}", "waf-web")
     _, members = docker("network", "inspect", net, "-f", "{{range .Containers}}{{.Name}} {{end}}")
     check("red", f"{net}: solo los 2 WAF y los 2 proxies", sorted(members.split()) ==
           ["reverse-proxy-mobile", "reverse-proxy-web", "waf-mobile", "waf-web"], members)
@@ -250,7 +248,7 @@ def waf_checks(session):
     line = next((l for l in logs_since("reverse-proxy-web", since).splitlines() if probe in l), "")
     client = line.split(" ", 1)[0] if line else ""
     check("ip real", "el proxy registra la IP que vio el WAF, no la cabecera del cliente",
-          line and client != "203.0.113.77" and client != "172.30.250.3", client or "sin línea en el log")
+          line and client != "203.0.113.77" and client != "10.20.1.13", client or "sin línea en el log")
 
 
 def upstream_negative_control():
@@ -283,33 +281,19 @@ def upstream_negative_control():
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--modo", choices=("directo", "waf"), default="directo")
+    ap.add_argument("--modo", choices=("waf",), default="waf")
     ap.add_argument("--control-negativo-upstream", action="store_true")
     args = ap.parse_args()
-    waf = args.modo == "waf"
     if not CA_FILE or not Path(CA_FILE).is_file():
         print("Define TLS_CA_FILE con el certificado de la CA (p. ej. \"$(mkcert -CAROOT)\\rootCA.pem\").")
         sys.exit(2)
-    entry = "WAF web" if waf else "proxy web"
+    entry = "WAF web"
 
     # ------------------------------------------------------------------ web: TLS cliente -> entrada pública
     tls_checks(f"{entry} TLS", HTTPS_PORT)
     status, headers, _, _ = https(HTTPS_PORT, "GET", "/health")
     hsts = headers.get("Strict-Transport-Security", "")
     check(f"{entry} TLS", "HSTS presente en HTTPS", status == 200 and hsts.startswith("max-age="), hsts)
-
-    # ------------------------------------------------------------------ web: HTTP en claro (modo directo)
-    if not waf:
-        status, headers, _ = http_plain(HTTP_PORT, "/health")
-        check("web HTTP", "/health por HTTP (healthcheck) responde 200", status == 200)
-        status, headers, _ = http_plain(HTTP_PORT, "/estadisticas?x=1")
-        loc = headers.get("Location", "")
-        check("web HTTP", "páginas por HTTP -> 308 a HTTPS conservando ruta y consulta",
-              status == 308 and loc == f"https://{HOST}:{HTTPS_PORT}/estadisticas?x=1", f"{status} {loc}")
-        for path in ("/api/stats/me", "/api/auth/login", "/api/internal/auth/login"):
-            status, _, body = http_plain(HTTP_PORT, path)
-            check("web HTTP", f"{path} por HTTP -> 403 HTTPS_REQUIRED (no llega al gateway)",
-                  status == 403 and "HTTPS_REQUIRED" in body, status)
 
     # ------------------------------------------------------------------ web: REST y cookie
     user = "tls_" + uuid.uuid4().hex[:8]
@@ -372,15 +356,15 @@ def main():
     for path in ("/api/internal/auth/login", "/API/Internal/logic/games", "/api//internal/x", "/api/%69nternal/x"):
         status, _, body, _ = https(HTTPS_PORT, "GET", path)
         # Con WAF, CRS puede bloquear antes (403); lo exigido es que no se sirva (nunca 2xx/3xx)
-        check("borde", f"{path} por HTTPS -> 404{' o 403 del WAF' if waf else ''}",
-              status == 404 or (waf and is_waf_block(status, body)), status)
+        check("borde", f"{path} por HTTPS -> 404 o 403 del WAF",
+              status == 404 or is_waf_block(status, body), status)
 
     # ------------------------------------------------------------------ móvil
-    tls_checks("WAF móvil TLS" if waf else "móvil TLS", MOBILE_PORT)
+    tls_checks("WAF móvil TLS", MOBILE_PORT)
     status, _, body, version = https(MOBILE_PORT, "POST", "/auth/login", {"username": user, "password": PASSWORD})
     check("móvil REST", f"login de la app por HTTPS ({version})", status == 200 and "accessToken" in body, status)
     status, _, body, _ = https(MOBILE_PORT, "GET", "/internal/auth/login")
-    check("borde", "móvil /internal por HTTPS -> 404", status == 404 or (waf and is_waf_block(status, body)), status)
+    check("borde", "móvil /internal por HTTPS -> 404", status == 404 or is_waf_block(status, body), status)
     mob = "tls_mdel_" + uuid.uuid4().hex[:8]
     https(MOBILE_PORT, "POST", "/auth/register", {"username": mob, "password": PASSWORD})
     _, _, body, _ = https(MOBILE_PORT, "POST", "/auth/login", {"username": mob, "password": PASSWORD})
@@ -398,17 +382,16 @@ def main():
             reachable = s.connect_ex((HOST if HOST != "localhost" else "127.0.0.1", port)) == 0
         check("puertos", f"{port} ({name}) no publicado en el host", not reachable)
 
-    if waf:
-        waf_checks(session)
-        if args.control_negativo_upstream:
-            upstream_negative_control()
+    waf_checks(session)
+    if args.control_negativo_upstream:
+        upstream_negative_control()
 
     ok = sum(r["ok"] for r in results)
     print(f"\n[{args.modo}] {ok}/{len(results)} comprobaciones superadas")
     out = Path(__file__).with_name(f"resultados-canal-seguro-{args.modo}.json")
     out.write_text(json.dumps({
         "fecha": datetime.now(timezone.utc).isoformat(timespec="seconds"), "modo": args.modo,
-        "compose": WAF_LAYERS if waf else ["compose.yaml"],
+        "compose": WAF_LAYERS,
         "host": HOST, "puertos": {"http_web": HTTP_PORT, "https_web": HTTPS_PORT, "https_movil": MOBILE_PORT},
         "openssl_cliente": ssl.OPENSSL_VERSION, "superadas": ok, "total": len(results), "resultados": results,
     }, ensure_ascii=False, indent=2), encoding="utf-8")

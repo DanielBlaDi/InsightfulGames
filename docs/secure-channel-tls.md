@@ -1,16 +1,8 @@
 # Prototype 3 · Escenario de seguridad 1: Secure Channel (TLS)
 
-Rama: `feature/secure-channel-waf` = `origin/feature/waf-security` (`368f93a`, WAF de Kevin sobre los dos
-reverse proxies y el subnetting de Daniel) + merge de `feature/secure-channel-tls` (5 commits del canal seguro)
-+ integración con el WAF, consolidada en `Backend/waf/compose.waf.yaml`. Hay **dos modos**, con pruebas separadas:
-
-| Modo | Compose | Entrada pública | TLS |
-|---|---|---|---|
-| **Integrado con WAF — despliegue oficial** (sección 11) | `docker compose -f compose.yaml -f Backend/waf/compose.waf.yaml up --build -d` | `waf-web` / `waf-mobile` | cliente ⇒ WAF ⇒ proxy (dos canales TLS validados) |
-| **Directo — solo pruebas de los reverse proxies** (secciones 1–10, escenario 2) | `docker compose up -d` | `reverse-proxy-web` / `reverse-proxy-mobile` | cliente ⇒ proxy |
-
-El modo directo no forma parte del despliegue: deja los proxies publicados sin WAF y solo sirve para medirlos.
-
+El despliegue vigente usa un único `compose.yaml`. Para configurar certificados, variables y arranque,
+sigue la sección 11.4. Las secciones 1–10 documentan el prototipo histórico con acceso directo a los proxies;
+sus instrucciones de despliegue corresponden a la versión anterior.
 
 ## 1. Escenario de seguridad
 
@@ -328,19 +320,19 @@ Android   ══TLS① (cert. público mkcert)══► waf-mobile:8443 [ModSecu
 ```
 
 - **TLS①** termina en el WAF: es necesario para que ModSecurity vea la petición HTTP (no se puede inspeccionar
-  tráfico cifrado). **TLS②** es una conexión nueva del WAF al proxy, en `waf-edge`.
+  tráfico cifrado). **TLS②** es una conexión nueva del WAF al proxy, en `public_network`.
 - Los proxies **no cambian**: misma imagen, mismas plantillas, mismas rutas, bloqueo de `/internal`,
   `X-User-Id` vaciado, rate limit y cabeceras WebSocket. Solo cambia el certificado montado (el interno).
-- Publican puertos **solo los WAF** (`compose.waf.yaml` ya quita los de los proxies con `ports: !override []`):
+- Publican puertos **solo los WAF** (los proxies solo escuchan dentro de Docker):
   `waf-web` → `FRONTEND_PORT:8080` (HTTP, solo 301) y `FRONTEND_HTTPS_PORT:8443`; `waf-mobile` →
   `MOBILE_HTTPS_PORT:8443`. El HTTP móvil no se publica. Así el navegador sigue en `https://localhost:8443`
   (`WS_ALLOWED_ORIGINS` no cambia) y Android en `https://10.0.2.2:8444/` (sin cambios en la app).
 
 ### 11.2 Cómo se configura (verificado contra el código de la imagen)
 
-Todo está en `Backend/waf/compose.waf.yaml`, sobre la configuración de Kevin, que se conserva (imagen,
+Todo está en `compose.yaml`, con la configuración del WAF (imagen,
 `MODSEC_RULE_ENGINE=On`, `MODSEC_AUDIT_ENGINE=RelevantOnly`, `MODSEC_AUDIT_LOG=/dev/stdout`, `PORT=8080`,
-`waf-edge` y sus IP, `real-ip.conf`, proxies sin puertos). `compose.yaml` no cambia. Las variables se comprobaron en `coreruleset/modsecurity-crs-docker` (`nginx/Dockerfile`,
+`public_network`, `real-ip.conf`, proxies sin puertos publicados). Las variables se comprobaron en `coreruleset/modsecurity-crs-docker` (`nginx/Dockerfile`,
 `templates/includes/proxy_backend_ssl.conf.template`, `docker-entrypoint.d/93-update-proxy-ssl-config.sh`,
 `src/bin/check-proxy-client-cert`):
 
@@ -392,7 +384,7 @@ python Backend\reverse-proxy\secure-channel\generar_certs_internos.py --control-
 
 # 3. Variables (añade solo las que falten; no sobrescribe .env)
 $nuevas = [ordered]@{ FRONTEND_PORT='8080'; FRONTEND_HTTPS_PORT='8443'; MOBILE_HTTPS_PORT='8444'; HSTS_MAX_AGE='0'
-  WEB_TLS_DIR='./certs'; MOBILE_TLS_DIR='./certs'; EDGE_TLS_DIR='./certs/edge'   # WEB/MOBILE_TLS_DIR: modo directo (8.1)
+  EDGE_TLS_DIR='./certs/edge'
   INTERNAL_CA_CERT='./certs/internal/ca/ca.crt'; INTERNAL_WEB_TLS_DIR='./certs/internal/reverse-proxy-web'
   INTERNAL_MOBILE_TLS_DIR='./certs/internal/reverse-proxy-mobile' }
 $actual = if (Test-Path .env) { Get-Content .env } else { @() }
@@ -400,26 +392,17 @@ foreach ($k in $nuevas.Keys) { if (-not ($actual -match "^$k=")) { Add-Content .
 # A mano en .env: COOKIE_SECURE=true y WS_ALLOWED_ORIGINS=https://localhost:8443
 
 # 4. Validación estática y arranque
-python Backend\reverse-proxy\secure-channel\validar_config.py          # [directo] 40/40 y [waf] 50/50
-docker compose -f compose.yaml -f Backend/waf/compose.waf.yaml config --quiet; "config: $LASTEXITCODE"
-docker compose -f compose.yaml -f Backend/waf/compose.waf.yaml up --build -d
-docker compose -f compose.yaml -f Backend/waf/compose.waf.yaml ps -a     # todo healthy, incluidos waf-web y waf-mobile
-docker compose -f compose.yaml -f Backend/waf/compose.waf.yaml exec waf-web nginx -T | Select-String 'proxy_ssl_verify|proxy_ssl_trusted|proxy_pass https'
+python Backend\reverse-proxy\secure-channel\validar_config.py          # [proxy] 34/34 y [waf] 47/47
+docker compose config --quiet; "config: $LASTEXITCODE"
+docker compose up --build -d
+docker compose ps -a     # todo healthy, incluidos waf-web y waf-mobile
+docker compose exec waf-web nginx -T | Select-String 'proxy_ssl_verify|proxy_ssl_trusted|proxy_pass https'
 ```
-
-- `!override` requiere Docker Compose ≥ 2.24.4. Se usa en los proxies: `ports: !override []` (de Kevin) y
-  `volumes: !override` (repite `real-ip.conf` y sustituye el certificado público por el interno en
-  `/etc/nginx/certs`).
-- `compose.yaml` exige `WEB_TLS_DIR`/`MOBILE_TLS_DIR` también en el despliegue integrado (los usa el modo
-  directo); aquí no se montan.
-- Pasar al modo directo (solo pruebas): `docker compose -f compose.yaml -f Backend/waf/compose.waf.yaml down`
-  (sin `-v`) y `docker compose up -d`; en ese modo los proxies usan `WEB_TLS_DIR`/`MOBILE_TLS_DIR`.
-- Con `compose.debug.yaml` (gateway en `127.0.0.1:8080`) usa `FRONTEND_PORT=80` para no chocar en el 8080.
 
 ### 11.5 IP real, cabeceras y WebSocket a través del WAF
 
 - **IP real:** el WAF envía `X-REAL-IP: $remote_addr` (sobrescribe lo que mande el cliente;
-  `REAL_IP_PROXY_HEADER` por defecto) y el proxy solo cree esa cabecera si viene de `172.30.250.3/.4`
+  `REAL_IP_PROXY_HEADER` por defecto) y el proxy solo cree esa cabecera si viene de `10.20.1.13/.14`
   (`real-ip.conf` de Kevin). El TLS② no cambia esto. Sin `real-ip.conf`, el rate limit de login sería
   global (todas las peticiones con la IP del WAF). En Docker Desktop el WAF ve la IP de NAT de Docker, no la
   del cliente real: el límite por IP se comporta como global en pruebas locales.
@@ -437,7 +420,7 @@ docker compose -f compose.yaml -f Backend/waf/compose.waf.yaml exec waf-web ngin
 
 CRS solo permite `GET HEAD POST OPTIONS` (regla 900200); la 911100 (nivel 1, crítica) bloquea el resto, pero
 el sistema usa `DELETE /api/auth/account`, `PATCH /api/games/{id}/visibility`,
-`PATCH /api/matches/{id}/visibility` y `DELETE /auth/account` (app). `compose.waf.yaml` fija
+`PATCH /api/matches/{id}/visibility` y `DELETE /auth/account` (app). `compose.yaml` fija
 `ALLOWED_METHODS`: `GET HEAD POST OPTIONS PATCH DELETE` en `waf-web` y `GET HEAD POST OPTIONS DELETE` en
 `waf-mobile` (el gateway móvil no tiene rutas `PATCH`). No desactiva reglas ni cambia paranoia o umbrales;
 `PUT`, `TRACE`, `CONNECT`… siguen bloqueados (lo comprueba `verificar_canal_seguro.py`).
@@ -461,7 +444,7 @@ HSTS, login, cookie `Secure`, WSS, `Origin`, rutas internas, puertos):
 - HTTP del WAF: páginas 301 y `POST /api/auth/login` 301 **sin** aparecer en los logs del proxy ni del gateway;
 - CRS: SQLi y XSS → 403 del WAF y reglas 942xxx/941xxx en el audit log; `PUT` → 403; `PATCH`/`DELETE` → 2xx;
 - IP real: `X-Real-IP` falsificado no aparece en el log del proxy;
-- segmentación: `waf-edge` solo tiene los 2 WAF y los 2 proxies; el WAF no resuelve ni alcanza gateways,
+- segmentación: `public_network` solo tiene los 2 WAF y los 2 proxies; el WAF no resuelve ni alcanza gateways,
   frontend, Auth ni bases; solo los WAF publican puertos.
 
 `--control-negativo-upstream` recrea `reverse-proxy-web` con el certificado público (otra CA) y luego con
@@ -469,23 +452,12 @@ HSTS, login, cookie `Secure`, WSS, `Origin`, rutas internas, puertos):
 `upstream SSL certificate verify error`; al final restaura el certificado correcto y comprueba 200. Es la
 prueba de que el WAF **valida** el tramo interno, no solo lo cifra.
 
-### 11.8 Discrepancias entre documentación, diagramas y código (a coordinar)
+### 11.8 Direccionamiento del borde
 
-| Documento | Dice | Código actual | Quién |
-|---|---|---|---|
-| Diagrama de subnetting | redes privadas separadas WEB y Mobile, subredes por componente; sin WAF | una `private_api` compartida, una `private_back`, más `waf-edge` (`172.30.250.0/24`, fuera de `10.20.x`, no `internal`) | Daniel |
-| `compose.yaml`, bloque comentado `waf-component` | WAF único en `public_network` `10.20.1.10`, publica `FRONTEND_PORT` y `MOBILE_GATEWAY_PORT` (HTTP) | `waf-web`/`waf-mobile` en `Backend/waf/compose.waf.yaml`, en `waf-edge`, HTTPS | Daniel |
-| `compose.yaml`, comentarios de los proxies | "Temporary mock / bypass without WAF: comment these lines out when enabling `waf-component`" | no hay que comentar nada: `compose.waf.yaml` anula los puertos con `!override` | Daniel |
-| `Backend/reverse-proxy/nginx/common.conf` (cabecera) | los proxies están en `public_network` y son lo único publicado | en el despliegue integrado solo publican los WAF | Daniel |
-| `README.md`, sección Android (`MOBILE_GATEWAY_PORT=8090`) | el gateway móvil en 8090 por HTTP | la app usa `https://…:MOBILE_HTTPS_PORT` (8444) | equipo |
-| `DOCKER_DEPLOYMENT.md`, `DEPLOYMENT_HANDOFF.md`, `docs/proxy-inverso.md` | entradas HTTP y `MOBILE_GATEWAY_PORT` | HTTPS; `MOBILE_GATEWAY_PORT` ya no existe en `.env.example` | Daniel / equipo |
+| Canal | WAF en `public_network` | Reverse proxy en `public_network` |
+|---|---|---|
+| Web | `10.20.1.13` | `10.20.1.11` |
+| Móvil | `10.20.1.14` | `10.20.1.12` |
 
-**Correcciones propuestas para revisar con Daniel** (no aplicadas):
-
-1. En `compose.yaml`, sustituir el bloque `waf-component` comentado por una referencia a
-   `Backend/waf/compose.waf.yaml` y el comando del despliegue integrado.
-2. Cambiar el comentario "Temporary mock / bypass without WAF…" de los proxies por "Modo directo (pruebas):
-   en el despliegue integrado `compose.waf.yaml` anula estos puertos".
-3. Actualizar la cabecera de `common.conf` y las entradas de `docs/proxy-inverso.md` a HTTPS (8443/8444).
-4. Decidir si `waf-edge` se renumera dentro de `10.20.x` y si pasa a `internal: true` (hoy no puede: los WAF
-   publican puertos solo a través de esa red).
+Los WAF resuelven los nombres de servicio de los proxies y verifican esos nombres en sus certificados.
+Los proxies también tienen una interfaz en `private_api` para alcanzar el frontend y los gateways.
