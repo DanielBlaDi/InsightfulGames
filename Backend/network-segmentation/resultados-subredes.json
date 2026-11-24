@@ -1,0 +1,1034 @@
+{
+  "fecha": "2026-11-24T04:28:36+00:00",
+  "imagen_sonda": "python:3.12-slim",
+  "timeout_tcp_s": 2.0,
+  "redes": {
+    "public_network": {
+      "subnet": "10.20.1.0/24",
+      "gateway": "10.20.1.1",
+      "internal": false
+    },
+    "private_api": {
+      "subnet": "10.20.2.0/24",
+      "gateway": "10.20.2.1",
+      "internal": true
+    },
+    "private_back": {
+      "subnet": "10.20.3.0/24",
+      "gateway": "10.20.3.1",
+      "internal": true
+    }
+  },
+  "resumen": {
+    "P1": {
+      "intentos": 45,
+      "permitidos_alcanzados": 15,
+      "permitidos": 15,
+      "prohibidos_bloqueados": 30,
+      "prohibidos": 30,
+      "violaciones": 0
+    },
+    "P2": {
+      "superadas": 40,
+      "total": 40
+    }
+  },
+  "P1_matriz": [
+    {
+      "nombre": "waf-web",
+      "ip": "10.20.1.13",
+      "puerto": 8443,
+      "subred": "public_network",
+      "resultado": "open",
+      "ms": 0.1,
+      "sonda": "public_network",
+      "alcanzado": true,
+      "esperado": true,
+      "ok": true
+    },
+    {
+      "nombre": "waf-mobile",
+      "ip": "10.20.1.14",
+      "puerto": 8443,
+      "subred": "public_network",
+      "resultado": "open",
+      "ms": 0.2,
+      "sonda": "public_network",
+      "alcanzado": true,
+      "esperado": true,
+      "ok": true
+    },
+    {
+      "nombre": "reverse-proxy-web",
+      "ip": "10.20.1.11",
+      "puerto": 8443,
+      "subred": "public_network",
+      "resultado": "open",
+      "ms": 0.1,
+      "sonda": "public_network",
+      "alcanzado": true,
+      "esperado": true,
+      "ok": true
+    },
+    {
+      "nombre": "reverse-proxy-mobile",
+      "ip": "10.20.1.12",
+      "puerto": 8443,
+      "subred": "public_network",
+      "resultado": "open",
+      "ms": 0.1,
+      "sonda": "public_network",
+      "alcanzado": true,
+      "esperado": true,
+      "ok": true
+    },
+    {
+      "nombre": "reverse-proxy-web",
+      "ip": "10.20.2.10",
+      "puerto": 8443,
+      "subred": "private_api",
+      "resultado": "timeout",
+      "ms": 2002.5,
+      "sonda": "public_network",
+      "alcanzado": false,
+      "esperado": false,
+      "ok": true
+    },
+    {
+      "nombre": "frontend-component",
+      "ip": "10.20.2.12",
+      "puerto": 80,
+      "subred": "private_api",
+      "resultado": "timeout",
+      "ms": 2001.2,
+      "sonda": "public_network",
+      "alcanzado": false,
+      "esperado": false,
+      "ok": true
+    },
+    {
+      "nombre": "api-gateway-mobile",
+      "ip": "10.20.2.13",
+      "puerto": 8090,
+      "subred": "private_api",
+      "resultado": "timeout",
+      "ms": 2002.3,
+      "sonda": "public_network",
+      "alcanzado": false,
+      "esperado": false,
+      "ok": true
+    },
+    {
+      "nombre": "api-gateway-component",
+      "ip": "10.20.2.14",
+      "puerto": 8080,
+      "subred": "private_api",
+      "resultado": "timeout",
+      "ms": 2001.5,
+      "sonda": "public_network",
+      "alcanzado": false,
+      "esperado": false,
+      "ok": true
+    },
+    {
+      "nombre": "api-gateway-component",
+      "ip": "10.20.3.11",
+      "puerto": 8080,
+      "subred": "private_back",
+      "resultado": "timeout",
+      "ms": 2000.9,
+      "sonda": "public_network",
+      "alcanzado": false,
+      "esperado": false,
+      "ok": true
+    },
+    {
+      "nombre": "auth-component",
+      "ip": "10.20.3.12",
+      "puerto": 8081,
+      "subred": "private_back",
+      "resultado": "timeout",
+      "ms": 2002.3,
+      "sonda": "public_network",
+      "alcanzado": false,
+      "esperado": false,
+      "ok": true
+    },
+    {
+      "nombre": "game-logic-component",
+      "ip": "10.20.3.13",
+      "puerto": 8082,
+      "subred": "private_back",
+      "resultado": "timeout",
+      "ms": 2000.6,
+      "sonda": "public_network",
+      "alcanzado": false,
+      "esperado": false,
+      "ok": true
+    },
+    {
+      "nombre": "rabbitmq-broker",
+      "ip": "10.20.3.22",
+      "puerto": 5672,
+      "subred": "private_back",
+      "resultado": "timeout",
+      "ms": 2002.2,
+      "sonda": "public_network",
+      "alcanzado": false,
+      "esperado": false,
+      "ok": true
+    },
+    {
+      "nombre": "mongo-db",
+      "ip": "10.20.3.23",
+      "puerto": 27017,
+      "subred": "private_back",
+      "resultado": "timeout",
+      "ms": 2002.2,
+      "sonda": "public_network",
+      "alcanzado": false,
+      "esperado": false,
+      "ok": true
+    },
+    {
+      "nombre": "mysql-db",
+      "ip": "10.20.3.25",
+      "puerto": 3306,
+      "subred": "private_back",
+      "resultado": "timeout",
+      "ms": 2002.2,
+      "sonda": "public_network",
+      "alcanzado": false,
+      "esperado": false,
+      "ok": true
+    },
+    {
+      "nombre": "postgres-profile-db",
+      "ip": "10.20.3.26",
+      "puerto": 5432,
+      "subred": "private_back",
+      "resultado": "timeout",
+      "ms": 2002.2,
+      "sonda": "public_network",
+      "alcanzado": false,
+      "esperado": false,
+      "ok": true
+    },
+    {
+      "nombre": "waf-web",
+      "ip": "10.20.1.13",
+      "puerto": 8443,
+      "subred": "public_network",
+      "resultado": "unreachable (Network is unreachable)",
+      "ms": 0.0,
+      "sonda": "private_api",
+      "alcanzado": false,
+      "esperado": false,
+      "ok": true
+    },
+    {
+      "nombre": "waf-mobile",
+      "ip": "10.20.1.14",
+      "puerto": 8443,
+      "subred": "public_network",
+      "resultado": "unreachable (Network is unreachable)",
+      "ms": 0.0,
+      "sonda": "private_api",
+      "alcanzado": false,
+      "esperado": false,
+      "ok": true
+    },
+    {
+      "nombre": "reverse-proxy-web",
+      "ip": "10.20.1.11",
+      "puerto": 8443,
+      "subred": "public_network",
+      "resultado": "unreachable (Network is unreachable)",
+      "ms": 0.0,
+      "sonda": "private_api",
+      "alcanzado": false,
+      "esperado": false,
+      "ok": true
+    },
+    {
+      "nombre": "reverse-proxy-mobile",
+      "ip": "10.20.1.12",
+      "puerto": 8443,
+      "subred": "public_network",
+      "resultado": "unreachable (Network is unreachable)",
+      "ms": 0.0,
+      "sonda": "private_api",
+      "alcanzado": false,
+      "esperado": false,
+      "ok": true
+    },
+    {
+      "nombre": "reverse-proxy-web",
+      "ip": "10.20.2.10",
+      "puerto": 8443,
+      "subred": "private_api",
+      "resultado": "open",
+      "ms": 0.3,
+      "sonda": "private_api",
+      "alcanzado": true,
+      "esperado": true,
+      "ok": true
+    },
+    {
+      "nombre": "frontend-component",
+      "ip": "10.20.2.12",
+      "puerto": 80,
+      "subred": "private_api",
+      "resultado": "open",
+      "ms": 0.2,
+      "sonda": "private_api",
+      "alcanzado": true,
+      "esperado": true,
+      "ok": true
+    },
+    {
+      "nombre": "api-gateway-mobile",
+      "ip": "10.20.2.13",
+      "puerto": 8090,
+      "subred": "private_api",
+      "resultado": "open",
+      "ms": 0.1,
+      "sonda": "private_api",
+      "alcanzado": true,
+      "esperado": true,
+      "ok": true
+    },
+    {
+      "nombre": "api-gateway-component",
+      "ip": "10.20.2.14",
+      "puerto": 8080,
+      "subred": "private_api",
+      "resultado": "open",
+      "ms": 0.1,
+      "sonda": "private_api",
+      "alcanzado": true,
+      "esperado": true,
+      "ok": true
+    },
+    {
+      "nombre": "api-gateway-component",
+      "ip": "10.20.3.11",
+      "puerto": 8080,
+      "subred": "private_back",
+      "resultado": "unreachable (Network is unreachable)",
+      "ms": 0.0,
+      "sonda": "private_api",
+      "alcanzado": false,
+      "esperado": false,
+      "ok": true
+    },
+    {
+      "nombre": "auth-component",
+      "ip": "10.20.3.12",
+      "puerto": 8081,
+      "subred": "private_back",
+      "resultado": "unreachable (Network is unreachable)",
+      "ms": 0.0,
+      "sonda": "private_api",
+      "alcanzado": false,
+      "esperado": false,
+      "ok": true
+    },
+    {
+      "nombre": "game-logic-component",
+      "ip": "10.20.3.13",
+      "puerto": 8082,
+      "subred": "private_back",
+      "resultado": "unreachable (Network is unreachable)",
+      "ms": 0.0,
+      "sonda": "private_api",
+      "alcanzado": false,
+      "esperado": false,
+      "ok": true
+    },
+    {
+      "nombre": "rabbitmq-broker",
+      "ip": "10.20.3.22",
+      "puerto": 5672,
+      "subred": "private_back",
+      "resultado": "unreachable (Network is unreachable)",
+      "ms": 0.0,
+      "sonda": "private_api",
+      "alcanzado": false,
+      "esperado": false,
+      "ok": true
+    },
+    {
+      "nombre": "mongo-db",
+      "ip": "10.20.3.23",
+      "puerto": 27017,
+      "subred": "private_back",
+      "resultado": "unreachable (Network is unreachable)",
+      "ms": 0.0,
+      "sonda": "private_api",
+      "alcanzado": false,
+      "esperado": false,
+      "ok": true
+    },
+    {
+      "nombre": "mysql-db",
+      "ip": "10.20.3.25",
+      "puerto": 3306,
+      "subred": "private_back",
+      "resultado": "unreachable (Network is unreachable)",
+      "ms": 0.0,
+      "sonda": "private_api",
+      "alcanzado": false,
+      "esperado": false,
+      "ok": true
+    },
+    {
+      "nombre": "postgres-profile-db",
+      "ip": "10.20.3.26",
+      "puerto": 5432,
+      "subred": "private_back",
+      "resultado": "unreachable (Network is unreachable)",
+      "ms": 0.0,
+      "sonda": "private_api",
+      "alcanzado": false,
+      "esperado": false,
+      "ok": true
+    },
+    {
+      "nombre": "waf-web",
+      "ip": "10.20.1.13",
+      "puerto": 8443,
+      "subred": "public_network",
+      "resultado": "unreachable (Network is unreachable)",
+      "ms": 0.0,
+      "sonda": "private_back",
+      "alcanzado": false,
+      "esperado": false,
+      "ok": true
+    },
+    {
+      "nombre": "waf-mobile",
+      "ip": "10.20.1.14",
+      "puerto": 8443,
+      "subred": "public_network",
+      "resultado": "unreachable (Network is unreachable)",
+      "ms": 0.0,
+      "sonda": "private_back",
+      "alcanzado": false,
+      "esperado": false,
+      "ok": true
+    },
+    {
+      "nombre": "reverse-proxy-web",
+      "ip": "10.20.1.11",
+      "puerto": 8443,
+      "subred": "public_network",
+      "resultado": "unreachable (Network is unreachable)",
+      "ms": 0.0,
+      "sonda": "private_back",
+      "alcanzado": false,
+      "esperado": false,
+      "ok": true
+    },
+    {
+      "nombre": "reverse-proxy-mobile",
+      "ip": "10.20.1.12",
+      "puerto": 8443,
+      "subred": "public_network",
+      "resultado": "unreachable (Network is unreachable)",
+      "ms": 0.0,
+      "sonda": "private_back",
+      "alcanzado": false,
+      "esperado": false,
+      "ok": true
+    },
+    {
+      "nombre": "reverse-proxy-web",
+      "ip": "10.20.2.10",
+      "puerto": 8443,
+      "subred": "private_api",
+      "resultado": "unreachable (Network is unreachable)",
+      "ms": 0.0,
+      "sonda": "private_back",
+      "alcanzado": false,
+      "esperado": false,
+      "ok": true
+    },
+    {
+      "nombre": "frontend-component",
+      "ip": "10.20.2.12",
+      "puerto": 80,
+      "subred": "private_api",
+      "resultado": "unreachable (Network is unreachable)",
+      "ms": 0.0,
+      "sonda": "private_back",
+      "alcanzado": false,
+      "esperado": false,
+      "ok": true
+    },
+    {
+      "nombre": "api-gateway-mobile",
+      "ip": "10.20.2.13",
+      "puerto": 8090,
+      "subred": "private_api",
+      "resultado": "unreachable (Network is unreachable)",
+      "ms": 0.0,
+      "sonda": "private_back",
+      "alcanzado": false,
+      "esperado": false,
+      "ok": true
+    },
+    {
+      "nombre": "api-gateway-component",
+      "ip": "10.20.2.14",
+      "puerto": 8080,
+      "subred": "private_api",
+      "resultado": "unreachable (Network is unreachable)",
+      "ms": 0.0,
+      "sonda": "private_back",
+      "alcanzado": false,
+      "esperado": false,
+      "ok": true
+    },
+    {
+      "nombre": "api-gateway-component",
+      "ip": "10.20.3.11",
+      "puerto": 8080,
+      "subred": "private_back",
+      "resultado": "open",
+      "ms": 0.2,
+      "sonda": "private_back",
+      "alcanzado": true,
+      "esperado": true,
+      "ok": true
+    },
+    {
+      "nombre": "auth-component",
+      "ip": "10.20.3.12",
+      "puerto": 8081,
+      "subred": "private_back",
+      "resultado": "open",
+      "ms": 0.1,
+      "sonda": "private_back",
+      "alcanzado": true,
+      "esperado": true,
+      "ok": true
+    },
+    {
+      "nombre": "game-logic-component",
+      "ip": "10.20.3.13",
+      "puerto": 8082,
+      "subred": "private_back",
+      "resultado": "open",
+      "ms": 0.1,
+      "sonda": "private_back",
+      "alcanzado": true,
+      "esperado": true,
+      "ok": true
+    },
+    {
+      "nombre": "rabbitmq-broker",
+      "ip": "10.20.3.22",
+      "puerto": 5672,
+      "subred": "private_back",
+      "resultado": "open",
+      "ms": 0.1,
+      "sonda": "private_back",
+      "alcanzado": true,
+      "esperado": true,
+      "ok": true
+    },
+    {
+      "nombre": "mongo-db",
+      "ip": "10.20.3.23",
+      "puerto": 27017,
+      "subred": "private_back",
+      "resultado": "open",
+      "ms": 0.1,
+      "sonda": "private_back",
+      "alcanzado": true,
+      "esperado": true,
+      "ok": true
+    },
+    {
+      "nombre": "mysql-db",
+      "ip": "10.20.3.25",
+      "puerto": 3306,
+      "subred": "private_back",
+      "resultado": "open",
+      "ms": 0.1,
+      "sonda": "private_back",
+      "alcanzado": true,
+      "esperado": true,
+      "ok": true
+    },
+    {
+      "nombre": "postgres-profile-db",
+      "ip": "10.20.3.26",
+      "puerto": 5432,
+      "subred": "private_back",
+      "resultado": "open",
+      "ms": 0.1,
+      "sonda": "private_back",
+      "alcanzado": true,
+      "esperado": true,
+      "ok": true
+    }
+  ],
+  "P2_auditoria": [
+    {
+      "prueba": "public_network: subred 10.20.1.0/24, gateway 10.20.1.1, internal=False",
+      "ok": true,
+      "detalle": "10.20.1.0/24 gw=10.20.1.1 internal=False"
+    },
+    {
+      "prueba": "public_network: las 4 IP están dentro de 10.20.1.0/24",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "prueba": "public_network: miembros exactos según el diseño (4)",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "prueba": "private_api: subred 10.20.2.0/24, gateway 10.20.2.1, internal=True",
+      "ok": true,
+      "detalle": "10.20.2.0/24 gw=10.20.2.1 internal=True"
+    },
+    {
+      "prueba": "private_api: las 5 IP están dentro de 10.20.2.0/24",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "prueba": "private_api: miembros exactos según el diseño (5)",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "prueba": "private_back: subred 10.20.3.0/24, gateway 10.20.3.1, internal=True",
+      "ok": true,
+      "detalle": "10.20.3.0/24 gw=10.20.3.1 internal=True"
+    },
+    {
+      "prueba": "private_back: las 17 IP están dentro de 10.20.3.0/24",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "prueba": "private_back: miembros exactos según el diseño (17)",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "prueba": "solo los 2 proxies y los 2 gateways están en dos subredes",
+      "ok": true,
+      "detalle": {
+        "reverse-proxy-web": [
+          "private_api",
+          "public_network"
+        ],
+        "reverse-proxy-mobile": [
+          "private_api",
+          "public_network"
+        ],
+        "api-gateway-mobile": [
+          "private_api",
+          "private_back"
+        ],
+        "api-gateway-component": [
+          "private_api",
+          "private_back"
+        ]
+      }
+    },
+    {
+      "prueba": "ningún contenedor une public_network con private_back (no se salta private_api)",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "prueba": "ningún contenedor está en redes ajenas al diseño",
+      "ok": true,
+      "detalle": [
+        {
+          "red": "insightfulgames_app",
+          "subred": "172.18.0.0/16",
+          "contenedores": 0
+        }
+      ]
+    }
+  ],
+  "P2_sondas": [
+    {
+      "sonda": "public_network",
+      "checks": [
+        {
+          "prueba": "public_network: ruta por defecto vía 10.20.1.1 (red de borde, no interna)",
+          "ok": true,
+          "detalle": [
+            {
+              "iface": "eth0",
+              "destino": "0.0.0.0",
+              "gateway": "10.20.1.1",
+              "mascara": "0.0.0.0"
+            },
+            {
+              "iface": "eth0",
+              "destino": "10.20.1.0",
+              "gateway": "0.0.0.0",
+              "mascara": "255.255.255.0"
+            }
+          ]
+        },
+        {
+          "prueba": "public_network: 'waf-web' se resuelve a una IP de la subred",
+          "ok": true,
+          "detalle": "10.20.1.13"
+        },
+        {
+          "prueba": "public_network: 'reverse-proxy-web' se resuelve a una IP de la subred",
+          "ok": true,
+          "detalle": "10.20.1.11"
+        },
+        {
+          "prueba": "public_network: 'frontend-component' no se resuelve",
+          "ok": true,
+          "detalle": "sin respuesta"
+        },
+        {
+          "prueba": "public_network: 'api-gateway-component' no se resuelve",
+          "ok": true,
+          "detalle": "sin respuesta"
+        },
+        {
+          "prueba": "public_network: 'auth-component' no se resuelve",
+          "ok": true,
+          "detalle": "sin respuesta"
+        },
+        {
+          "prueba": "public_network: 'mongo-db' no se resuelve",
+          "ok": true,
+          "detalle": "sin respuesta"
+        },
+        {
+          "prueba": "public_network: 'mysql-db' no se resuelve",
+          "ok": true,
+          "detalle": "sin respuesta"
+        },
+        {
+          "prueba": "public_network: salida a Internet (informativo; red de borde no interna)",
+          "ok": true,
+          "informativo": true,
+          "detalle": "TCP 1.1.1.1:443: timeout; DNS example.com: 104.20.23.154"
+        }
+      ],
+      "rutas": [
+        {
+          "iface": "eth0",
+          "destino": "0.0.0.0",
+          "gateway": "10.20.1.1",
+          "mascara": "0.0.0.0"
+        },
+        {
+          "iface": "eth0",
+          "destino": "10.20.1.0",
+          "gateway": "0.0.0.0",
+          "mascara": "255.255.255.0"
+        }
+      ],
+      "dns": [
+        {
+          "nombre": "waf-web",
+          "ip": "10.20.1.13"
+        },
+        {
+          "nombre": "reverse-proxy-web",
+          "ip": "10.20.1.11"
+        },
+        {
+          "nombre": "frontend-component",
+          "ip": null
+        },
+        {
+          "nombre": "api-gateway-component",
+          "ip": null
+        },
+        {
+          "nombre": "auth-component",
+          "ip": null
+        },
+        {
+          "nombre": "mongo-db",
+          "ip": null
+        },
+        {
+          "nombre": "mysql-db",
+          "ip": null
+        },
+        {
+          "nombre": "example.com",
+          "ip": "104.20.23.154"
+        }
+      ],
+      "egress_tcp": {
+        "destino": "1.1.1.1:443",
+        "resultado": "timeout",
+        "ms": 2002.1
+      }
+    },
+    {
+      "sonda": "private_api",
+      "checks": [
+        {
+          "prueba": "private_api: sin ruta por defecto (solo la ruta de su /24)",
+          "ok": true,
+          "detalle": [
+            {
+              "iface": "eth0",
+              "destino": "10.20.2.0",
+              "gateway": "0.0.0.0",
+              "mascara": "255.255.255.0"
+            }
+          ]
+        },
+        {
+          "prueba": "private_api: 'waf-web' no se resuelve",
+          "ok": true,
+          "detalle": "sin respuesta"
+        },
+        {
+          "prueba": "private_api: 'reverse-proxy-web' se resuelve a una IP de la subred",
+          "ok": true,
+          "detalle": "10.20.2.10"
+        },
+        {
+          "prueba": "private_api: 'frontend-component' se resuelve a una IP de la subred",
+          "ok": true,
+          "detalle": "10.20.2.12"
+        },
+        {
+          "prueba": "private_api: 'api-gateway-component' se resuelve a una IP de la subred",
+          "ok": true,
+          "detalle": "10.20.2.14"
+        },
+        {
+          "prueba": "private_api: 'auth-component' no se resuelve",
+          "ok": true,
+          "detalle": "sin respuesta"
+        },
+        {
+          "prueba": "private_api: 'mongo-db' no se resuelve",
+          "ok": true,
+          "detalle": "sin respuesta"
+        },
+        {
+          "prueba": "private_api: 'mysql-db' no se resuelve",
+          "ok": true,
+          "detalle": "sin respuesta"
+        },
+        {
+          "prueba": "private_api: sin salida a Internet (TCP 1.1.1.1:443)",
+          "ok": true,
+          "detalle": "unreachable (Network is unreachable)"
+        },
+        {
+          "prueba": "private_api: no resuelve nombres externos (example.com)",
+          "ok": true,
+          "detalle": "sin respuesta"
+        }
+      ],
+      "rutas": [
+        {
+          "iface": "eth0",
+          "destino": "10.20.2.0",
+          "gateway": "0.0.0.0",
+          "mascara": "255.255.255.0"
+        }
+      ],
+      "dns": [
+        {
+          "nombre": "waf-web",
+          "ip": null
+        },
+        {
+          "nombre": "reverse-proxy-web",
+          "ip": "10.20.2.10"
+        },
+        {
+          "nombre": "frontend-component",
+          "ip": "10.20.2.12"
+        },
+        {
+          "nombre": "api-gateway-component",
+          "ip": "10.20.2.14"
+        },
+        {
+          "nombre": "auth-component",
+          "ip": null
+        },
+        {
+          "nombre": "mongo-db",
+          "ip": null
+        },
+        {
+          "nombre": "mysql-db",
+          "ip": null
+        },
+        {
+          "nombre": "example.com",
+          "ip": null
+        }
+      ],
+      "egress_tcp": {
+        "destino": "1.1.1.1:443",
+        "resultado": "unreachable (Network is unreachable)",
+        "ms": 0.0
+      }
+    },
+    {
+      "sonda": "private_back",
+      "checks": [
+        {
+          "prueba": "private_back: sin ruta por defecto (solo la ruta de su /24)",
+          "ok": true,
+          "detalle": [
+            {
+              "iface": "eth0",
+              "destino": "10.20.3.0",
+              "gateway": "0.0.0.0",
+              "mascara": "255.255.255.0"
+            }
+          ]
+        },
+        {
+          "prueba": "private_back: 'waf-web' no se resuelve",
+          "ok": true,
+          "detalle": "sin respuesta"
+        },
+        {
+          "prueba": "private_back: 'reverse-proxy-web' no se resuelve",
+          "ok": true,
+          "detalle": "sin respuesta"
+        },
+        {
+          "prueba": "private_back: 'frontend-component' no se resuelve",
+          "ok": true,
+          "detalle": "sin respuesta"
+        },
+        {
+          "prueba": "private_back: 'api-gateway-component' se resuelve a una IP de la subred",
+          "ok": true,
+          "detalle": "10.20.3.11"
+        },
+        {
+          "prueba": "private_back: 'auth-component' se resuelve a una IP de la subred",
+          "ok": true,
+          "detalle": "10.20.3.12"
+        },
+        {
+          "prueba": "private_back: 'mongo-db' se resuelve a una IP de la subred",
+          "ok": true,
+          "detalle": "10.20.3.23"
+        },
+        {
+          "prueba": "private_back: 'mysql-db' se resuelve a una IP de la subred",
+          "ok": true,
+          "detalle": "10.20.3.25"
+        },
+        {
+          "prueba": "private_back: sin salida a Internet (TCP 1.1.1.1:443)",
+          "ok": true,
+          "detalle": "unreachable (Network is unreachable)"
+        },
+        {
+          "prueba": "private_back: no resuelve nombres externos (example.com)",
+          "ok": true,
+          "detalle": "sin respuesta"
+        }
+      ],
+      "rutas": [
+        {
+          "iface": "eth0",
+          "destino": "10.20.3.0",
+          "gateway": "0.0.0.0",
+          "mascara": "255.255.255.0"
+        }
+      ],
+      "dns": [
+        {
+          "nombre": "waf-web",
+          "ip": null
+        },
+        {
+          "nombre": "reverse-proxy-web",
+          "ip": null
+        },
+        {
+          "nombre": "frontend-component",
+          "ip": null
+        },
+        {
+          "nombre": "api-gateway-component",
+          "ip": "10.20.3.11"
+        },
+        {
+          "nombre": "auth-component",
+          "ip": "10.20.3.12"
+        },
+        {
+          "nombre": "mongo-db",
+          "ip": "10.20.3.23"
+        },
+        {
+          "nombre": "mysql-db",
+          "ip": "10.20.3.25"
+        },
+        {
+          "nombre": "example.com",
+          "ip": null
+        }
+      ],
+      "egress_tcp": {
+        "destino": "1.1.1.1:443",
+        "resultado": "unreachable (Network is unreachable)",
+        "ms": 0.0
+      }
+    }
+  ],
+  "miembros": {
+    "public_network": {
+      "reverse-proxy-mobile": "10.20.1.12",
+      "reverse-proxy-web": "10.20.1.11",
+      "waf-mobile": "10.20.1.14",
+      "waf-web": "10.20.1.13"
+    },
+    "private_api": {
+      "api-gateway-component": "10.20.2.14",
+      "api-gateway-mobile": "10.20.2.13",
+      "frontend-component": "10.20.2.12",
+      "reverse-proxy-mobile": "10.20.2.11",
+      "reverse-proxy-web": "10.20.2.10"
+    },
+    "private_back": {
+      "analysis-worker": "10.20.3.21",
+      "api-gateway-component": "10.20.3.11",
+      "api-gateway-mobile": "10.20.3.10",
+      "auth-component": "10.20.3.12",
+      "botcito-analysis-component": "10.20.3.18",
+      "botcito-component": "10.20.3.17",
+      "game-logic-component": "10.20.3.13",
+      "mongo-analysis-db": "10.20.3.24",
+      "mongo-db": "10.20.3.23",
+      "multiplayer-component": "10.20.3.15",
+      "mysql-db": "10.20.3.25",
+      "postgres-profile-db": "10.20.3.26",
+      "profile-stats-component": "10.20.3.19",
+      "rabbitmq-broker": "10.20.3.22",
+      "single-player-component": "10.20.3.14",
+      "timeout-worker": "10.20.3.20",
+      "tutor-component": "10.20.3.16"
+    }
+  }
+}

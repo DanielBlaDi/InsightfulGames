@@ -1,0 +1,540 @@
+{
+  "fecha": "2026-11-24T04:30:42+00:00",
+  "compose": [
+    "compose.yaml"
+  ],
+  "control_negativo_upstream": true,
+  "host": "localhost",
+  "puertos": {
+    "http_web": 80,
+    "https_web": 8443,
+    "https_movil": 8444
+  },
+  "openssl_cliente": "OpenSSL 3.0.16 11 Feb 2025",
+  "superadas": 87,
+  "total": 87,
+  "resultados": [
+    {
+      "grupo": "WAF web TLS",
+      "prueba": "HTTPS con certificado confiable (CA de desarrollo, nombre verificado)",
+      "ok": true,
+      "detalle": "TLSv1.3"
+    },
+    {
+      "grupo": "WAF web TLS",
+      "prueba": "TLS 1.2 aceptado",
+      "ok": true,
+      "detalle": "TLSv1.2"
+    },
+    {
+      "grupo": "WAF web TLS",
+      "prueba": "TLS 1.3 aceptado",
+      "ok": true,
+      "detalle": "TLSv1.3"
+    },
+    {
+      "grupo": "WAF web TLS",
+      "prueba": "TLS 1.0 rechazado por el servidor",
+      "ok": true,
+      "detalle": "SSLError: [SSL: TLSV1_ALERT_PROTOCOL_VERSION] tlsv1 alert protocol version (_ssl.c:1010)"
+    },
+    {
+      "grupo": "WAF web TLS",
+      "prueba": "TLS 1.1 rechazado por el servidor",
+      "ok": true,
+      "detalle": "SSLError: [SSL: TLSV1_ALERT_PROTOCOL_VERSION] tlsv1 alert protocol version (_ssl.c:1010)"
+    },
+    {
+      "grupo": "WAF web TLS",
+      "prueba": "cliente sin la CA: certificado no confiable -> rechazado",
+      "ok": true,
+      "detalle": "SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1010)"
+    },
+    {
+      "grupo": "WAF web TLS",
+      "prueba": "nombre de host que no está en el certificado -> rechazado",
+      "ok": true,
+      "detalle": "SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: Hostname mismatch, certificate is not valid for 'otro-dominio.example'. (_ssl.c:1010)"
+    },
+    {
+      "grupo": "WAF web TLS",
+      "prueba": "HSTS presente en HTTPS",
+      "ok": true,
+      "detalle": "max-age=0"
+    },
+    {
+      "grupo": "web REST",
+      "prueba": "registro por HTTPS (TLSv1.3)",
+      "ok": true,
+      "detalle": "201"
+    },
+    {
+      "grupo": "web REST",
+      "prueba": "login por HTTPS",
+      "ok": true,
+      "detalle": "200"
+    },
+    {
+      "grupo": "sesión",
+      "prueba": "cookie session con Secure, HttpOnly y SameSite=Lax",
+      "ok": true,
+      "detalle": "httponly; max-age=3600; path=/; samesite=lax; secure"
+    },
+    {
+      "grupo": "web REST",
+      "prueba": "petición autenticada por HTTPS (/api/stats/me)",
+      "ok": true,
+      "detalle": "200"
+    },
+    {
+      "grupo": "web WSS",
+      "prueba": "crear partida local por HTTPS",
+      "ok": true,
+      "detalle": "201"
+    },
+    {
+      "grupo": "web WSS",
+      "prueba": "partida por WSS: el primer mensaje es el state",
+      "ok": true,
+      "detalle": "('ok', {'type': 'state', 'state': {'gameId': '9c94e8c4-1b06-4c80-9d21-ae21ba01a3cc', 'mode': 'local', 'visibility': 'pri"
+    },
+    {
+      "grupo": "web WSS",
+      "prueba": "WSS desde un origen http:// -> 4403",
+      "ok": true,
+      "detalle": "('cerrado', 4403)"
+    },
+    {
+      "grupo": "métodos",
+      "prueba": "PATCH /api/games/{id}/visibility (partida terminada) -> 2xx",
+      "ok": true,
+      "detalle": "200 {\"gameId\":\"9c94e8c4-1b06-4c80-9d21-ae21ba01a3cc\",\"mode\":\"local\",\"visibility\":\"sh"
+    },
+    {
+      "grupo": "métodos",
+      "prueba": "DELETE /api/auth/account (usuario de prueba) -> 204",
+      "ok": true,
+      "detalle": "204 "
+    },
+    {
+      "grupo": "borde",
+      "prueba": "/api/internal/auth/login por HTTPS -> 404 del proxy o 403 del WAF",
+      "ok": true,
+      "detalle": "404"
+    },
+    {
+      "grupo": "borde",
+      "prueba": "/API/Internal/logic/games por HTTPS -> 404 del proxy o 403 del WAF",
+      "ok": true,
+      "detalle": "404"
+    },
+    {
+      "grupo": "borde",
+      "prueba": "/api//internal/x por HTTPS -> 404 del proxy o 403 del WAF",
+      "ok": true,
+      "detalle": "404"
+    },
+    {
+      "grupo": "borde",
+      "prueba": "/api/%69nternal/x por HTTPS -> 404 del proxy o 403 del WAF",
+      "ok": true,
+      "detalle": "404"
+    },
+    {
+      "grupo": "WAF móvil TLS",
+      "prueba": "HTTPS con certificado confiable (CA de desarrollo, nombre verificado)",
+      "ok": true,
+      "detalle": "TLSv1.3"
+    },
+    {
+      "grupo": "WAF móvil TLS",
+      "prueba": "TLS 1.2 aceptado",
+      "ok": true,
+      "detalle": "TLSv1.2"
+    },
+    {
+      "grupo": "WAF móvil TLS",
+      "prueba": "TLS 1.3 aceptado",
+      "ok": true,
+      "detalle": "TLSv1.3"
+    },
+    {
+      "grupo": "WAF móvil TLS",
+      "prueba": "TLS 1.0 rechazado por el servidor",
+      "ok": true,
+      "detalle": "SSLError: [SSL: TLSV1_ALERT_PROTOCOL_VERSION] tlsv1 alert protocol version (_ssl.c:1010)"
+    },
+    {
+      "grupo": "WAF móvil TLS",
+      "prueba": "TLS 1.1 rechazado por el servidor",
+      "ok": true,
+      "detalle": "SSLError: [SSL: TLSV1_ALERT_PROTOCOL_VERSION] tlsv1 alert protocol version (_ssl.c:1010)"
+    },
+    {
+      "grupo": "WAF móvil TLS",
+      "prueba": "cliente sin la CA: certificado no confiable -> rechazado",
+      "ok": true,
+      "detalle": "SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1010)"
+    },
+    {
+      "grupo": "WAF móvil TLS",
+      "prueba": "nombre de host que no está en el certificado -> rechazado",
+      "ok": true,
+      "detalle": "SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: Hostname mismatch, certificate is not valid for 'otro-dominio.example'. (_ssl.c:1010)"
+    },
+    {
+      "grupo": "móvil REST",
+      "prueba": "login de la app por HTTPS (TLSv1.3)",
+      "ok": true,
+      "detalle": "200"
+    },
+    {
+      "grupo": "borde",
+      "prueba": "móvil /internal por HTTPS -> 404 del proxy o 403 del WAF",
+      "ok": true,
+      "detalle": "404"
+    },
+    {
+      "grupo": "métodos",
+      "prueba": "móvil DELETE /auth/account (usuario de prueba) -> 204",
+      "ok": true,
+      "detalle": "204 "
+    },
+    {
+      "grupo": "puertos",
+      "prueba": "8000 (nginx web (interno)) no publicado en el host",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "grupo": "puertos",
+      "prueba": "8090 (nginx móvil HTTP) no publicado en el host",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "grupo": "puertos",
+      "prueba": "8091 (gateway móvil (debug)) no publicado en el host",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "grupo": "puertos",
+      "prueba": "8080 (api-gateway web) no publicado en el host",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "grupo": "puertos",
+      "prueba": "8081 (auth) no publicado en el host",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "grupo": "puertos",
+      "prueba": "8082 (game-logic) no publicado en el host",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "grupo": "puertos",
+      "prueba": "8083 (single-player) no publicado en el host",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "grupo": "puertos",
+      "prueba": "8084 (multiplayer) no publicado en el host",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "grupo": "puertos",
+      "prueba": "8085 (tutor) no publicado en el host",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "grupo": "puertos",
+      "prueba": "8086 (botcito) no publicado en el host",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "grupo": "puertos",
+      "prueba": "8087 (profile-stats) no publicado en el host",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "grupo": "puertos",
+      "prueba": "27017 (mongo) no publicado en el host",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "grupo": "puertos",
+      "prueba": "3306 (mysql) no publicado en el host",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "grupo": "puertos",
+      "prueba": "5432 (postgres) no publicado en el host",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "grupo": "puertos",
+      "prueba": "5672 (rabbitmq) no publicado en el host",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "grupo": "puertos",
+      "prueba": "15672 (rabbitmq admin) no publicado en el host",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "grupo": "waf-web->reverse-proxy-web",
+      "prueba": "nginx -T del WAF: configuración válida",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "grupo": "waf-web->reverse-proxy-web",
+      "prueba": "configuración efectiva: BACKEND por HTTPS, verificación del certificado, SNI, solo la CA interna, TLS 1.2/1.3 hacia el proxy, TLS 1.2/1.3 hacia el cliente, certificado público montado",
+      "ok": true,
+      "detalle": "falta: []"
+    },
+    {
+      "grupo": "waf-web->reverse-proxy-web",
+      "prueba": "sin mTLS (no hay proxy_ssl_certificate)",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "grupo": "waf-web->reverse-proxy-web",
+      "prueba": "ModSecurity activo con OWASP CRS",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "grupo": "waf-web->reverse-proxy-web",
+      "prueba": "desde el WAF: https://reverse-proxy-web:8443 validado con la CA interna (200, verify 0)",
+      "ok": true,
+      "detalle": "200 0"
+    },
+    {
+      "grupo": "waf-web->reverse-proxy-web",
+      "prueba": "la CA interna NO está en el almacén del sistema del WAF (curl sin --cacert falla)",
+      "ok": true,
+      "detalle": "secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above."
+    },
+    {
+      "grupo": "waf-web->reverse-proxy-web",
+      "prueba": "segmentación: el WAF no resuelve api-gateway-component",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "grupo": "waf-web->reverse-proxy-web",
+      "prueba": "segmentación: el WAF no resuelve api-gateway-mobile",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "grupo": "waf-web->reverse-proxy-web",
+      "prueba": "segmentación: el WAF no resuelve frontend-component",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "grupo": "waf-web->reverse-proxy-web",
+      "prueba": "segmentación: el WAF no resuelve auth-component",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "grupo": "waf-web->reverse-proxy-web",
+      "prueba": "segmentación: el WAF no resuelve mongo-db",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "grupo": "waf-mobile->reverse-proxy-mobile",
+      "prueba": "nginx -T del WAF: configuración válida",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "grupo": "waf-mobile->reverse-proxy-mobile",
+      "prueba": "configuración efectiva: BACKEND por HTTPS, verificación del certificado, SNI, solo la CA interna, TLS 1.2/1.3 hacia el proxy, TLS 1.2/1.3 hacia el cliente, certificado público montado",
+      "ok": true,
+      "detalle": "falta: []"
+    },
+    {
+      "grupo": "waf-mobile->reverse-proxy-mobile",
+      "prueba": "sin mTLS (no hay proxy_ssl_certificate)",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "grupo": "waf-mobile->reverse-proxy-mobile",
+      "prueba": "ModSecurity activo con OWASP CRS",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "grupo": "waf-mobile->reverse-proxy-mobile",
+      "prueba": "desde el WAF: https://reverse-proxy-mobile:8443 validado con la CA interna (200, verify 0)",
+      "ok": true,
+      "detalle": "200 0"
+    },
+    {
+      "grupo": "waf-mobile->reverse-proxy-mobile",
+      "prueba": "la CA interna NO está en el almacén del sistema del WAF (curl sin --cacert falla)",
+      "ok": true,
+      "detalle": "secure connection to it. To learn more about this situation and\nhow to fix it, please visit the webpage mentioned above."
+    },
+    {
+      "grupo": "waf-mobile->reverse-proxy-mobile",
+      "prueba": "segmentación: el WAF no resuelve api-gateway-component",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "grupo": "waf-mobile->reverse-proxy-mobile",
+      "prueba": "segmentación: el WAF no resuelve api-gateway-mobile",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "grupo": "waf-mobile->reverse-proxy-mobile",
+      "prueba": "segmentación: el WAF no resuelve frontend-component",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "grupo": "waf-mobile->reverse-proxy-mobile",
+      "prueba": "segmentación: el WAF no resuelve auth-component",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "grupo": "waf-mobile->reverse-proxy-mobile",
+      "prueba": "segmentación: el WAF no resuelve mongo-db",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "grupo": "red",
+      "prueba": "insightfulgames_public_network: solo los 2 WAF y los 2 proxies",
+      "ok": true,
+      "detalle": "['reverse-proxy-mobile', 'reverse-proxy-web', 'waf-mobile', 'waf-web']"
+    },
+    {
+      "grupo": "red",
+      "prueba": "waf-web solo está en public_network (no en private_api ni private_back)",
+      "ok": true,
+      "detalle": "{'public_network': '10.20.1.13'}"
+    },
+    {
+      "grupo": "red",
+      "prueba": "waf-mobile solo está en public_network (no en private_api ni private_back)",
+      "ok": true,
+      "detalle": "{'public_network': '10.20.1.14'}"
+    },
+    {
+      "grupo": "red",
+      "prueba": "el WAF no alcanza el gateway web por IP (10.20.2.14)",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "grupo": "red",
+      "prueba": "el WAF no alcanza el gateway web por IP (10.20.3.11)",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "grupo": "puertos",
+      "prueba": "solo los WAF publican puertos (HTTP web solo redirige; móvil solo HTTPS)",
+      "ok": true,
+      "detalle": "{'waf-mobile': {8444}, 'waf-web': {80, 8443}}"
+    },
+    {
+      "grupo": "waf HTTP",
+      "prueba": "páginas por HTTP -> 301 a HTTPS conservando ruta y consulta",
+      "ok": true,
+      "detalle": "301 https://localhost:8443/estadisticas?x=7bee3e23ad1e43cc9f3e4ab83a75bfeb"
+    },
+    {
+      "grupo": "waf HTTP",
+      "prueba": "POST /api/auth/login por HTTP -> 301 (no se procesa)",
+      "ok": true,
+      "detalle": "301"
+    },
+    {
+      "grupo": "waf HTTP",
+      "prueba": "ninguna petición HTTP llegó al proxy ni al gateway",
+      "ok": true,
+      "detalle": "[]"
+    },
+    {
+      "grupo": "waf reglas",
+      "prueba": "inyección SQL en la consulta -> 403 del WAF",
+      "ok": true,
+      "detalle": "403"
+    },
+    {
+      "grupo": "waf reglas",
+      "prueba": "XSS en la consulta -> 403 del WAF",
+      "ok": true,
+      "detalle": "403"
+    },
+    {
+      "grupo": "waf reglas",
+      "prueba": "móvil: inyección SQL -> 403 del WAF",
+      "ok": true,
+      "detalle": "403"
+    },
+    {
+      "grupo": "waf reglas",
+      "prueba": "método no permitido (PUT) sigue bloqueado por CRS (911100)",
+      "ok": true,
+      "detalle": "403"
+    },
+    {
+      "grupo": "waf reglas",
+      "prueba": "el audit log del WAF registra las reglas CRS (942xxx / 941xxx)",
+      "ok": true,
+      "detalle": ""
+    },
+    {
+      "grupo": "ip real",
+      "prueba": "el proxy registra la IP que vio el WAF, no la cabecera del cliente",
+      "ok": true,
+      "detalle": "10.20.1.1"
+    },
+    {
+      "grupo": "negativo",
+      "prueba": "certificado de otra CA (el público de mkcert) -> el WAF no conecta (502) y registra el fallo de verificación",
+      "ok": true,
+      "detalle": "status 502; upstream SSL certificate verify error: (21:unable to verify the first certificate) while SSL handshaking to upstream, client: 10.20."
+    },
+    {
+      "grupo": "negativo",
+      "prueba": "CA interna pero nombre 'otro-servicio' -> el WAF no conecta (502) y registra el fallo de verificación",
+      "ok": true,
+      "detalle": "status 502; upstream SSL certificate does not match \"reverse-proxy-web\" while SSL handshaking to upstream, client: 10.20.1.1, server: localhost,"
+    },
+    {
+      "grupo": "negativo",
+      "prueba": "restaurado: reverse-proxy-web con su certificado interno -> 200 a través del WAF",
+      "ok": true,
+      "detalle": "200"
+    }
+  ]
+}
