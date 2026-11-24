@@ -79,7 +79,8 @@ def https(port, method, path, body=None, headers=None, ctx=None, host=HOST):
     conn.request(method, path, body=data, headers=h)
     version = conn.sock.version()
     r = conn.getresponse()
-    out = (r.status, dict(r.getheaders()), r.read().decode("utf-8", "replace"), version)
+    # r.msg (HTTPMessage) busca cabeceras sin distinguir mayúsculas: el gateway envía "set-cookie" en minúsculas
+    out = (r.status, r.msg, r.read().decode("utf-8", "replace"), version)
     conn.close()
     return out
 
@@ -89,7 +90,7 @@ def http_plain(port, path, method="GET", body=None):
     data = json.dumps(body).encode() if body is not None else None
     conn.request(method, path, body=data, headers={"Content-Type": "application/json"} if data else {})
     r = conn.getresponse()
-    out = (r.status, dict(r.getheaders()), r.read().decode("utf-8", "replace"))
+    out = (r.status, r.msg, r.read().decode("utf-8", "replace"))
     conn.close()
     return out
 
@@ -243,7 +244,8 @@ def waf_checks(session):
     print("\n== IP real: no se puede falsificar desde fuera")
     probe = uuid.uuid4().hex
     since = datetime.now(timezone.utc).isoformat()
-    https(HTTPS_PORT, "GET", f"/health?probe={probe}", headers={"X-Real-IP": "203.0.113.77", "X-Forwarded-For": "203.0.113.77"})
+    # /health no se registra (access_log off): la sonda va a una ruta que el proxy sí registra (404 de /api/internal)
+    https(HTTPS_PORT, "GET", f"/api/internal/{probe}", headers={"X-Real-IP": "203.0.113.77", "X-Forwarded-For": "203.0.113.77"})
     time.sleep(1)
     line = next((l for l in logs_since("reverse-proxy-web", since).splitlines() if probe in l), "")
     client = line.split(" ", 1)[0] if line else ""
@@ -347,9 +349,15 @@ def main():
 
     # ------------------------------------------------------------------ métodos PATCH y DELETE (no los bloquea el WAF)
     if game_id:
-        https(HTTPS_PORT, "POST", f"/api/games/{game_id}/resign", {}, headers={"Cookie": session})
-        status, _, body, _ = https(HTTPS_PORT, "PATCH", f"/api/games/{game_id}/visibility", {"visibility": "shared"},
+        # Partida local: la rendición indica el color que se rinde; el PATCH exige la versión actual (expectedVersion)
+        status, _, body, _ = https(HTTPS_PORT, "POST", f"/api/games/{game_id}/resign", {"side": "white"},
                                    headers={"Cookie": session})
+        try:
+            version = json.loads(body).get("version")
+        except ValueError:
+            version = None
+        status, _, body, _ = https(HTTPS_PORT, "PATCH", f"/api/games/{game_id}/visibility",
+                                   {"visibility": "shared", "expectedVersion": version}, headers={"Cookie": session})
         check("métodos", "PATCH /api/games/{id}/visibility (partida terminada) -> 2xx", 200 <= status < 300,
               f"{status} {'(bloqueado por el WAF)' if is_waf_block(status, body) else body[:80]}")
     other = "tls_del_" + uuid.uuid4().hex[:8]
