@@ -1,0 +1,5 @@
+# Tokens de sesión de los usuarios de prueba (válidos 1 h): nunca se versionan
+usuarios.json
+# Datos crudos (una fila por petición) y control del monitor: se regeneran con ejecutar.ps1
+*.csv.gz
+.detener-monitor
