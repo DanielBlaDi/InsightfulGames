@@ -1,0 +1,98 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Pruebas de rendimiento con k6</title>
+<style>
+@page { size: A4; margin: 15mm 13mm; }
+body { font-family: "Segoe UI", Arial, sans-serif; font-size: 9.8pt; color: #1d1d1f; line-height: 1.42; }
+h1 { font-size: 19pt; margin: 0 0 4px; }
+.sub { color: #666; margin-bottom: 12px; }
+h2 { font-size: 13.5pt; border-bottom: 2px solid #2a78d6; padding-bottom: 3px; margin-top: 16px; color: #1c5cab; }
+h3 { font-size: 10.5pt; margin: 12px 0 4px; }
+table { border-collapse: collapse; width: 100%; margin: 6px 0; font-size: 8.5pt; }
+th, td { border: 1px solid #ccc; padding: 3px 5px; text-align: left; vertical-align: top; }
+th { background: #eef3fb; }
+tr, .chart, pre { page-break-inside: avoid; }
+code { font-family: Consolas, monospace; font-size: 8.2pt; background: #f3f3f3; padding: 0 2px; }
+pre { font-family: Consolas, monospace; font-size: 8pt; background: #f6f6f6; border: 1px solid #ddd; padding: 6px; white-space: pre-wrap; }
+.ok { color: #1a7f37; font-weight: 600; } .bad { color: #b42318; font-weight: 600; }
+.box { background: #f2f7fd; border-left: 4px solid #2a78d6; padding: 6px 10px; margin: 8px 0; }
+.warn { background: #fff7e8; border-left: 4px solid #eda100; padding: 6px 10px; margin: 8px 0; }
+.note { font-size: 8.4pt; color: #555; margin: 2px 0 8px; }
+.chart { margin: 6px 0; }
+.pb { page-break-before: always; }
+ul { margin: 4px 0 6px 18px; padding: 0; } li { margin: 2px 0; }
+</style></head><body>
+<h1>Pruebas de rendimiento de Insightful Games con k6</h1>
+<div class="sub">Web y app móvil a través de los WAF y los reverse proxies · corrida del 2026-11-23 · rama <code>feature/waf-compose-unico</code></div>
+<p><i>Pendiente.</i></p>
+<h2>Objetivo y alcance</h2>
+<p>Medir cuánto tráfico aguanta la aplicación en este equipo antes de dejar de cumplir sus objetivos de tiempo de
+respuesta, cómo se comporta ante subidas bruscas y qué componente se satura primero. Las peticiones entran por las
+mismas puertas que los usuarios reales: los WAF por HTTPS, luego los reverse proxies, los gateways y los servicios.</p>
+<table>
+<tr><th>Se prueba</th><th>Cómo</th></tr>
+<tr><td>Web (navegador)</td><td>Páginas con renderizado en el servidor (<code>/</code>, <code>/historial</code>, <code>/estadisticas</code>) y la API
+que llama el navegador: perfil, estadísticas, historial (en paralelo, como el frontend) y detalle de una partida.</td></tr>
+<tr><td>App Android</td><td>La API del gateway móvil: inicio (<code>/home</code>), historial, detalle, estadísticas y, en el 30 % de las sesiones,
+una partida local corta (crear, 4 jugadas y rendirse).</td></tr>
+<tr><td>Partidas contra el bot</td><td>Por WebSocket seguro (WSS), con 1, 2, 4, 8 y 12 partidas simultáneas.</td></tr>
+<tr><td>Inicio de sesión</td><td>A 20 intentos/s desde una sola IP, por encima del límite de los reverse proxies.</td></tr>
+</table>
+<p><b>No se prueba:</b> el multijugador en línea (necesita dos jugadores coordinados por WebSocket), el análisis del
+tutor (asíncrono), la descarga de JavaScript y CSS del frontend, ni la interfaz de la app Android.</p>
+
+<h2>Entorno</h2><table><tr><td><b>Equipo</b></td><td>Laptop con Intel Core i7-10750H (6 núcleos, 12 hilos) y 15,9 GB de RAM, Windows 11</td></tr><tr><td><b>Docker</b></td><td>Docker Desktop 29.9.3 sobre WSL 2: la máquina virtual tiene 12 CPU y 7,7 GB de RAM</td></tr><tr><td><b>Sistema probado</b></td><td>22 contenedores de <code>compose.yaml</code>: 2 WAF (ModSecurity + OWASP CRS), 2 reverse proxies, frontend SSR, 2 gateways, 9 servicios, 2 workers, RabbitMQ y 4 bases de datos</td></tr><tr><td><b>Entradas</b></td><td>Las mismas que los usuarios: <code>https://localhost:8443</code> (web) y <code>https://localhost:8444</code> (app), con TLS 1.3 y el certificado validado (CA de mkcert instalada en Windows)</td></tr><tr><td><b>Generador de carga</b></td><td>k6 2.4.0 en el mismo equipo que el sistema</td></tr><tr><td><b>Memoria libre al empezar</b></td><td>2,0 GB de 15,9 GB, con 3,3 GB en el archivo de paginación (Edge 3,1 GB y VS Code 2,3 GB abiertos)</td></tr></table>
+<div class="warn"><b>Aviso sobre el entorno.</b> El sistema y el generador de carga corren en el mismo portátil, y al
+empezar quedaban solo 2 GB de RAM libres. Se decidió hacer las pruebas igual y documentar el efecto: cuando Windows
+se queda sin memoria pagina la máquina virtual de Docker y la congela por momentos, lo que aparece como peticiones
+de varios segundos que no se deben a la aplicación. La sección «Salud del entorno» separa ese ruido usando una sonda
+que no ejecuta nada de la aplicación.</div>
+
+<h2>Diseño de las pruebas</h2>
+<table>
+<tr><th>Prueba</th><th>Usuarios virtuales (VUs)</th><th>Duración</th><th>Para qué</th></tr>
+<tr><td>Humo</td><td>1 web + 1 móvil</td><td>1 min</td><td>Comprobar que todos los recorridos funcionan (todas las sesiones móviles juegan) y calentar el sistema.</td></tr>
+<tr><td>Carga</td><td>0 → 40 en 1 min, 40 durante 5 min</td><td>6,5 min</td><td>Comportamiento con un uso normal sostenido.</td></tr>
+<tr><td>Estrés</td><td>50 → 100 → 200 → 300, 2 min en cada nivel</td><td>12,5 min</td><td>Encontrar el nivel en que deja de cumplir los objetivos.</td></tr>
+<tr><td>Pico</td><td>10 → 200 en 10 s, 1 min arriba, vuelta a 10</td><td>3 min</td><td>Reacción ante una subida brusca y recuperación.</td></tr>
+<tr><td>Bot</td><td>1, 2, 4, 8 y 12 partidas, 90 s cada nivel</td><td>7,8 min</td><td>Capacidad del motor (Botcito) y del WebSocket.</td></tr>
+<tr><td>Login</td><td>20 intentos/s (tasa constante)</td><td>1 min</td><td>Comprobar el límite de 10/s por IP de los reverse proxies.</td></tr>
+</table>
+<ul>
+<li><b>Mezcla:</b> el 60 % de los VUs navega la web y el 40 % usa la app. Cada VU hace pausas de 1 a 3 s entre acciones
+(tiempo de una persona leyendo o pensando), así que 40 VUs generan unas 30 peticiones/s, no 40.</li>
+<li><b>Usuarios:</b> 50 cuentas de prueba (<code>perf_001</code> a <code>perf_050</code>) con al menos 3 partidas cada una.
+Las sesiones se abren antes de cada prueba y despacio, porque el login tiene un límite de frecuencia que, si no,
+frenaría la propia prueba.</li>
+<li><b>Medición:</b> k6 registra cada petición. Un monitor anota cada 3 s la CPU y la memoria de cada contenedor, la CPU
+del equipo y de k6, la memoria paginada de Windows y el tiempo de una sonda trivial (<code>/health</code>).</li>
+</ul>
+<h3>Objetivos (SLO) usados como umbrales</h3>
+<table>
+<tr><th>Métrica</th><th>Objetivo</th><th>Por qué</th></tr>
+<tr><td>Peticiones fallidas</td><td>&lt; 1 %</td><td>Casi ninguna acción del usuario debe fallar.</td></tr>
+<tr><td>Checks (respuesta correcta)</td><td>&gt; 99 %</td><td>Además del código HTTP, el contenido esperado.</td></tr>
+<tr><td>p95 de páginas (SSR)</td><td>&lt; 1 s</td><td>Una página que tarda más de 1 s ya se percibe lenta.</td></tr>
+<tr><td>p95 de lecturas de la API</td><td>&lt; 500 ms</td><td>Lo que el usuario espera al abrir el historial o el inicio.</td></tr>
+<tr><td>p95 de escrituras (jugadas, crear, rendirse)</td><td>&lt; 800 ms</td><td>Una jugada debe sentirse inmediata.</td></tr>
+<tr><td>p95 de la respuesta del bot</td><td>&lt; 3 s</td><td>Incluye ~0,5 s que el motor piensa a propósito.</td></tr>
+<tr><td>Jugadas del bot que llegan</td><td>&gt; 99 %</td><td>Si el bot no responde, la partida queda bloqueada.</td></tr>
+</table>
+<p class="note">p50, p95 y p99: tiempo por debajo del cual queda el 50 %, el 95 % y el 99 % de las peticiones.</p>
+
+<h2 class="pb">Prueba de humo · 1 usuario web y 1 móvil, 1 min</h2><p>Un usuario web y uno móvil durante un minuto; todas las sesiones móviles juegan una partida.</p><table><tr><th>Peticiones</th><th>pet./s (media)</th><th>fallidas</th><th>checks</th><th>p50</th><th>p95</th><th>p99</th></tr><tr><td>99</td><td>1,4</td><td>0,00 %</td><td>100,00 %</td><td>20 ms</td><td>719 ms</td><td>884 ms</td></tr></table><h3>Objetivos (umbrales de k6)</h3><table><tr><th>Métrica</th><th>Objetivo</th><th>Medido</th><th></th></tr><tr><td><code>http_req_failed</code></td><td><code>rate&lt;0.01</code></td><td>0,00 %</td><td><span class="ok">Cumple</span></td></tr><tr><td><code>http_req_duration{tipo:escritura}</code></td><td><code>p(95)&lt;800</code></td><td>143 ms</td><td><span class="ok">Cumple</span></td></tr><tr><td><code>http_req_duration{canal:movil}</code></td><td><code>p(95)&lt;800</code></td><td>208 ms</td><td><span class="ok">Cumple</span></td></tr><tr><td><code>http_req_duration{tipo:lectura}</code></td><td><code>p(95)&lt;500</code></td><td>815 ms</td><td><span class="bad">No cumple</span></td></tr><tr><td><code>http_req_duration{tipo:pagina}</code></td><td><code>p(95)&lt;1000</code></td><td>659 ms</td><td><span class="ok">Cumple</span></td></tr><tr><td><code>http_req_duration{canal:web}</code></td><td><code>p(95)&lt;1000</code></td><td>877 ms</td><td><span class="ok">Cumple</span></td></tr><tr><td><code>checks</code></td><td><code>rate&gt;0.99</code></td><td>100,00 %</td><td><span class="ok">Cumple</span></td></tr></table><h3>Por endpoint</h3><table><tr><th>Endpoint</th><th>peticiones</th><th>p50</th><th>p95</th><th>p99</th><th>máx</th><th>fallidas</th></tr><tr><td><code>GET /</code></td><td>7</td><td>8 ms</td><td>833 ms</td><td>1.072 ms</td><td>1.132 ms</td><td>0,00 %</td></tr><tr><td><code>GET /api/profile/me</code></td><td>7</td><td>67 ms</td><td>826 ms</td><td>868 ms</td><td>879 ms</td><td>0,00 %</td></tr><tr><td><code>POST /games/{id}/resign</code></td><td>5</td><td>19 ms</td><td>702 ms</td><td>838 ms</td><td>873 ms</td><td>0,00 %</td></tr><tr><td><code>GET /api/stats/me</code></td><td>7</td><td>53 ms</td><td>644 ms</td><td>832 ms</td><td>879 ms</td><td>0,00 %</td></tr><tr><td><code>GET /api/games</code></td><td>7</td><td>69 ms</td><td>641 ms</td><td>828 ms</td><td>875 ms</td><td>0,00 %</td></tr><tr><td><code>GET /estadisticas</code></td><td>7</td><td>189 ms</td><td>547 ms</td><td>637 ms</td><td>659 ms</td><td>0,00 %</td></tr><tr><td><code>GET /games/{id}</code></td><td>5</td><td>30 ms</td><td>199 ms</td><td>227 ms</td><td>234 ms</td><td>0,00 %</td></tr><tr><td><code>GET /home</code></td><td>5</td><td>74 ms</td><td>164 ms</td><td>176 ms</td><td>178 ms</td><td>0,00 %</td></tr><tr><td><code>GET /api/games/{id}</code></td><td>7</td><td>14 ms</td><td>133 ms</td><td>168 ms</td><td>177 ms</td><td>0,00 %</td></tr><tr><td><code>GET /historial</code></td><td>7</td><td>11 ms</td><td>63 ms</td><td>79 ms</td><td>83 ms</td><td>0,00 %</td></tr><tr><td><code>GET /stats/me</code></td><td>5</td><td>19 ms</td><td>62 ms</td><td>70 ms</td><td>71 ms</td><td>0,00 %</td></tr><tr><td><code>POST /games/{id}/moves</code></td><td>20</td><td>16 ms</td><td>45 ms</td><td>195 ms</td><td>232 ms</td><td>0,00 %</td></tr><tr><td><code>POST /games</code></td><td>5</td><td>20 ms</td><td>26 ms</td><td>27 ms</td><td>27 ms</td><td>0,00 %</td></tr><tr><td><code>GET /games</code></td><td>5</td><td>11 ms</td><td>12 ms</td><td>12 ms</td><td>12 ms</td><td>0,00 %</td></tr></table><h2>Prueba de carga · 40 usuarios durante 5 min</h2><p><i>Sin resultados.</i></p><h2>Prueba de estrés · 50 → 100 → 200 → 300 usuarios</h2><p><i>Sin resultados.</i></p><h2>Prueba de pico · de 10 a 200 usuarios en 10 s</h2><p><i>Sin resultados.</i></p><h2>Bot por WebSocket</h2><p><i>Sin resultados.</i></p><h2>Inicio de sesión</h2><p><i>Sin resultados.</i></p><h2 class="pb">Consumo de recursos</h2><p>CPU y memoria medidas por el monitor durante las pruebas. Muestran qué componente
+trabaja más con cada nivel de carga.</p><h3>Salud del entorno durante cada prueba</h3><p>La sonda pide <code>/health</code> a través del WAF cada 3 s; ese endpoint no toca la
+aplicación, así que si tarda más de 1 s el retraso es del entorno. Una «lectura de CPU imposible» es una muestra de
+<code>docker stats</code> por encima de 12 núcleos: ocurre cuando la máquina virtual se detuvo entre dos mediciones.</p><table><tr><th>Prueba</th><th>muestras de la sonda</th><th>sonda p50</th><th>sonda máx.</th><th>sonda &gt; 1 s o fallida</th><th>lecturas de CPU imposibles</th><th>paginación máx.</th><th>CPU media del equipo</th></tr><tr><td>humo</td><td>23</td><td>27 ms</td><td>628 ms</td><td>0 (0,0 %)</td><td>0</td><td>3,2 GB</td><td>24 %</td></tr></table>
+<h2 class="pb">Análisis</h2><p><i>Pendiente.</i></p>
+<h2>Recomendaciones</h2><p><i>Pendiente.</i></p>
+<h2>Limitaciones</h2><p><i>Pendiente.</i></p>
+<h2>Cómo repetir las pruebas</h2>
+<pre>winget install GrafanaLabs.k6             # una vez
+pip install psutil                          # para el monitor de recursos
+docker compose up -d                        # stack con los WAF y los certificados (docs/secure-channel-tls.md)
+.\performance\ejecutar.ps1                 # toda la batería (~40 min); o -Pruebas carga,bot
+python performance\informe.py               # genera performance\resultados\informe.html
+msedge --headless --no-pdf-header-footer --print-to-pdf=docs\pruebas-rendimiento-k6.pdf performance\resultados\informe.html</pre>
+<p>Los scripts de k6 están en <code>performance/k6/</code> y los resultados en <code>performance/resultados/</code>
+(los CSV por petición y los tokens no se versionan).</p>
+
+</body></html>

@@ -3,18 +3,24 @@
     pip install psutil
     python performance/monitor.py <salida.csv> <archivo-de-parada>
 
-Cada ~3 s anota la CPU y la memoria de cada contenedor (docker stats), la CPU total del equipo y la de k6
-(el generador de carga corre en la misma máquina que el sistema). Se detiene cuando existe <archivo-de-parada>.
-En docker stats, 100 % de CPU = un núcleo completo.
+Cada ~3 s anota la CPU y la memoria de cada contenedor (docker stats), la CPU total del equipo, la de k6
+(el generador de carga corre en la misma máquina que el sistema), la memoria paginada de Windows y la latencia
+de una sonda trivial (/health de la entrada web, que no ejecuta nada de la app). Si la sonda tarda, el retraso es
+del entorno (p. ej. la máquina virtual de Docker detenida por falta de RAM), no de un servicio.
+Se detiene cuando existe <archivo-de-parada>. En docker stats, 100 % de CPU = un núcleo completo.
+
+Variables opcionales: SONDA_URL (https://localhost:8443/health) y SONDA_CA (CA que firmó el certificado).
 """
 
 import csv
 import json
 import os
 import re
+import ssl
 import subprocess
 import sys
 import time
+import urllib.request
 
 import psutil
 
@@ -26,8 +32,22 @@ def megas(texto):
     return float(m.group(1)) * UNIDADES.get(m.group(2), 1) if m else 0.0
 
 
+def sonda(url, contexto):
+    """ms que tarda la sonda; -1 si falla."""
+    inicio = time.perf_counter()
+    try:
+        with urllib.request.urlopen(url, timeout=20, context=contexto) as r:
+            r.read()
+        return round((time.perf_counter() - inicio) * 1000, 1)
+    except Exception:  # noqa: BLE001
+        return -1
+
+
 def main():
     salida, parada = sys.argv[1], sys.argv[2]
+    url = os.getenv("SONDA_URL", "https://localhost:8443/health")
+    ca = os.getenv("SONDA_CA")
+    contexto = ssl.create_default_context(cafile=ca) if ca else ssl.create_default_context()
     nuevo = not os.path.exists(salida)
     procesos = {}
     psutil.cpu_percent(None)
@@ -57,6 +77,8 @@ def main():
                     except psutil.Error:
                         pass
             w.writerow([ts, "host", "k6", round(k6_cpu, 2), ""])
+            w.writerow([ts, "host", "paginacion", "", round(psutil.swap_memory().used / 2**20, 1)])
+            w.writerow([ts, "sonda", "health_ms", sonda(url, contexto), ""])
             f.flush()
             time.sleep(max(0.0, 3 - (time.time() - inicio)))
 

@@ -1,0 +1,7 @@
+﻿== humo: 99 peticiones (1.4/s), fallidas 0.00 %, checks 100.00 %
+  páginas (SSR)                p50 14 ms · p95 659 ms · p99 1038 ms [p(95)<1000 OK]
+  API lecturas                 p50 35 ms · p95 815 ms · p99 879 ms [p(95)<500 NO CUMPLE]
+  API escrituras               p50 18 ms · p95 143 ms · p99 687 ms [p(95)<800 OK]
+  canal web                    p50 41 ms · p95 877 ms · p99 1010 ms [p(95)<1000 OK]
+  canal móvil                  p50 18 ms · p95 208 ms · p99 560 ms [p(95)<800 OK]
+time="2026-11-23T23:52:28-05:00" level=error msg="thresholds on metrics 'http_req_duration{tipo:lectura}' have been crossed"

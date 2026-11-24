@@ -30,6 +30,8 @@ const ETAPAS = {
 if (!ETAPAS) throw new Error(`PERFIL desconocido: ${PERFIL} (humo, carga, estres, pico)`);
 
 const humo = PERFIL === 'humo';
+// Parte de las sesiones móviles que juega una partida local (camino de escritura). En humo, todas.
+const PROB_ESCRITURA = Number(__ENV.PROB_ESCRITURA || (humo ? 1 : 0.3));
 
 export const options = {
   scenarios: {
@@ -120,8 +122,8 @@ export function movil() {
   }
   pausa();
 
-  // 30 % de las sesiones juegan una partida local corta (camino de escritura: Game Logic + hub)
-  if (Math.random() < 0.3) {
+  // Parte de las sesiones juega una partida local corta (camino de escritura: Game Logic + hub)
+  if (Math.random() < PROB_ESCRITURA) {
     r = http.post(`${MOVIL}/games`, JSON.stringify({ mode: 'local', timeControl: null }), escr('POST /games'));
     if (check(r, { 'móvil: crear partida 201': (x) => x.status === 201 })) {
       let estado = r.json();

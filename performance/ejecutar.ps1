@@ -29,6 +29,8 @@ $archivoVentanas = "$res/ventanas.json"
 $ventanas = @()
 if (Test-Path $archivoVentanas) { $ventanas = @(Get-Content $archivoVentanas -Raw | ConvertFrom-Json) }
 
+# La sonda del monitor valida el certificado con la CA de mkcert (si está instalada)
+if (Get-Command mkcert -ErrorAction SilentlyContinue) { $env:SONDA_CA = Join-Path (mkcert -CAROOT) 'rootCA.pem' }
 $parada = "$res/.detener-monitor"
 Remove-Item $parada -ErrorAction SilentlyContinue
 $monitor = Start-Process $py -ArgumentList @('performance/monitor.py', "$res/recursos.csv", $parada) -PassThru -WindowStyle Hidden
