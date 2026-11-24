@@ -4,5 +4,5 @@
 !api-gateway/requirements.txt
 !api-gateway-mobile/main.py
 !api-gateway-mobile/requirements.txt
-!gateway-shared/orchestration
+!Rate_limiting/escenario/rate_limit.py
 **/__pycache__
