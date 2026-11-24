@@ -1,4 +1,4 @@
-﻿# =============================================================================================
+# =============================================================================================
 # WAF (ModSecurity + OWASP CRS) + Secure Channel. Integrated deployment:
 #
 #   docker compose -f compose.yaml -f Backend/waf/compose.waf.yaml up --build -d
@@ -52,9 +52,6 @@ x-internal-ca: &internal-ca
 services:
   reverse-proxy-web:
     ports: !override []
-    networks:
-      waf-edge:
-        ipv4_address: 172.30.250.2
     # !override: the internal certificate replaces the public one mounted by compose.yaml (same target)
     volumes: !override
       - ./Backend/waf/real-ip.conf:/etc/nginx/conf.d/real-ip.conf:ro
@@ -67,9 +64,6 @@ services:
 
   reverse-proxy-mobile:
     ports: !override []
-    networks:
-      waf-edge:
-        ipv4_address: 172.30.250.5
     volumes: !override
       - ./Backend/waf/real-ip.conf:/etc/nginx/conf.d/real-ip.conf:ro
       - type: bind
@@ -106,8 +100,8 @@ services:
       - *internal-ca
 
     networks:
-      waf-edge:
-        ipv4_address: 172.30.250.3
+      public_network:
+        ipv4_address: 10.20.1.13
 
     depends_on:
       reverse-proxy-web:
@@ -137,16 +131,9 @@ services:
       - *internal-ca
 
     networks:
-      waf-edge:
-        ipv4_address: 172.30.250.4
+      public_network:
+        ipv4_address: 10.20.1.14
 
     depends_on:
       reverse-proxy-mobile:
         condition: service_healthy
-
-networks:
-  waf-edge:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.30.250.0/24

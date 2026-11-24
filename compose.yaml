@@ -3,32 +3,107 @@ name: InsightfulGames
 x-service: &service
   restart: unless-stopped
 
+x-waf-tls-env: &waf-tls-env
+  # Client -> WAF: TLS terminated here so ModSecurity/CRS can inspect the HTTP request
+  SSL_PORT: "8443"
+  SSL_CERT_FILE: /etc/nginx/edge-certs/tls.crt
+  SSL_CERT_KEY_FILE: /etc/nginx/edge-certs/tls.key
+  SSL_PROTOCOLS: "TLSv1.2 TLSv1.3"
+  # Same ECDHE + AEAD list as Backend/reverse-proxy/nginx/common.conf (the image default also allows DHE)
+  SSL_CIPHERS: "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305"
+  SSL_OCSP_STAPLING: "off"             # development certificates have no OCSP responder
+  # Plain HTTP is never proxied: 301 to HTTPS before ModSecurity or the reverse proxy see the request
+  NGINX_ALWAYS_TLS_REDIRECT: "on"
+  # WAF -> reverse proxy: new TLS connection, certificate chain AND name verified
+  PROXY_SSL: "on"
+  PROXY_SSL_VERIFY: "on"
+  PROXY_SSL_VERIFY_DEPTH: "1"          # leaf signed directly by the internal CA
+  PROXY_SSL_SERVER_NAME: "on"          # SNI; the name checked is the host of BACKEND
+  PROXY_SSL_PROTOCOLS: "TLSv1.2 TLSv1.3"
+  PROXY_SSL_CIPHERS: "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305"
+  PROXY_SSL_CA_CERT_FILE: /etc/nginx/upstream-ca/ca.crt   # ONLY the internal CA (not the system store)
+
+x-edge-cert: &edge-cert
+  type: bind
+  source: ${EDGE_TLS_DIR:?}            # tls.crt + tls.key (mkcert: localhost, 127.0.0.1, ::1, 10.0.2.2)
+  target: /etc/nginx/edge-certs
+  read_only: true
+  bind:
+    create_host_path: false
+
+x-internal-ca: &internal-ca
+  type: bind
+  source: ${INTERNAL_CA_CERT:?}        # certs/internal/ca/ca.crt (public certificate only, never ca.key)
+  target: /etc/nginx/upstream-ca/ca.crt
+  read_only: true
+  bind:
+    create_host_path: false
+
 services:
-  # =============================================================================================
-  # WAF (COMMENTED FOR NOW - UNCOMMENT WHEN READY)
-  # When enabled:
-  #   1. Uncomment the `waf-component` block.
-  #   2. Comment out `ports:` in `reverse-proxy-web` and `reverse-proxy-mobile` so only the WAF
-  #      publishes ports to the host.
-  # =============================================================================================
-  # waf-component:
-  #   <<: *service
-  #   container_name: waf-component
-  #   build:
-  #     context: ./Backend/waf
-  #     dockerfile: Dockerfile
-  #   image: waf-component:dev
-  #   ports:
-  #     - "${FRONTEND_PORT:?}:8000"
-  #     - "${MOBILE_GATEWAY_PORT:?}:8090"
-  #   networks:
-  #     public_network:
-  #       ipv4_address: 10.20.1.10
-  #   depends_on:
-  #     reverse-proxy-web:
-  #       condition: service_healthy
-  #     reverse-proxy-mobile:
-  #       condition: service_healthy
+  waf-web:
+    image: owasp/modsecurity-crs:nginx
+    container_name: waf-web
+    restart: unless-stopped
+
+    environment:
+      <<: *waf-tls-env
+      BACKEND: "https://reverse-proxy-web:8443"
+      PORT: "8080"
+      SSL_REDIRECT_PORT: ${FRONTEND_HTTPS_PORT:?}   # public HTTPS port used in the 301
+      MODSEC_RULE_ENGINE: "On"
+      MODSEC_AUDIT_ENGINE: "RelevantOnly"
+      MODSEC_AUDIT_LOG: "/dev/stdout"
+      # Approved by the WAF owner: CRS default (GET HEAD POST OPTIONS) + PATCH and DELETE used by the web
+      # gateway (DELETE /api/auth/account, PATCH /api/games|matches/{id}/visibility). Rule 911100 stays
+      # active for any other method; paranoia level and anomaly thresholds unchanged.
+      ALLOWED_METHODS: "GET HEAD POST OPTIONS PATCH DELETE"
+
+    ports:
+      - "${FRONTEND_PORT:?}:8080"          # HTTP: only 301 to HTTPS
+      - "${FRONTEND_HTTPS_PORT:?}:8443"    # HTTPS + WSS
+
+    volumes:
+      - *edge-cert
+      - *internal-ca
+
+    networks:
+      public_network:
+        ipv4_address: 10.20.1.13
+
+    depends_on:
+      reverse-proxy-web:
+        condition: service_healthy
+
+  waf-mobile:
+    image: owasp/modsecurity-crs:nginx
+    container_name: waf-mobile
+    restart: unless-stopped
+
+    environment:
+      <<: *waf-tls-env
+      BACKEND: "https://reverse-proxy-mobile:8443"
+      PORT: "8080"
+      SSL_REDIRECT_PORT: ${MOBILE_HTTPS_PORT:?}
+      MODSEC_RULE_ENGINE: "On"
+      MODSEC_AUDIT_ENGINE: "RelevantOnly"
+      MODSEC_AUDIT_LOG: "/dev/stdout"
+      # Approved by the WAF owner: CRS default + DELETE (DELETE /auth/account); the mobile gateway has no PATCH.
+      ALLOWED_METHODS: "GET HEAD POST OPTIONS DELETE"
+
+    ports:
+      - "${MOBILE_HTTPS_PORT:?}:8443"      # HTTPS only: mobile HTTP is not published
+
+    volumes:
+      - *edge-cert
+      - *internal-ca
+
+    networks:
+      public_network:
+        ipv4_address: 10.20.1.14
+
+    depends_on:
+      reverse-proxy-mobile:
+        condition: service_healthy
 
   # =============================================================================================
   # REVERSE PROXIES (PUBLIC SUBNETWORK 1 - 10.20.1.0/24) (PRIVATE SUBNETWORK 1 - 10.20.2.0/24)
@@ -37,7 +112,7 @@ services:
   #                       (:8000 HTTP)         -> only /health and 308 redirect to HTTPS
   #   - reverse-proxy-mobile (:8443 HTTPS)     -> api-gateway-mobile:8090
   #                          (:8090 HTTP)      -> only /health (healthcheck), not published
-  # Secure Channel Pattern (Prototype 3, scenario 1): TLS ends here; see docs/secure-channel-tls.md.
+  # Secure Channel Pattern (Prototype 3, scenario 1): the internal TLS channel ends here; see docs/secure-channel-tls.md.
   # Certificates are mounted read-only from the host (never baked into the image or committed).
   # =============================================================================================
 
@@ -51,10 +126,6 @@ services:
         ENTRY: web            # nginx/common.conf + nginx/web.conf
         HEALTH_PORT: "8000"
     image: reverse-proxy-web:dev
-    # Temporary mock / bypass without WAF: comment these lines out when enabling `waf-component`.
-    ports:
-      - "${FRONTEND_PORT:?}:8000"          # HTTP: only /health and redirect to HTTPS
-      - "${FRONTEND_HTTPS_PORT:?}:8443"    # HTTPS + WSS
     expose:
       - "8000"
       - "8443"
@@ -62,8 +133,9 @@ services:
       PUBLIC_HTTPS_PORT: ${FRONTEND_HTTPS_PORT:?}   # port used in the HTTP -> HTTPS redirect
       HSTS_MAX_AGE: ${HSTS_MAX_AGE:?}
     volumes:
+      - ./Backend/waf/real-ip.conf:/etc/nginx/conf.d/real-ip.conf:ro
       - type: bind
-        source: ${WEB_TLS_DIR:?}               # tls.crt + tls.key
+        source: ${INTERNAL_WEB_TLS_DIR:?}      # certs/internal/reverse-proxy-web (SAN reverse-proxy-web)
         target: /etc/nginx/certs
         read_only: true
         bind:
@@ -89,18 +161,15 @@ services:
         ENTRY: mobile         # nginx/common.conf + nginx/mobile.conf
         HEALTH_PORT: "8090"
     image: reverse-proxy-mobile:dev
-    # Temporary mock / bypass without WAF: comment these lines out when enabling `waf-component`.
-    # Only HTTPS is published: the Android app never uses plain HTTP (8090 stays internal for /health).
-    ports:
-      - "${MOBILE_HTTPS_PORT:?}:8443"
     expose:
       - "8090"
       - "8443"
     environment:
       HSTS_MAX_AGE: ${HSTS_MAX_AGE:?}
     volumes:
+      - ./Backend/waf/real-ip.conf:/etc/nginx/conf.d/real-ip.conf:ro
       - type: bind
-        source: ${MOBILE_TLS_DIR:?}            # tls.crt + tls.key
+        source: ${INTERNAL_MOBILE_TLS_DIR:?}   # certs/internal/reverse-proxy-mobile (SAN reverse-proxy-mobile)
         target: /etc/nginx/certs
         read_only: true
         bind:
