@@ -38,48 +38,16 @@ x-internal-ca: &internal-ca
   read_only: true
 
 services:
-  cert-gen:
-    image: alpine/openssl:latest
-    container_name: cert-gen
+  init-internal-certs:
+    build:
+      context: .
+      dockerfile: Backend/reverse-proxy/secure-channel/Dockerfile.certs
+    image: insightfulgames-certs:dev
+    container_name: init-internal-certs
     restart: "no"
+
     volumes:
-      - ./certs:/certs
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        set -e
-        mkdir -p /certs/edge /certs/internal/ca /certs/internal/reverse-proxy-web /certs/internal/reverse-proxy-mobile
-
-        if [ ! -f /certs/internal/ca/ca.crt ]; then
-          openssl req -x509 -newkey rsa:2048 -nodes -days 365 \
-            -keyout /certs/internal/ca/ca.key \
-            -out /certs/internal/ca/ca.crt \
-            -subj "/CN=InsightfulGames-Dev-CA"
-        fi
-
-        if [ ! -f /certs/edge/tls.crt ]; then
-          openssl req -newkey rsa:2048 -nodes \
-            -keyout /certs/edge/tls.key \
-            -out /tmp/edge.csr \
-            -subj "/CN=localhost"
-          printf "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:0:0:0:0:0:0:0:1,IP:10.0.2.2\n" > /tmp/edge.ext
-          openssl x509 -req -in /tmp/edge.csr -CA /certs/internal/ca/ca.crt -CAkey /certs/internal/ca/ca.key \
-            -CAcreateserial -out /certs/edge/tls.crt -days 365 -extfile /tmp/edge.ext
-        fi
-
-        for svc in reverse-proxy-web reverse-proxy-mobile; do
-          if [ ! -f "/certs/internal/$${svc}/tls.crt" ]; then
-            openssl req -newkey rsa:2048 -nodes \
-              -keyout "/certs/internal/$${svc}/tls.key" \
-              -out "/tmp/$${svc}.csr" \
-              -subj "/CN=$${svc}"
-            printf "subjectAltName=DNS:$${svc},DNS:localhost\n" > "/tmp/$${svc}.ext"
-            openssl x509 -req -in "/tmp/$${svc}.csr" -CA /certs/internal/ca/ca.crt -CAkey /certs/internal/ca/ca.key \
-              -CAcreateserial -out "/certs/internal/$${svc}/tls.crt" -days 365 -extfile "/tmp/$${svc}.ext"
-          fi
-        done
-
-        chmod -R a+r /certs
+      - ./certs/internal:/app/certs/internal
 
   waf-web:
     image: owasp/modsecurity-crs:nginx
@@ -104,8 +72,7 @@ services:
       public_network:
         ipv4_address: 10.20.1.13
     depends_on:
-      cert-gen:
-        condition: service_completed_successfully
+
       reverse-proxy-web:
         condition: service_healthy
 
@@ -131,8 +98,6 @@ services:
       public_network:
         ipv4_address: 10.20.1.14
     depends_on:
-      cert-gen:
-        condition: service_completed_successfully
       reverse-proxy-mobile:
         condition: service_healthy
 
@@ -154,6 +119,7 @@ services:
       HSTS_MAX_AGE: ${HSTS_MAX_AGE:-0}
     volumes:
       - ./Backend/waf/real-ip.conf:/etc/nginx/conf.d/real-ip.conf:ro
+      - ./certs/internal/reverse-proxy-web:/etc/nginx/tls:ro
       - type: bind
         source: ${INTERNAL_WEB_TLS_DIR:-./certs/internal/reverse-proxy-web}
         target: /etc/nginx/certs
@@ -166,7 +132,7 @@ services:
       private_api:
         ipv4_address: 10.20.2.10
     depends_on:
-      cert-gen:
+      init-internal-certs:
         condition: service_completed_successfully
       frontend:
         condition: service_healthy
@@ -190,6 +156,7 @@ services:
       HSTS_MAX_AGE: ${HSTS_MAX_AGE:-0}
     volumes:
       - ./Backend/waf/real-ip.conf:/etc/nginx/conf.d/real-ip.conf:ro
+      - ./certs/internal/reverse-proxy-mobile:/etc/nginx/tls:ro
       - type: bind
         source: ${INTERNAL_MOBILE_TLS_DIR:-./certs/internal/reverse-proxy-mobile}
         target: /etc/nginx/certs
@@ -202,10 +169,11 @@ services:
       private_api:
         ipv4_address: 10.20.2.11
     depends_on:
-      cert-gen:
-        condition: service_completed_successfully
+
       api-gateway-mobile:
         condition: service_healthy
+      init-internal-certs:
+        condition: service_completed_successfully
 
   frontend:
     <<: *service
