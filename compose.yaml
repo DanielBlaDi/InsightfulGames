@@ -25,7 +25,7 @@ x-waf-tls-env: &waf-tls-env
 
 x-edge-cert: &edge-cert
   type: bind
-  source: ${EDGE_TLS_DIR:?}            # tls.crt + tls.key (mkcert: localhost, 127.0.0.1, ::1, 10.0.2.2)
+  source: ${EDGE_TLS_DIR:-./certs/edge}
   target: /etc/nginx/edge-certs
   read_only: true
   bind:
@@ -33,44 +33,79 @@ x-edge-cert: &edge-cert
 
 x-internal-ca: &internal-ca
   type: bind
-  source: ${INTERNAL_CA_CERT:?}        # certs/internal/ca/ca.crt (public certificate only, never ca.key)
-  target: /etc/nginx/upstream-ca/ca.crt
+  source: ${INTERNAL_CA_DIR:-./certs/internal/ca}
+  target: /etc/nginx/upstream-ca
   read_only: true
-  bind:
-    create_host_path: false
 
 services:
+  cert-gen:
+    image: alpine/openssl:latest
+    container_name: cert-gen
+    restart: "no"
+    volumes:
+      - ./certs:/certs
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        mkdir -p /certs/edge /certs/internal/ca /certs/internal/reverse-proxy-web /certs/internal/reverse-proxy-mobile
+
+        if [ ! -f /certs/internal/ca/ca.crt ]; then
+          openssl req -x509 -newkey rsa:2048 -nodes -days 365 \
+            -keyout /certs/internal/ca/ca.key \
+            -out /certs/internal/ca/ca.crt \
+            -subj "/CN=InsightfulGames-Dev-CA"
+        fi
+
+        if [ ! -f /certs/edge/tls.crt ]; then
+          openssl req -newkey rsa:2048 -nodes \
+            -keyout /certs/edge/tls.key \
+            -out /tmp/edge.csr \
+            -subj "/CN=localhost"
+          printf "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:0:0:0:0:0:0:0:1,IP:10.0.2.2\n" > /tmp/edge.ext
+          openssl x509 -req -in /tmp/edge.csr -CA /certs/internal/ca/ca.crt -CAkey /certs/internal/ca/ca.key \
+            -CAcreateserial -out /certs/edge/tls.crt -days 365 -extfile /tmp/edge.ext
+        fi
+
+        for svc in reverse-proxy-web reverse-proxy-mobile; do
+          if [ ! -f "/certs/internal/$${svc}/tls.crt" ]; then
+            openssl req -newkey rsa:2048 -nodes \
+              -keyout "/certs/internal/$${svc}/tls.key" \
+              -out "/tmp/$${svc}.csr" \
+              -subj "/CN=$${svc}"
+            printf "subjectAltName=DNS:$${svc},DNS:localhost\n" > "/tmp/$${svc}.ext"
+            openssl x509 -req -in "/tmp/$${svc}.csr" -CA /certs/internal/ca/ca.crt -CAkey /certs/internal/ca/ca.key \
+              -CAcreateserial -out "/certs/internal/$${svc}/tls.crt" -days 365 -extfile "/tmp/$${svc}.ext"
+          fi
+        done
+
+        chmod -R a+r /certs
+
   waf-web:
     image: owasp/modsecurity-crs:nginx
     container_name: waf-web
     restart: unless-stopped
-
     environment:
       <<: *waf-tls-env
       BACKEND: "https://reverse-proxy-web:8443"
       PORT: "8080"
-      SSL_REDIRECT_PORT: ${FRONTEND_HTTPS_PORT:?}   # public HTTPS port used in the 301
+      SSL_REDIRECT_PORT: ${FRONTEND_HTTPS_PORT:-8443}
       MODSEC_RULE_ENGINE: "On"
       MODSEC_AUDIT_ENGINE: "RelevantOnly"
       MODSEC_AUDIT_LOG: "/dev/stdout"
-      # Approved by the WAF owner: CRS default (GET HEAD POST OPTIONS) + PATCH and DELETE used by the web
-      # gateway (DELETE /api/auth/account, PATCH /api/games|matches/{id}/visibility). Rule 911100 stays
-      # active for any other method; paranoia level and anomaly thresholds unchanged.
       ALLOWED_METHODS: "GET HEAD POST OPTIONS PATCH DELETE"
-
     ports:
-      - "${FRONTEND_PORT:?}:8080"          # HTTP: only 301 to HTTPS
-      - "${FRONTEND_HTTPS_PORT:?}:8443"    # HTTPS + WSS
-
+      - "${FRONTEND_PORT:-80}:8080"
+      - "${FRONTEND_HTTPS_PORT:-8443}:8443"
     volumes:
       - *edge-cert
       - *internal-ca
-
     networks:
       public_network:
         ipv4_address: 10.20.1.13
-
     depends_on:
+      cert-gen:
+        condition: service_completed_successfully
       reverse-proxy-web:
         condition: service_healthy
 
@@ -78,43 +113,28 @@ services:
     image: owasp/modsecurity-crs:nginx
     container_name: waf-mobile
     restart: unless-stopped
-
     environment:
       <<: *waf-tls-env
       BACKEND: "https://reverse-proxy-mobile:8443"
       PORT: "8080"
-      SSL_REDIRECT_PORT: ${MOBILE_HTTPS_PORT:?}
+      SSL_REDIRECT_PORT: ${MOBILE_HTTPS_PORT:-8444}
       MODSEC_RULE_ENGINE: "On"
       MODSEC_AUDIT_ENGINE: "RelevantOnly"
       MODSEC_AUDIT_LOG: "/dev/stdout"
-      # Approved by the WAF owner: CRS default + DELETE (DELETE /auth/account); the mobile gateway has no PATCH.
       ALLOWED_METHODS: "GET HEAD POST OPTIONS DELETE"
-
     ports:
-      - "${MOBILE_HTTPS_PORT:?}:8443"      # HTTPS only: mobile HTTP is not published
-
+      - "${MOBILE_HTTPS_PORT:-8444}:8443"
     volumes:
       - *edge-cert
       - *internal-ca
-
     networks:
       public_network:
         ipv4_address: 10.20.1.14
-
     depends_on:
+      cert-gen:
+        condition: service_completed_successfully
       reverse-proxy-mobile:
         condition: service_healthy
-
-  # =============================================================================================
-  # REVERSE PROXIES (PUBLIC SUBNETWORK 1 - 10.20.1.0/24) (PRIVATE SUBNETWORK 1 - 10.20.2.0/24)
-  # Routing:
-  #   - reverse-proxy-web (:8443 HTTPS/WSS)    -> frontend-component:80 and api-gateway-component:8080
-  #                       (:8000 HTTP)         -> only /health and 308 redirect to HTTPS
-  #   - reverse-proxy-mobile (:8443 HTTPS)     -> api-gateway-mobile:8090
-  #                          (:8090 HTTP)      -> only /health (healthcheck), not published
-  # Secure Channel Pattern (Prototype 3, scenario 1): the internal TLS channel ends here; see docs/secure-channel-tls.md.
-  # Certificates are mounted read-only from the host (never baked into the image or committed).
-  # =============================================================================================
 
   reverse-proxy-web:
     <<: *service
@@ -123,19 +143,19 @@ services:
       context: ./Backend/reverse-proxy
       dockerfile: Dockerfile
       args:
-        ENTRY: web            # nginx/common.conf + nginx/web.conf
+        ENTRY: web
         HEALTH_PORT: "8000"
     image: reverse-proxy-web:dev
     expose:
       - "8000"
       - "8443"
     environment:
-      PUBLIC_HTTPS_PORT: ${FRONTEND_HTTPS_PORT:?}   # port used in the HTTP -> HTTPS redirect
-      HSTS_MAX_AGE: ${HSTS_MAX_AGE:?}
+      PUBLIC_HTTPS_PORT: ${FRONTEND_HTTPS_PORT:-8443}
+      HSTS_MAX_AGE: ${HSTS_MAX_AGE:-0}
     volumes:
       - ./Backend/waf/real-ip.conf:/etc/nginx/conf.d/real-ip.conf:ro
       - type: bind
-        source: ${INTERNAL_WEB_TLS_DIR:?}      # certs/internal/reverse-proxy-web (SAN reverse-proxy-web)
+        source: ${INTERNAL_WEB_TLS_DIR:-./certs/internal/reverse-proxy-web}
         target: /etc/nginx/certs
         read_only: true
         bind:
@@ -146,6 +166,8 @@ services:
       private_api:
         ipv4_address: 10.20.2.10
     depends_on:
+      cert-gen:
+        condition: service_completed_successfully
       frontend:
         condition: service_healthy
       api-gateway-component:
@@ -158,18 +180,18 @@ services:
       context: ./Backend/reverse-proxy
       dockerfile: Dockerfile
       args:
-        ENTRY: mobile         # nginx/common.conf + nginx/mobile.conf
+        ENTRY: mobile
         HEALTH_PORT: "8090"
     image: reverse-proxy-mobile:dev
     expose:
       - "8090"
       - "8443"
     environment:
-      HSTS_MAX_AGE: ${HSTS_MAX_AGE:?}
+      HSTS_MAX_AGE: ${HSTS_MAX_AGE:-0}
     volumes:
       - ./Backend/waf/real-ip.conf:/etc/nginx/conf.d/real-ip.conf:ro
       - type: bind
-        source: ${INTERNAL_MOBILE_TLS_DIR:?}   # certs/internal/reverse-proxy-mobile (SAN reverse-proxy-mobile)
+        source: ${INTERNAL_MOBILE_TLS_DIR:-./certs/internal/reverse-proxy-mobile}
         target: /etc/nginx/certs
         read_only: true
         bind:
@@ -180,12 +202,11 @@ services:
       private_api:
         ipv4_address: 10.20.2.11
     depends_on:
+      cert-gen:
+        condition: service_completed_successfully
       api-gateway-mobile:
         condition: service_healthy
 
-  # =============================================================================================
-  # PRESENTATION (PRIVATE SUBNETWORK 1 - 10.20.2.0/24)
-  # =============================================================================================
   frontend:
     <<: *service
     container_name: frontend-component
@@ -204,9 +225,6 @@ services:
       api-gateway-component:
         condition: service_healthy
 
-  # =============================================================================================
-  # API GATEWAYS (PRIVATE SUBNETWORK 1 - 10.20.2.0/24) (PRIVATE SUBNETWORK 2 - 10.20.3.0/24)
-  # =============================================================================================
   api-gateway-mobile:
     <<: *service
     container_name: api-gateway-mobile
@@ -302,9 +320,6 @@ services:
       botcito-component:
         condition: service_healthy
 
-  # =============================================================================================
-  # BUSINESS LOGIC (PRIVATE SUBNETWORK 2 - 10.20.3.0/24)
-  # =============================================================================================
   auth-component:
     <<: *service
     container_name: auth-component
@@ -327,7 +342,6 @@ services:
       private_back:
         ipv4_address: 10.20.3.12
     healthcheck:
-      # eclipse-temurin JRE image does not include curl or wget; bash checks HTTP 200 on /health.
       test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8081 && printf 'GET /health HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3 && head -n 1 <&3 | grep -q '200'"]
       interval: 10s
       timeout: 5s
@@ -357,7 +371,6 @@ services:
       private_back:
         ipv4_address: 10.20.3.13
     healthcheck:
-      # eclipse-temurin JRE image does not include curl or wget; bash opens the TCP socket directly.
       test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8082 && printf 'GET /health HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3 && grep -q '\"ok\"' <&3"]
       interval: 10s
       timeout: 5s
@@ -538,7 +551,6 @@ services:
       private_back:
         ipv4_address: 10.20.3.19
     healthcheck:
-      # eclipse-temurin JRE image does not include curl or wget; bash opens the TCP socket directly.
       test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8087 && printf 'GET /health HTTP/1.0\r\nHost: localhost\r\n\r\n' >&3 && grep -q '\"ok\"' <&3"]
       interval: 10s
       timeout: 5s
@@ -550,9 +562,6 @@ services:
       rabbitmq:
         condition: service_healthy
 
-  # =============================================================================================
-  # WORKERS (PRIVATE SUBNETWORK 2 - 10.20.3.0/24)
-  # =============================================================================================
   timeout-worker:
     <<: *service
     container_name: timeout-worker
@@ -620,14 +629,10 @@ services:
       rabbitmq:
         condition: service_healthy
 
-  # =============================================================================================
-  # BROKER AND DATABASES (PRIVATE SUBNETWORK 2 - 10.20.3.0/24)
-  # =============================================================================================
   rabbitmq:
     <<: *service
     image: rabbitmq:3.13-management
     container_name: rabbitmq-broker
-    # Fixed hostname: RabbitMQ stores node state in a directory derived from the node name.
     hostname: rabbitmq
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:?}
