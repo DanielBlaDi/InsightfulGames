@@ -1,6 +1,7 @@
 Listado de rutas de carpetas para el volumen Windows 11
 El número de serie del volumen es B284-556B
 C:.
+¦   .env
 ¦   .env.example
 ¦   .gitattributes
 ¦   .gitignore
@@ -11,6 +12,7 @@ C:.
 ¦   LICENSE
 ¦   README.md
 ¦   tree.txt
+¦   wazaaaa.md
 ¦   
 +---backend
 ¦   ¦   .dockerignore
@@ -722,7 +724,6 @@ C:.
 ¦   ¦   ¦   gradlew
 ¦   ¦   ¦   gradlew.bat
 ¦   ¦   ¦   settings.gradle.kts
-¦   ¦   ¦   tree.txt
 ¦   ¦   ¦   
 ¦   ¦   +---docker
 ¦   ¦   ¦       timeout-worker
@@ -793,6 +794,13 @@ C:.
 ¦   +---waf
 ¦           real-ip.conf
 ¦           
++---certs
+¦   +---edge
+¦   +---internal
+¦       +---ca
+¦       ¦   +---ca.crt
+¦       +---reverse-proxy-mobile
+¦       +---reverse-proxy-web
 +---database
 ¦   ¦   README.md
 ¦   ¦   
