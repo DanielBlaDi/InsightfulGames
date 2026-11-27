@@ -6,7 +6,7 @@ del esquema y el Analysis Worker solo actualiza status, result y error.
 
 from __future__ import annotations
 
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
+from motor.motor_asyncio import AsyncIOMotorClient
 
 # Si Mongo no responde, las peticiones fallan rápido con 503 en lugar de
 # quedarse colgadas hasta el timeout del gateway.
@@ -21,7 +21,3 @@ def create_mongo_client(url: str) -> AsyncIOMotorClient:
         connectTimeoutMS=SERVER_SELECTION_TIMEOUT_MS,
         uuidRepresentation="standard",
     )
-
-
-def get_database(client: AsyncIOMotorClient, name: str) -> AsyncIOMotorDatabase:
-    return client[name]

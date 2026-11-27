@@ -75,7 +75,9 @@ class TutorService:
             )
         # userId de cada participante, sin repetir (en local el creador juega ambos colores)
         participant_ids = list(
-            dict.fromkeys(p for p in game.participantIds if isinstance(p, str) and p)
+            dict.fromkeys(
+                normalize_uuid(p, "participantIds") for p in game.participantIds
+            )
         )
 
         engine_version = self._settings.engine_version

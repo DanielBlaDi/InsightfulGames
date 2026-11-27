@@ -57,14 +57,7 @@ export default function () {
   const r = http.post(`${WEB}/api/games`, JSON.stringify({ mode: 'vs_bot', botLevel: NIVEL, playerColor: 'white' }),
     conCookie(u.token, { name: 'POST /api/games (vs_bot)', tipo: 'escritura' }));
   if (!check(r, { 'bot: crear partida 201': (x) => x.status === 201 })) {
-    errores.add(1, { ...tags, motivo: `crear-${r.status}` });
-    partidaOk.add(false, tags);
-    return;
-  }
-  const gameId = r.json('gameId');
-
-  const ws = new WebSocket(`${WS_WEB}/api/ws/games/${gameId}`, null, {
-    headers: { Cookie: `session=${u.token}`, Origin: ORIGEN },
+    errores.add(1, { ...tags, motivo: `crear-${r.status}` }); partidaOk.add(false, tags); return; } const gameId = r.json('gameId');  const ws = new WebSocket(`${WS_WEB}/api/ws/games/${gameId}`, null, { headers: { Cookie: `session=${u.token}`, Origin: ORIGEN },
     tags: { name: 'WSS /api/ws/games/{id}' },
   });
 
@@ -150,6 +143,12 @@ export default function () {
   ws.onerror = () => {
     errores.add(1, { ...tags, motivo: 'ws' });
     terminar(false);
+  };
+  ws.onclose = () => {
+    if (!terminado) {
+      errores.add(1, { ...tags, motivo: 'ws-cerrado' });
+      terminar(false);
+    }
   };
 }
 

@@ -1,4 +1,4 @@
-"""API sin estado para consultar Stockfish mediante UCI."""
+"""API para consultar Stockfish mediante UCI."""
 
 import logging
 import os
@@ -15,32 +15,33 @@ from pydantic import BaseModel, Field
 
 logger = logging.getLogger("botcito")
 
-
 class BotError(Exception):
     def __init__(self, status: int, code: str, message: str):
         self.status, self.code, self.message = status, code, message
-
 
 class MoveRequest(BaseModel):
     fen: str = Field(min_length=1, max_length=200, strict=True)
     level: int = Field(ge=1, le=20, strict=True)
 
+
 class InternalMoveRequest(BaseModel):
     fen: str = Field(min_length=1, max_length=200, strict=True)
     botLevel: int = Field(ge=1, le=20, strict=True)
 
+
 class Evaluation(BaseModel):
     type: Literal["cp", "mate"]
     value: int
-
 
 class MoveResponse(BaseModel):
     uci: str
     san: str
     evaluation: Evaluation
 
+
 class InternalEvaluation(Evaluation):
     perspective: Literal["side_to_move"] = "side_to_move"
+
 
 class InternalMoveResponse(BaseModel):
     uci: str
@@ -65,11 +66,9 @@ class AnalysisEvaluation(BaseModel):
     value: int
     perspective: Literal["white"] = "white"
 
-
 class AnalysisBestMove(BaseModel):
     uci: str
     san: str
-
 
 class AnalysisResponse(BaseModel):
     fen: str
@@ -77,10 +76,8 @@ class AnalysisResponse(BaseModel):
     bestMove: AnalysisBestMove | None
     depth: int
 
-
 class LegacyMoveResponse(MoveResponse):
     move: str
-
 
 def parse_position(fen: str) -> chess.Board:
     try:
@@ -115,7 +112,6 @@ def parse_analysis_position(fen: str) -> chess.Board:
         ) from exc
 
     return board
-
 
 def terminal_analysis_response(
     board: chess.Board,
@@ -156,7 +152,7 @@ class EngineSlot:
         self.lock = threading.Lock()
 
 class StockfishEngine:
-    """Un proceso por worker; exclusión mutua para no mezclar consultas UCI."""
+    """Pool de motores Stockfish con exclusión mutua por proceso UCI."""
 
     def __init__(self):
         self.path = os.getenv("STOCKFISH_PATH", "/usr/games/stockfish")
@@ -172,10 +168,8 @@ class StockfishEngine:
         ):
             raise ValueError("La configuración del motor debe ser positiva.")
 
-        self.lock = threading.Lock()
         self.engine: chess.engine.SimpleEngine | None = None
         self.slots = [EngineSlot() for _ in range(self.pool_size)]
-
 
     def _create_engine(self, startup_timeout: float):
         """Inicia y configura un proceso independiente de Stockfish."""
@@ -267,7 +261,6 @@ class StockfishEngine:
             except Exception:
                 logger.exception("Error al cerrar un motor Stockfish")
 
-
     def best_move(self, board: chess.Board, level: int) -> MoveResponse:
         """Calcula una jugada utilizando un motor disponible del pool."""
 
@@ -355,7 +348,6 @@ class StockfishEngine:
 
         finally:
             slot.lock.release()
-
 
     def evaluate_position(
         self,
@@ -456,7 +448,6 @@ class StockfishEngine:
         finally:
             slot.lock.release()
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     engine = StockfishEngine()
@@ -484,7 +475,6 @@ async def bot_error_handler(_request: Request, exc: BotError):
     return JSONResponse(status_code=exc.status, content={
         "error": {"code": exc.code, "message": exc.message}
     })
-
 
 @app.exception_handler(RequestValidationError)
 async def validation_error_handler(_request: Request, _exc: RequestValidationError):
@@ -522,7 +512,6 @@ def internal_best_move(data: InternalMoveRequest, request: Request):
 @game_router.post("/engine/best-move", response_model=MoveResponse)
 def best_move(data: MoveRequest, request: Request):
     return request.app.state.engine.best_move(parse_position(data.fen), data.level)
-
 
 @game_router.post("/best-move", response_model=LegacyMoveResponse)
 def legacy_best_move(data: MoveRequest, request: Request):

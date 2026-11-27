@@ -43,7 +43,7 @@ LEAF_DAYS = 397  # duración máxima que aceptan los clientes modernos para cert
 
 
 def now():
-    return dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=5)
+    return dt.datetime.now(dt.timezone.utc).replace(tzinfo=None) - dt.timedelta(minutes=5)
 
 
 def write_key(path, key):

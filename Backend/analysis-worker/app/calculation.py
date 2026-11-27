@@ -67,7 +67,6 @@ def parse_game_input(
         if isinstance(raw_move, str):
             uci = raw_move
             ply = index
-            provided_san = None
         elif isinstance(raw_move, Mapping):
             uci = raw_move.get("uci")
             raw_ply = raw_move.get("ply", index)
@@ -76,7 +75,6 @@ def parse_game_input(
                 if isinstance(raw_ply, int) and not isinstance(raw_ply, bool)
                 else index
             )
-            provided_san = raw_move.get("san")
         else:
             raise _permanent(f"La jugada {index} no tiene un formato válido.")
 
@@ -96,9 +94,6 @@ def parse_game_input(
             san = board.san(move)
         except (ValueError, AssertionError) as exc:
             raise _permanent(f"No se pudo calcular la SAN de la jugada {index}.") from exc
-
-        if not san and isinstance(provided_san, str) and provided_san.strip():
-            san = provided_san.strip()
 
         moves.append(
             GameMove(ply=ply, color=color, uci=uci.strip(), san=san)

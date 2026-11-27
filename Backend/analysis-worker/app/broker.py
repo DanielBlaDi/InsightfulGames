@@ -20,7 +20,6 @@ from app.config import (
 from app.messaging import (
     ACTION_ACK,
     ACTION_DLQ,
-    ACTION_REQUEUE,
     ACTION_RETRY,
     HandlerAction,
 )

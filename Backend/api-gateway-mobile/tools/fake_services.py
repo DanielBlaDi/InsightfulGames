@@ -1,3 +1,4 @@
+
 """Servicios SIMULADOS (Auth, Profile/Stats y Game Logic), solo para desarrollo de la app y del gateway móvil.
 
 El gateway móvil llama directamente a cada servicio. Este servidor atiende las rutas /internal/* de los
@@ -5,7 +6,7 @@ tres con datos simulados, para trabajar sin levantar los servicios reales.
 
 Uso (un solo puerto atiende a los tres servicios):
     JWT_SECRET=<el mismo del gateway móvil> uvicorn fake_services:app --port 8080
-    AUTH_URL=http://localhost:8080 PROFILE_URL=http://localhost:8080 GAME_LOGIC_URL=http://localhost:8080 \\
+    AUTH_URL=http://localhost:8080 PROFILE_URL=http://localhost:8080 GAME_LOGIC_URL=http://localhost:8080 \
         uvicorn main:app --port 8090
 Para mezclar real y simulado, apunta solo algunas de esas URLs a este servidor.
 
@@ -50,13 +51,22 @@ def _id(seed: str) -> str:
 @app.post("/internal/auth/register", status_code=201)
 def register(body: dict):
     username = body.get("username", "")
-    if not 3 <= len(username) <= 20 or len(body.get("password", "")) < 8:
+    password = body.get("password", "")
+
+    if (
+        not isinstance(username, str)
+        or not isinstance(password, str)
+        or not 3 <= len(username) <= 20
+        or len(password) < 8
+    ):
         return err(400, "VALIDATION_ERROR", "Campos inválidos")
+
     if username in USERS:
         return err(409, "USERNAME_TAKEN", "El nombre de usuario ya existe")
+
     USERS[username] = {
         "userId": str(uuid.uuid4()),
-        "password": body["password"],
+        "password": password,
         "createdAt": iso(datetime.now(timezone.utc)),
     }
     return {"userId": USERS[username]["userId"], "username": username}
@@ -65,8 +75,10 @@ def register(body: dict):
 @app.post("/internal/auth/login")
 def login(body: dict):
     user = USERS.get(body.get("username", ""))
+
     if not user or user["password"] != body.get("password"):
         return err(401, "INVALID_CREDENTIALS", "Usuario o contraseña incorrectos")
+
     token = jwt.encode(
         {"sub": user["userId"], "username": body["username"], "exp": int(time.time()) + 3600},
         JWT_SECRET,
@@ -98,16 +110,19 @@ def games_for(user_id: str) -> list[dict]:
         ("black", "surrender"), ("white", "abandonment"),
     ]
     out = []
+
     for i in range(N_GAMES):
         mode = modes[i % len(modes)]
         result, reason = finals[i % len(finals)]
         status = "finished"
+
         if i == 0 and mode == "multiplayer":
             status, result, reason = "in_progress", None, None
         if i == 3:
             mode, status, result, reason = "multiplayer", "finished", None, "expired"
         if i == 1:
             mode, status, result, reason = "multiplayer", "waiting", None, None
+
         game_id = _id(f"{user_id}-game-{i}")
         out.append({
             "gameId": game_id,
@@ -119,6 +134,7 @@ def games_for(user_id: str) -> list[dict]:
             "color": None if mode == "local" else ("white" if i % 2 == 0 else "black"),
             "createdAt": iso(base - timedelta(hours=3 * i)),
         })
+
     return out
 
 
@@ -127,11 +143,17 @@ def game_state(summary: dict, user_id: str) -> dict:
     me = {"userId": user_id, "color": summary["color"] or "white"}
     other = "black" if me["color"] == "white" else "white"
     participants = [me]
+
     if mode == "local":
-        participants = [{"userId": user_id, "color": "white"}, {"userId": user_id, "color": "black"}]
+        participants = [
+            {"userId": user_id, "color": "white"},
+            {"userId": user_id, "color": "black"},
+        ]
     elif mode == "multiplayer" and summary["status"] != "waiting" and summary["endReason"] != "expired":
         participants.append({"userId": _id("rival"), "color": other})
+
     sans = [("e4", "e2e4"), ("e5", "e7e5"), ("Nf3", "g1f3"), ("Nc6", "b8c6")]
+
     return {
         "gameId": summary["gameId"],
         "mode": mode,
@@ -147,8 +169,14 @@ def game_state(summary: dict, user_id: str) -> dict:
         "initialFen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
         "legalMoves": {},
         "moves": [
-            {"ply": i + 1, "color": "white" if i % 2 == 0 else "black", "san": s, "uci": u,
-             "fenAfter": "...", "timestamp": summary["createdAt"]}
+            {
+                "ply": i + 1,
+                "color": "white" if i % 2 == 0 else "black",
+                "san": s,
+                "uci": u,
+                "fenAfter": "...",
+                "timestamp": summary["createdAt"],
+            }
             for i, (s, u) in enumerate(sans)
         ],
         "drawOffer": None,
@@ -167,9 +195,11 @@ def game_state(summary: dict, user_id: str) -> dict:
 def profile(user_id: str):
     if "profile" in FAIL:
         return err(503, "SERVICES_UNAVAILABLE", "simulado")
+
     name, u = user_by_id(user_id)
     if not u:
         return err(404, "NOT_FOUND", "Perfil inexistente")
+
     return {"userId": user_id, "username": name, "createdAt": u["createdAt"]}
 
 
@@ -177,10 +207,17 @@ def profile(user_id: str):
 def stats(user_id: str):
     if "stats" in FAIL:
         return err(503, "SERVICES_UNAVAILABLE", "simulado")
+
     played = [g for g in games_for(user_id) if g["mode"] == "multiplayer" and g["result"]]
     wins = sum(1 for g in played if g["result"] == g["color"])
     draws = sum(1 for g in played if g["result"] == "draw")
-    return {"gamesPlayed": len(played), "wins": wins, "losses": len(played) - wins - draws, "draws": draws}
+
+    return {
+        "gamesPlayed": len(played),
+        "wins": wins,
+        "losses": len(played) - wins - draws,
+        "draws": draws,
+    }
 
 
 # ------------------------------------------------------------------- partidas
@@ -190,11 +227,19 @@ def stats(user_id: str):
 def list_games(userId: str, limit: int = Query(20, ge=1, le=20), cursor: str | None = None):
     if "recentGames" in FAIL:
         return err(503, "SERVICES_UNAVAILABLE", "simulado")
-    offset = int(base64.urlsafe_b64decode(cursor.encode()).decode()) if cursor else 0
+
+    try:
+        offset = int(base64.b64decode(cursor, altchars=b"-_", validate=True).decode()) if cursor else 0
+        if offset < 0:
+            raise ValueError
+    except (ValueError, UnicodeDecodeError):
+        return err(400, "INVALID_CURSOR", "Cursor inválido")
+
     games = games_for(userId)
-    page = games[offset: offset + limit]
+    page = games[offset:offset + limit]
     nxt = offset + limit
     next_cursor = base64.urlsafe_b64encode(str(nxt).encode()).decode() if nxt < len(games) else None
+
     return {"items": page, "nextCursor": next_cursor}
 
 
@@ -205,20 +250,25 @@ def _find_any(key: str, value: str):
         g = next((g for g in games_for(user["userId"]) if g[key] == value), None)
         if g:
             return user["userId"], g
+
     return None, None
 
 
 @app.get("/internal/logic/games/by-match/{match_id}")
 def logic_game_by_match(match_id: str):
     user_id, g = _find_any("matchId", match_id)
+
     if not g:
         return err(404, "GAME_NOT_FOUND", "La partida no existe")
+
     return game_state(g, user_id)
 
 
 @app.get("/internal/logic/games/{game_id}")
 def logic_game(game_id: str):
     user_id, g = _find_any("gameId", game_id)
+
     if not g:
         return err(404, "GAME_NOT_FOUND", "La partida no existe")
+
     return game_state(g, user_id)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import os
 import socket
 import uuid
@@ -43,7 +44,10 @@ def _float_env(name: str, default: float) -> float:
     if raw is None or not raw.strip():
         return default
     try:
-        return float(raw.strip())
+        value = float(raw.strip())
+        if not math.isfinite(value):
+            raise ValueError
+        return value
     except ValueError as exc:
         raise ValueError(f"{name} debe ser un número, se recibió {raw!r}") from exc
 

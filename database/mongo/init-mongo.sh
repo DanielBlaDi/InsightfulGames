@@ -2,13 +2,9 @@
 #!/bin/bash
 set -eu
 
-js_escape() {
-  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
-}
-
-DB_NAME=$(js_escape "$MONGO_APP_DATABASE")
-APP_USER=$(js_escape "$MONGO_APP_USERNAME")
-APP_PASSWORD=$(js_escape "$MONGO_APP_PASSWORD")
+DB_NAME=$(jq -Rn --arg value "$MONGO_APP_DATABASE" '$value')
+APP_USER=$(jq -Rn --arg value "$MONGO_APP_USERNAME" '$value')
+APP_PASSWORD=$(jq -Rn --arg value "$MONGO_APP_PASSWORD" '$value')
 
 mongosh \
   --username "$MONGO_INITDB_ROOT_USERNAME" \
@@ -16,9 +12,9 @@ mongosh \
   --authenticationDatabase admin \
   --quiet \
   --eval "
-    const databaseName = \"$DB_NAME\";
-    const appUsername = \"$APP_USER\";
-    const appPassword = \"$APP_PASSWORD\";
+    const databaseName = $DB_NAME;
+    const appUsername = $APP_USER;
+    const appPassword = $APP_PASSWORD;
 
     const appDb = db.getSiblingDB(databaseName);
 

@@ -39,7 +39,7 @@ el login tiene un límite de 10 peticiones/s por IP.
 En `flujos.js` el 60 % de los VUs navega la web (páginas SSR y la API del historial) y el 40 % usa la app (inicio,
 historial, detalle, estadísticas y, en el 30 % de las sesiones, una partida local). Cada VU hace pausas de 1 a 3 s.
 Variables: `WEB_URL`, `MOVIL_URL`, `WEB_ORIGIN`, `PROB_ESCRITURA`; en el bot, `JUGADAS`, `BOT_NIVEL`,
-`CONCURRENCIA` (p. ej. `1,2,4`) y `DURACION_NIVEL`; en el login, `TASA`.
+`CONCURRENCIA` (p. ej. `1,2,4`) y `DURACION_NIVEL`; en el login, `TASA`; en `preparar.js`, `CLAVE_USUARIOS` y `USUARIOS`.
 
 ## Resultados (`performance/resultados/`)
 

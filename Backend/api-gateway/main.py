@@ -25,7 +25,14 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from orchestration import account, analyses, multiplayer, single_player, upstream, ws_session
+from orchestration import (
+    account,
+    analyses,
+    multiplayer,
+    single_player,
+    upstream,
+    ws_session,
+)
 from orchestration.context import BackgroundTasks, Ctx, GameLocks
 from orchestration.errors import FlowError
 from orchestration.errors import (
@@ -126,7 +133,10 @@ app = FastAPI(title="Insightful Games - API Gateway web", lifespan=lifespan)
 
 
 def error_response(status: int, code: str, message: str) -> JSONResponse:
-    return JSONResponse(status_code=status, content={"error": {"code": code, "message": message}})
+    return JSONResponse(
+        status_code=status,
+        content={"error": {"code": code, "message": message}},
+    )
 
 
 @app.exception_handler(GatewayError)
@@ -276,10 +286,13 @@ def relay(
         return JSONResponse(status_code=status, content=payload, headers=extra)
 
     out_status, code, message = translate_error(
-        status, service=service, conflict_code=conflict_code,
-        unauthorized_code=unauthorized_code, not_found_codes=NOT_FOUND_CODE,
+        status,
+        service=service,
+        conflict_code=conflict_code,
+        unauthorized_code=unauthorized_code,
+        not_found_codes=NOT_FOUND_CODE,
     )
-    return error_response(out_status, code, message, ) if not extra else JSONResponse(
+    return error_response(out_status, code, message) if not extra else JSONResponse(
         status_code=out_status,
         content={"error": {"code": code, "message": message}},
         headers=extra,
@@ -304,7 +317,11 @@ def _ctx(conn: Request | WebSocket) -> Ctx:
     if getattr(state, "tasks", None) is None:
         state.tasks = BackgroundTasks()
     return Ctx(
-        client=state.client, upstreams=UPSTREAMS, locks=state.locks, timeout=HTTP_TIMEOUT, tasks=state.tasks
+        client=state.client,
+        upstreams=UPSTREAMS,
+        locks=state.locks,
+        timeout=HTTP_TIMEOUT,
+        tasks=state.tasks,
     )
 
 
@@ -394,7 +411,8 @@ async def list_games(
 async def get_game(game_id: str, request: Request, user_id: str = Depends(current_user)):
     if not UUID_RE.match(game_id):
         return _not_found("GAME_NOT_FOUND")
-    return JSONResponse(content=await single_player.get_game(_ctx(request), user_id, game_id))
+    state = await single_player.get_game(_ctx(request), user_id, game_id)
+    return JSONResponse(content=state)
 
 
 @app.post("/games/{game_id}/resign")

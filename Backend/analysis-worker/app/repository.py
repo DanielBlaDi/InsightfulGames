@@ -204,7 +204,6 @@ class AnalysisRepository:
         """Lista pending antiguos y processing con lease vencido."""
         stale_ms = _stale_ms(stale_seconds)
         pipeline = [
-            {"$set": {"_now": "$$NOW"}},
             {
                 "$match": {
                     "$expr": {

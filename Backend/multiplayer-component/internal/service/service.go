@@ -219,6 +219,12 @@ func (s *Service) HandleGameFinished(ctx context.Context, eventID, matchID strin
 	}
 	session.mu.Lock()
 	defer session.mu.Unlock()
+	s.mu.Lock()
+	_, processed := s.processedEvent[eventID]
+	s.mu.Unlock()
+	if processed {
+		return nil
+	}
 	response, err := s.logic.Get(ctx, session.state.GameID)
 	if err != nil {
 		return err

@@ -1,0 +1,1158 @@
+Listado de rutas de carpetas para el volumen Windows 11
+El número de serie del volumen es B284-556B
+C:.
+¦   .env.example
+¦   .gitattributes
+¦   .gitignore
+¦   CLAUDE.md
+¦   compose.yaml
+¦   DEPLOYMENT_HANDOFF.md
+¦   DOCKER_DEPLOYMENT.md
+¦   LICENSE
+¦   README.md
+¦   tree.txt
+¦   
++---backend
+¦   ¦   .dockerignore
+¦   ¦   documentation.md
+¦   ¦   
+¦   +---analysis-worker
+¦   ¦   ¦   .dockerignore
+¦   ¦   ¦   Dockerfile
+¦   ¦   ¦   main.py
+¦   ¦   ¦   pytest.ini
+¦   ¦   ¦   README.md
+¦   ¦   ¦   requirements-dev.txt
+¦   ¦   ¦   requirements.txt
+¦   ¦   ¦   
+¦   ¦   +---app
+¦   ¦   ¦       broker.py
+¦   ¦   ¦       calculation.py
+¦   ¦   ¦       config.py
+¦   ¦   ¦       consumer.py
+¦   ¦   ¦       db.py
+¦   ¦   ¦       engine.py
+¦   ¦   ¦       errors.py
+¦   ¦   ¦       game_logic.py
+¦   ¦   ¦       http_utils.py
+¦   ¦   ¦       messaging.py
+¦   ¦   ¦       models.py
+¦   ¦   ¦       poller.py
+¦   ¦   ¦       processor.py
+¦   ¦   ¦       repository.py
+¦   ¦   ¦       timeutils.py
+¦   ¦   ¦       __init__.py
+¦   ¦   ¦       
+¦   ¦   +---tests
+¦   ¦           conftest.py
+¦   ¦           test_broker.py
+¦   ¦           test_calculation.py
+¦   ¦           test_clients.py
+¦   ¦           test_config.py
+¦   ¦           test_health.py
+¦   ¦           test_integration_mongo.py
+¦   ¦           test_integration_rabbit.py
+¦   ¦           test_messaging.py
+¦   ¦           test_poller.py
+¦   ¦           test_processor.py
+¦   ¦           __init__.py
+¦   ¦           
+¦   +---api-gateway
+¦   ¦   ¦   conftest.py
+¦   ¦   ¦   Dockerfile
+¦   ¦   ¦   main.py
+¦   ¦   ¦   requirements-dev.txt
+¦   ¦   ¦   requirements.txt
+¦   ¦   ¦   
+¦   ¦   +---tests
+¦   ¦           test_account_saga.py
+¦   ¦           test_gateway.py
+¦   ¦           test_mp_ws_frames.py
+¦   ¦           test_multiplayer_flows.py
+¦   ¦           test_single_player_flows.py
+¦   ¦           test_tutor_flows.py
+¦   ¦           test_upstream.py
+¦   ¦           test_ws_frames.py
+¦   ¦           
+¦   +---api-gateway-mobile
+¦   ¦   ¦   conftest.py
+¦   ¦   ¦   Dockerfile
+¦   ¦   ¦   main.py
+¦   ¦   ¦   README.md
+¦   ¦   ¦   requirements-dev.txt
+¦   ¦   ¦   requirements.txt
+¦   ¦   ¦   
+¦   ¦   +---tests
+¦   ¦   ¦       test_account_saga.py
+¦   ¦   ¦       test_e2e_mixed.py
+¦   ¦   ¦       test_gateway.py
+¦   ¦   ¦       test_local_games.py
+¦   ¦   ¦       
+¦   ¦   +---tools
+¦   ¦           fake_services.py
+¦   ¦           
+¦   +---auth-component
+¦   ¦   ¦   .gitattributes
+¦   ¦   ¦   .gitignore
+¦   ¦   ¦   Dockerfile
+¦   ¦   ¦   mvnw
+¦   ¦   ¦   mvnw.cmd
+¦   ¦   ¦   pom.xml
+¦   ¦   ¦   READMEAPI.md
+¦   ¦   ¦   
+¦   ¦   +---.mvn
+¦   ¦   ¦   +---wrapper
+¦   ¦   ¦           maven-wrapper.properties
+¦   ¦   ¦           
+¦   ¦   +---src
+¦   ¦   ¦   +---main
+¦   ¦   ¦   ¦   +---java
+¦   ¦   ¦   ¦   ¦   +---com
+¦   ¦   ¦   ¦   ¦       +---prototipo
+¦   ¦   ¦   ¦   ¦           +---auth
+¦   ¦   ¦   ¦   ¦               ¦   AuthComponentApplication.java
+¦   ¦   ¦   ¦   ¦               ¦   
+¦   ¦   ¦   ¦   ¦               +---config
+¦   ¦   ¦   ¦   ¦               ¦       ClockConfig.java
+¦   ¦   ¦   ¦   ¦               ¦       
+¦   ¦   ¦   ¦   ¦               +---controller
+¦   ¦   ¦   ¦   ¦               ¦       AuthController.java
+¦   ¦   ¦   ¦   ¦               ¦       HealthController.java
+¦   ¦   ¦   ¦   ¦               ¦       
+¦   ¦   ¦   ¦   ¦               +---dto
+¦   ¦   ¦   ¦   ¦               ¦       LoginRequest.java
+¦   ¦   ¦   ¦   ¦               ¦       LoginResponse.java
+¦   ¦   ¦   ¦   ¦               ¦       RegisterRequest.java
+¦   ¦   ¦   ¦   ¦               ¦       RegisterResponse.java
+¦   ¦   ¦   ¦   ¦               ¦       UserResponse.java
+¦   ¦   ¦   ¦   ¦               ¦       
+¦   ¦   ¦   ¦   ¦               +---entity
+¦   ¦   ¦   ¦   ¦               ¦       User.java
+¦   ¦   ¦   ¦   ¦               ¦       
+¦   ¦   ¦   ¦   ¦               +---events
+¦   ¦   ¦   ¦   ¦               ¦       UserEventsTopology.java
+¦   ¦   ¦   ¦   ¦               ¦       UserRegistered.java
+¦   ¦   ¦   ¦   ¦               ¦       
+¦   ¦   ¦   ¦   ¦               +---exception
+¦   ¦   ¦   ¦   ¦               ¦       ApiException.java
+¦   ¦   ¦   ¦   ¦               ¦       GlobalExceptionHandler.java
+¦   ¦   ¦   ¦   ¦               ¦       
+¦   ¦   ¦   ¦   ¦               +---outbox
+¦   ¦   ¦   ¦   ¦               ¦       EventSender.java
+¦   ¦   ¦   ¦   ¦               ¦       OutboxEvent.java
+¦   ¦   ¦   ¦   ¦               ¦       OutboxRelay.java
+¦   ¦   ¦   ¦   ¦               ¦       OutboxRepository.java
+¦   ¦   ¦   ¦   ¦               ¦       OutboxScheduler.java
+¦   ¦   ¦   ¦   ¦               ¦       RabbitEventSender.java
+¦   ¦   ¦   ¦   ¦               ¦       UserRegisteredOutbox.java
+¦   ¦   ¦   ¦   ¦               ¦       
+¦   ¦   ¦   ¦   ¦               +---repository
+¦   ¦   ¦   ¦   ¦               ¦       UserRepository.java
+¦   ¦   ¦   ¦   ¦               ¦       
+¦   ¦   ¦   ¦   ¦               +---security
+¦   ¦   ¦   ¦   ¦               ¦       JwtService.java
+¦   ¦   ¦   ¦   ¦               ¦       SecurityConfig.java
+¦   ¦   ¦   ¦   ¦               ¦       
+¦   ¦   ¦   ¦   ¦               +---service
+¦   ¦   ¦   ¦   ¦                       AuthService.java
+¦   ¦   ¦   ¦   ¦                       
+¦   ¦   ¦   ¦   +---resources
+¦   ¦   ¦   ¦       ¦   application.yaml
+¦   ¦   ¦   ¦       ¦   
+¦   ¦   ¦   ¦       +---db
+¦   ¦   ¦   ¦               outbox.sql
+¦   ¦   ¦   ¦               
+¦   ¦   ¦   +---test
+¦   ¦   ¦       +---java
+¦   ¦   ¦       ¦   +---com
+¦   ¦   ¦       ¦       +---prototipo
+¦   ¦   ¦       ¦           +---auth
+¦   ¦   ¦       ¦                   AccountDeletionTest.java
+¦   ¦   ¦       ¦                   AuthComponentApplicationTests.java
+¦   ¦   ¦       ¦                   AuthIntegrationTest.java
+¦   ¦   ¦       ¦                   
+¦   ¦   ¦       +---resources
+¦   ¦   ¦               application-test.yaml
+¦   ¦   ¦               
+¦   ¦   +---target
+¦   ¦       +---classes
+¦   ¦       ¦   ¦   application.yaml
+¦   ¦       ¦   ¦   
+¦   ¦       ¦   +---com
+¦   ¦       ¦   ¦   +---prototipo
+¦   ¦       ¦   ¦       +---auth
+¦   ¦       ¦   ¦           ¦   AuthComponentApplication.class
+¦   ¦       ¦   ¦           ¦   
+¦   ¦       ¦   ¦           +---config
+¦   ¦       ¦   ¦           ¦       ClockConfig.class
+¦   ¦       ¦   ¦           ¦       
+¦   ¦       ¦   ¦           +---controller
+¦   ¦       ¦   ¦           ¦       AuthController.class
+¦   ¦       ¦   ¦           ¦       HealthController.class
+¦   ¦       ¦   ¦           ¦       
+¦   ¦       ¦   ¦           +---dto
+¦   ¦       ¦   ¦           ¦       LoginRequest.class
+¦   ¦       ¦   ¦           ¦       LoginResponse.class
+¦   ¦       ¦   ¦           ¦       RegisterRequest.class
+¦   ¦       ¦   ¦           ¦       RegisterResponse.class
+¦   ¦       ¦   ¦           ¦       UserResponse.class
+¦   ¦       ¦   ¦           ¦       
+¦   ¦       ¦   ¦           +---entity
+¦   ¦       ¦   ¦           ¦       User.class
+¦   ¦       ¦   ¦           ¦       
+¦   ¦       ¦   ¦           +---events
+¦   ¦       ¦   ¦           ¦       UserEventsTopology.class
+¦   ¦       ¦   ¦           ¦       UserRegistered.class
+¦   ¦       ¦   ¦           ¦       
+¦   ¦       ¦   ¦           +---exception
+¦   ¦       ¦   ¦           ¦       ApiException.class
+¦   ¦       ¦   ¦           ¦       GlobalExceptionHandler.class
+¦   ¦       ¦   ¦           ¦       
+¦   ¦       ¦   ¦           +---outbox
+¦   ¦       ¦   ¦           ¦       EventSender.class
+¦   ¦       ¦   ¦           ¦       OutboxEvent.class
+¦   ¦       ¦   ¦           ¦       OutboxRelay.class
+¦   ¦       ¦   ¦           ¦       OutboxRepository.class
+¦   ¦       ¦   ¦           ¦       OutboxScheduler.class
+¦   ¦       ¦   ¦           ¦       RabbitEventSender.class
+¦   ¦       ¦   ¦           ¦       UserRegisteredOutbox.class
+¦   ¦       ¦   ¦           ¦       
+¦   ¦       ¦   ¦           +---repository
+¦   ¦       ¦   ¦           ¦       UserRepository.class
+¦   ¦       ¦   ¦           ¦       
+¦   ¦       ¦   ¦           +---security
+¦   ¦       ¦   ¦           ¦       JwtService.class
+¦   ¦       ¦   ¦           ¦       SecurityConfig.class
+¦   ¦       ¦   ¦           ¦       
+¦   ¦       ¦   ¦           +---service
+¦   ¦       ¦   ¦                   AuthService.class
+¦   ¦       ¦   ¦                   
+¦   ¦       ¦   +---db
+¦   ¦       ¦           outbox.sql
+¦   ¦       ¦           
+¦   ¦       +---test-classes
+¦   ¦           ¦   application-test.yaml
+¦   ¦           ¦   
+¦   ¦           +---com
+¦   ¦               +---prototipo
+¦   ¦                   +---auth
+¦   ¦                           AccountDeletionTest.class
+¦   ¦                           AuthComponentApplicationTests.class
+¦   ¦                           AuthIntegrationTest.class
+¦   ¦                           
+¦   +---botcito-component
+¦   ¦   ¦   .dockerignore
+¦   ¦   ¦   Dockerfile
+¦   ¦   ¦   main.py
+¦   ¦   ¦   README.md
+¦   ¦   ¦   requirements-dev.txt
+¦   ¦   ¦   requirements.txt
+¦   ¦   ¦   
+¦   ¦   +---tests
+¦   ¦   ¦       test_analysis_api.py
+¦   ¦   ¦       test_api.py
+¦   ¦   ¦       test_internal_api.py
+¦   ¦   ¦       test_startup.py
+¦   ¦   ¦       
+¦   ¦   +---tools
+¦   ¦           prueba-integracion.html
+¦   ¦           
+¦   +---GameLogic
+¦   ¦   ¦   .dockerignore
+¦   ¦   ¦   .gitattributes
+¦   ¦   ¦   .gitignore
+¦   ¦   ¦   build.gradle.kts
+¦   ¦   ¦   Dockerfile
+¦   ¦   ¦   gradlew
+¦   ¦   ¦   gradlew.bat
+¦   ¦   ¦   settings.gradle.kts
+¦   ¦   ¦   
+¦   ¦   +---.gradle
+¦   ¦   ¦   +---9.7.1
+¦   ¦   ¦   ¦   ¦   gc.properties
+¦   ¦   ¦   ¦   ¦   
+¦   ¦   ¦   ¦   +---checksums
+¦   ¦   ¦   ¦   ¦       checksums.lock
+¦   ¦   ¦   ¦   ¦       
+¦   ¦   ¦   ¦   +---expanded
+¦   ¦   ¦   ¦   +---fileChanges
+¦   ¦   ¦   ¦   ¦       last-build.bin
+¦   ¦   ¦   ¦   ¦       
+¦   ¦   ¦   ¦   +---fileHashes
+¦   ¦   ¦   ¦   ¦       fileHashes.bin
+¦   ¦   ¦   ¦   ¦       fileHashes.lock
+¦   ¦   ¦   ¦   ¦       
+¦   ¦   ¦   ¦   +---vcsMetadata
+¦   ¦   ¦   +---buildOutputCleanup
+¦   ¦   ¦   ¦       buildOutputCleanup.lock
+¦   ¦   ¦   ¦       cache.properties
+¦   ¦   ¦   ¦       
+¦   ¦   ¦   +---vcs-1
+¦   ¦   ¦           gc.properties
+¦   ¦   ¦           
+¦   ¦   +---build
+¦   ¦   ¦   +---reports
+¦   ¦   ¦       +---problems
+¦   ¦   ¦               problems-report.html
+¦   ¦   ¦               
+¦   ¦   +---gradle
+¦   ¦   ¦   +---wrapper
+¦   ¦   ¦           gradle-wrapper.jar
+¦   ¦   ¦           gradle-wrapper.properties
+¦   ¦   ¦           
+¦   ¦   +---src
+¦   ¦       +---docs
+¦   ¦       ¦   +---asciidoc
+¦   ¦       ¦           index.adoc
+¦   ¦       ¦           
+¦   ¦       +---main
+¦   ¦       ¦   +---java
+¦   ¦       ¦   ¦   +---chess
+¦   ¦       ¦   ¦       ¦   ChessApplication.java
+¦   ¦       ¦   ¦       ¦   
+¦   ¦       ¦   ¦       +---constants
+¦   ¦       ¦   ¦       ¦       Color.java
+¦   ¦       ¦   ¦       ¦       EndReason.java
+¦   ¦       ¦   ¦       ¦       Mode.java
+¦   ¦       ¦   ¦       ¦       Result.java
+¦   ¦       ¦   ¦       ¦       Status.java
+¦   ¦       ¦   ¦       ¦       Visibility.java
+¦   ¦       ¦   ¦       ¦       
+¦   ¦       ¦   ¦       +---exceptions
+¦   ¦       ¦   ¦       ¦       CannotJoinMatchException.java
+¦   ¦       ¦   ¦       ¦       CannotOfferDrawException.java
+¦   ¦       ¦   ¦       ¦       CannotReplyToDrawException.java
+¦   ¦       ¦   ¦       ¦       ClockException.java
+¦   ¦       ¦   ¦       ¦       CreationKeyException.java
+¦   ¦       ¦   ¦       ¦       ExceptionWithNamedCode.java
+¦   ¦       ¦   ¦       ¦       ExceptionWithNamedCodeAdvice.java
+¦   ¦       ¦   ¦       ¦       MatchNotFinishedException.java
+¦   ¦       ¦   ¦       ¦       MatchNotFoundException.java
+¦   ¦       ¦   ¦       ¦       MatchNotInProgressException.java
+¦   ¦       ¦   ¦       ¦       MovementNotValidException.java
+¦   ¦       ¦   ¦       ¦       ParticipantsInvalidException.java
+¦   ¦       ¦   ¦       ¦       RequestNotValidException.java
+¦   ¦       ¦   ¦       ¦       VersionConflictException.java
+¦   ¦       ¦   ¦       ¦       
+¦   ¦       ¦   ¦       +---matches
+¦   ¦       ¦   ¦       ¦       ChessRules.java
+¦   ¦       ¦   ¦       ¦       Clocks.java
+¦   ¦       ¦   ¦       ¦       CreateMatchRequest.java
+¦   ¦       ¦   ¦       ¦       ExpectedVersionRequestBody.java
+¦   ¦       ¦   ¦       ¦       ExpiredQueryResponse.java
+¦   ¦       ¦   ¦       ¦       FinishedEventRelay.java
+¦   ¦       ¦   ¦       ¦       GamesPage.java
+¦   ¦       ¦   ¦       ¦       GameState.java
+¦   ¦       ¦   ¦       ¦       GameSummary.java
+¦   ¦       ¦   ¦       ¦       JoinMatchRequestBody.java
+¦   ¦       ¦   ¦       ¦       Match.java
+¦   ¦       ¦   ¦       ¦       MatchAnalysis.java
+¦   ¦       ¦   ¦       ¦       MatchAssembler.java
+¦   ¦       ¦   ¦       ¦       MatchController.java
+¦   ¦       ¦   ¦       ¦       MatchFinishedMessage.java
+¦   ¦       ¦   ¦       ¦       MatchRepository.java
+¦   ¦       ¦   ¦       ¦       MatchResultRequest.java
+¦   ¦       ¦   ¦       ¦       Participant.java
+¦   ¦       ¦   ¦       ¦       RabbitPublisher.java
+¦   ¦       ¦   ¦       ¦       TimeControl.java
+¦   ¦       ¦   ¦       ¦       TimeoutResponse.java
+¦   ¦       ¦   ¦       ¦       UpdateVisibilityRequest.java
+¦   ¦       ¦   ¦       ¦       
+¦   ¦       ¦   ¦       +---movements
+¦   ¦       ¦   ¦               Movement.java
+¦   ¦       ¦   ¦               MovementCreationEssentials.java
+¦   ¦       ¦   ¦               
+¦   ¦       ¦   +---resources
+¦   ¦       ¦           application.properties
+¦   ¦       ¦           
+¦   ¦       +---test
+¦   ¦           +---java
+¦   ¦               +---chess
+¦   ¦                       ChessApplicationHTTPTests.java
+¦   ¦                       ChessApplicationTests.java
+¦   ¦                       ChessRulesTest.java
+¦   ¦                       CreationIdempotencyHTTPTests.java
+¦   ¦                       DrawOfferHTTPTests.java
+¦   ¦                       FinishedEventOrderHTTPTests.java
+¦   ¦                       FinishedEventOutboxMongoTest.java
+¦   ¦                       MatchFingerprintMongoTest.java
+¦   ¦                       RabbitPublisherTest.java
+¦   ¦                       UntimedMatchHTTPTests.java
+¦   ¦                       
+¦   +---GameService
+¦   ¦   ¦   .gitignore
+¦   ¦   ¦   Dockerfile
+¦   ¦   ¦   pom.xml
+¦   ¦   ¦   README.md
+¦   ¦   ¦   
+¦   ¦   +---src
+¦   ¦   ¦   +---main
+¦   ¦   ¦   ¦   +---java
+¦   ¦   ¦   ¦   ¦   +---com
+¦   ¦   ¦   ¦   ¦       +---chess
+¦   ¦   ¦   ¦   ¦           +---gameservice
+¦   ¦   ¦   ¦   ¦               ¦   GameServiceApplication.java
+¦   ¦   ¦   ¦   ¦               ¦   
+¦   ¦   ¦   ¦   ¦               +---client
+¦   ¦   ¦   ¦   ¦               ¦       GameLogicClient.java
+¦   ¦   ¦   ¦   ¦               ¦       RestClients.java
+¦   ¦   ¦   ¦   ¦               ¦       
+¦   ¦   ¦   ¦   ¦               +---config
+¦   ¦   ¦   ¦   ¦               ¦       RabbitTopology.java
+¦   ¦   ¦   ¦   ¦               ¦       WebSocketConfig.java
+¦   ¦   ¦   ¦   ¦               ¦       
+¦   ¦   ¦   ¦   ¦               +---error
+¦   ¦   ¦   ¦   ¦               ¦       ApiException.java
+¦   ¦   ¦   ¦   ¦               ¦       ApiExceptionAdvice.java
+¦   ¦   ¦   ¦   ¦               ¦       
+¦   ¦   ¦   ¦   ¦               +---events
+¦   ¦   ¦   ¦   ¦               ¦       GameFinishedListener.java
+¦   ¦   ¦   ¦   ¦               ¦       
+¦   ¦   ¦   ¦   ¦               +---model
+¦   ¦   ¦   ¦   ¦               ¦       Clocks.java
+¦   ¦   ¦   ¦   ¦               ¦       GameState.java
+¦   ¦   ¦   ¦   ¦               ¦       MoveEntry.java
+¦   ¦   ¦   ¦   ¦               ¦       Participant.java
+¦   ¦   ¦   ¦   ¦               ¦       PublishRequest.java
+¦   ¦   ¦   ¦   ¦               ¦       TimeControl.java
+¦   ¦   ¦   ¦   ¦               ¦       
+¦   ¦   ¦   ¦   ¦               +---rest
+¦   ¦   ¦   ¦   ¦               ¦       GameController.java
+¦   ¦   ¦   ¦   ¦               ¦       
+¦   ¦   ¦   ¦   ¦               +---service
+¦   ¦   ¦   ¦   ¦               ¦       SinglePlayerService.java
+¦   ¦   ¦   ¦   ¦               ¦       
+¦   ¦   ¦   ¦   ¦               +---websocket
+¦   ¦   ¦   ¦   ¦                       GameChannels.java
+¦   ¦   ¦   ¦   ¦                       GameWebSocketHandler.java
+¦   ¦   ¦   ¦   ¦                       WsMessage.java
+¦   ¦   ¦   ¦   ¦                       
+¦   ¦   ¦   ¦   +---resources
+¦   ¦   ¦   ¦           application.yml
+¦   ¦   ¦   ¦           
+¦   ¦   ¦   +---test
+¦   ¦   ¦       +---java
+¦   ¦   ¦           +---com
+¦   ¦   ¦               +---chess
+¦   ¦   ¦                   +---gameservice
+¦   ¦   ¦                       ¦   FakeGameLogic.java
+¦   ¦   ¦                       ¦   SinglePlayerIntegrationTest.java
+¦   ¦   ¦                       ¦   
+¦   ¦   ¦                       +---events
+¦   ¦   ¦                       ¦       GameFinishedListenerTest.java
+¦   ¦   ¦                       ¦       
+¦   ¦   ¦                       +---model
+¦   ¦   ¦                       ¦       GameStateContractTest.java
+¦   ¦   ¦                       ¦       
+¦   ¦   ¦                       +---service
+¦   ¦   ¦                               SinglePlayerServiceTest.java
+¦   ¦   ¦                               
+¦   ¦   +---target
+¦   ¦   ¦   +---classes
+¦   ¦   ¦   ¦   ¦   application.yml
+¦   ¦   ¦   ¦   ¦   
+¦   ¦   ¦   ¦   +---com
+¦   ¦   ¦   ¦       +---chess
+¦   ¦   ¦   ¦           +---gameservice
+¦   ¦   ¦   ¦               ¦   GameServiceApplication.class
+¦   ¦   ¦   ¦               ¦   
+¦   ¦   ¦   ¦               +---client
+¦   ¦   ¦   ¦               ¦       GameLogicClient.class
+¦   ¦   ¦   ¦               ¦       RestClients.class
+¦   ¦   ¦   ¦               ¦       
+¦   ¦   ¦   ¦               +---config
+¦   ¦   ¦   ¦               ¦       RabbitTopology.class
+¦   ¦   ¦   ¦               ¦       WebSocketConfig.class
+¦   ¦   ¦   ¦               ¦       
+¦   ¦   ¦   ¦               +---error
+¦   ¦   ¦   ¦               ¦       ApiException.class
+¦   ¦   ¦   ¦               ¦       ApiExceptionAdvice.class
+¦   ¦   ¦   ¦               ¦       
+¦   ¦   ¦   ¦               +---events
+¦   ¦   ¦   ¦               ¦       GameFinishedListener.class
+¦   ¦   ¦   ¦               ¦       
+¦   ¦   ¦   ¦               +---model
+¦   ¦   ¦   ¦               ¦       Clocks.class
+¦   ¦   ¦   ¦               ¦       GameState.class
+¦   ¦   ¦   ¦               ¦       MoveEntry.class
+¦   ¦   ¦   ¦               ¦       Participant.class
+¦   ¦   ¦   ¦               ¦       PublishRequest$Signal.class
+¦   ¦   ¦   ¦               ¦       PublishRequest.class
+¦   ¦   ¦   ¦               ¦       TimeControl.class
+¦   ¦   ¦   ¦               ¦       
+¦   ¦   ¦   ¦               +---rest
+¦   ¦   ¦   ¦               ¦       GameController.class
+¦   ¦   ¦   ¦               ¦       
+¦   ¦   ¦   ¦               +---service
+¦   ¦   ¦   ¦               ¦       SinglePlayerService.class
+¦   ¦   ¦   ¦               ¦       
+¦   ¦   ¦   ¦               +---websocket
+¦   ¦   ¦   ¦                       GameChannels.class
+¦   ¦   ¦   ¦                       GameWebSocketHandler.class
+¦   ¦   ¦   ¦                       WsMessage$BotThinking.class
+¦   ¦   ¦   ¦                       WsMessage$ErrorMessage.class
+¦   ¦   ¦   ¦                       WsMessage$GameOver.class
+¦   ¦   ¦   ¦                       WsMessage$MoveRejected.class
+¦   ¦   ¦   ¦                       WsMessage$State.class
+¦   ¦   ¦   ¦                       WsMessage.class
+¦   ¦   ¦   ¦                       
+¦   ¦   ¦   +---test-classes
+¦   ¦   ¦       +---com
+¦   ¦   ¦           +---chess
+¦   ¦   ¦               +---gameservice
+¦   ¦   ¦                   ¦   FakeGameLogic$Request.class
+¦   ¦   ¦                   ¦   FakeGameLogic.class
+¦   ¦   ¦                   ¦   SinglePlayerIntegrationTest$Response.class
+¦   ¦   ¦                   ¦   SinglePlayerIntegrationTest$Socket.class
+¦   ¦   ¦                   ¦   SinglePlayerIntegrationTest.class
+¦   ¦   ¦                   ¦   
+¦   ¦   ¦                   +---events
+¦   ¦   ¦                   ¦       GameFinishedListenerTest.class
+¦   ¦   ¦                   ¦       
+¦   ¦   ¦                   +---model
+¦   ¦   ¦                   ¦       GameStateContractTest.class
+¦   ¦   ¦                   ¦       
+¦   ¦   ¦                   +---service
+¦   ¦   ¦                           SinglePlayerServiceTest.class
+¦   ¦   ¦                           
+¦   ¦   +---tools
+¦   ¦           fake_botcito.py
+¦   ¦           
+¦   +---gateway-shared
+¦   ¦   +---orchestration
+¦   ¦           account.py
+¦   ¦           analyses.py
+¦   ¦           context.py
+¦   ¦           engine.py
+¦   ¦           errors.py
+¦   ¦           logic.py
+¦   ¦           multiplayer.py
+¦   ¦           single_player.py
+¦   ¦           upstream.py
+¦   ¦           visibility.py
+¦   ¦           ws_session.py
+¦   ¦           __init__.py
+¦   ¦           
+¦   +---multiplayer-component
+¦   ¦   ¦   .dockerignore
+¦   ¦   ¦   Dockerfile
+¦   ¦   ¦   go.mod
+¦   ¦   ¦   go.sum
+¦   ¦   ¦   README.md
+¦   ¦   ¦   
+¦   ¦   +---cmd
+¦   ¦   ¦   +---multiplayer
+¦   ¦   ¦           main.go
+¦   ¦   ¦           
+¦   ¦   +---internal
+¦   ¦       +---config
+¦   ¦       ¦       config.go
+¦   ¦       ¦       config_test.go
+¦   ¦       ¦       
+¦   ¦       +---domain
+¦   ¦       ¦       models.go
+¦   ¦       ¦       models_test.go
+¦   ¦       ¦       
+¦   ¦       +---gamelogic
+¦   ¦       ¦       client.go
+¦   ¦       ¦       client_test.go
+¦   ¦       ¦       
+¦   ¦       +---httpapi
+¦   ¦       ¦       http.go
+¦   ¦       ¦       http_test.go
+¦   ¦       ¦       
+¦   ¦       +---messaging
+¦   ¦       ¦       rabbitmq.go
+¦   ¦       ¦       rabbitmq_test.go
+¦   ¦       ¦       
+¦   ¦       +---realtime
+¦   ¦       ¦       hub.go
+¦   ¦       ¦       
+¦   ¦       +---service
+¦   ¦               service.go
+¦   ¦               service_test.go
+¦   ¦               
+¦   +---network-segmentation
+¦   ¦       probar_subredes.py
+¦   ¦       resultados-subredes.json
+¦   ¦       
+¦   +---profile-stats-component
+¦   ¦   ¦   Dockerfile
+¦   ¦   ¦   pom.xml
+¦   ¦   ¦   README.md
+¦   ¦   ¦   
+¦   ¦   +---src
+¦   ¦   ¦   +---main
+¦   ¦   ¦   ¦   +---java
+¦   ¦   ¦   ¦   ¦   +---com
+¦   ¦   ¦   ¦   ¦       +---prototipo
+¦   ¦   ¦   ¦   ¦           +---profile
+¦   ¦   ¦   ¦   ¦               ¦   ProfileStatsApplication.java
+¦   ¦   ¦   ¦   ¦               ¦   
+¦   ¦   ¦   ¦   ¦               +---config
+¦   ¦   ¦   ¦   ¦               ¦       ClockConfig.java
+¦   ¦   ¦   ¦   ¦               ¦       RabbitTopology.java
+¦   ¦   ¦   ¦   ¦               ¦       
+¦   ¦   ¦   ¦   ¦               +---domain
+¦   ¦   ¦   ¦   ¦               ¦       DeletedUser.java
+¦   ¦   ¦   ¦   ¦               ¦       DeletedUserRepository.java
+¦   ¦   ¦   ¦   ¦               ¦       ProcessedEvent.java
+¦   ¦   ¦   ¦   ¦               ¦       ProcessedEventRepository.java
+¦   ¦   ¦   ¦   ¦               ¦       Profile.java
+¦   ¦   ¦   ¦   ¦               ¦       ProfileRepository.java
+¦   ¦   ¦   ¦   ¦               ¦       Stats.java
+¦   ¦   ¦   ¦   ¦               ¦       StatsRepository.java
+¦   ¦   ¦   ¦   ¦               ¦       
+¦   ¦   ¦   ¦   ¦               +---events
+¦   ¦   ¦   ¦   ¦               ¦       EventListeners.java
+¦   ¦   ¦   ¦   ¦               ¦       EventParser.java
+¦   ¦   ¦   ¦   ¦               ¦       EventProcessor.java
+¦   ¦   ¦   ¦   ¦               ¦       GameFinishedEvent.java
+¦   ¦   ¦   ¦   ¦               ¦       InvalidEventException.java
+¦   ¦   ¦   ¦   ¦               ¦       RetryPublisher.java
+¦   ¦   ¦   ¦   ¦               ¦       UserRegisteredEvent.java
+¦   ¦   ¦   ¦   ¦               ¦       
+¦   ¦   ¦   ¦   ¦               +---service
+¦   ¦   ¦   ¦   ¦               ¦       Ids.java
+¦   ¦   ¦   ¦   ¦               ¦       ProfileService.java
+¦   ¦   ¦   ¦   ¦               ¦       
+¦   ¦   ¦   ¦   ¦               +---web
+¦   ¦   ¦   ¦   ¦                       ApiException.java
+¦   ¦   ¦   ¦   ¦                       ApiExceptionHandler.java
+¦   ¦   ¦   ¦   ¦                       ProfileController.java
+¦   ¦   ¦   ¦   ¦                       ProfileResponse.java
+¦   ¦   ¦   ¦   ¦                       StatsResponse.java
+¦   ¦   ¦   ¦   ¦                       
+¦   ¦   ¦   ¦   +---resources
+¦   ¦   ¦   ¦           application.yaml
+¦   ¦   ¦   ¦           
+¦   ¦   ¦   +---test
+¦   ¦   ¦       +---java
+¦   ¦   ¦       ¦   +---com
+¦   ¦   ¦       ¦       +---prototipo
+¦   ¦   ¦       ¦           +---profile
+¦   ¦   ¦       ¦               ¦   ProfileStatsIntegrationTest.java
+¦   ¦   ¦       ¦               ¦   
+¦   ¦   ¦       ¦               +---events
+¦   ¦   ¦       ¦                       MessagingTest.java
+¦   ¦   ¦       ¦                       
+¦   ¦   ¦       +---resources
+¦   ¦   ¦               application-test.yaml
+¦   ¦   ¦               
+¦   ¦   +---target
+¦   ¦       +---classes
+¦   ¦       ¦   ¦   application.yaml
+¦   ¦       ¦   ¦   
+¦   ¦       ¦   +---com
+¦   ¦       ¦       +---prototipo
+¦   ¦       ¦           +---profile
+¦   ¦       ¦               ¦   ProfileStatsApplication.class
+¦   ¦       ¦               ¦   
+¦   ¦       ¦               +---config
+¦   ¦       ¦               ¦       ClockConfig.class
+¦   ¦       ¦               ¦       RabbitTopology.class
+¦   ¦       ¦               ¦       
+¦   ¦       ¦               +---domain
+¦   ¦       ¦               ¦       DeletedUser.class
+¦   ¦       ¦               ¦       DeletedUserRepository.class
+¦   ¦       ¦               ¦       ProcessedEvent.class
+¦   ¦       ¦               ¦       ProcessedEventRepository.class
+¦   ¦       ¦               ¦       Profile.class
+¦   ¦       ¦               ¦       ProfileRepository.class
+¦   ¦       ¦               ¦       Stats.class
+¦   ¦       ¦               ¦       StatsRepository.class
+¦   ¦       ¦               ¦       
+¦   ¦       ¦               +---events
+¦   ¦       ¦               ¦       EventListeners.class
+¦   ¦       ¦               ¦       EventParser.class
+¦   ¦       ¦               ¦       EventProcessor$Outcome.class
+¦   ¦       ¦               ¦       EventProcessor.class
+¦   ¦       ¦               ¦       GameFinishedEvent$Participant.class
+¦   ¦       ¦               ¦       GameFinishedEvent.class
+¦   ¦       ¦               ¦       InvalidEventException.class
+¦   ¦       ¦               ¦       RetryPublisher.class
+¦   ¦       ¦               ¦       UserRegisteredEvent.class
+¦   ¦       ¦               ¦       
+¦   ¦       ¦               +---service
+¦   ¦       ¦               ¦       Ids.class
+¦   ¦       ¦               ¦       ProfileService.class
+¦   ¦       ¦               ¦       
+¦   ¦       ¦               +---web
+¦   ¦       ¦                       ApiException.class
+¦   ¦       ¦                       ApiExceptionHandler.class
+¦   ¦       ¦                       ProfileController.class
+¦   ¦       ¦                       ProfileResponse.class
+¦   ¦       ¦                       StatsResponse.class
+¦   ¦       ¦                       
+¦   ¦       +---test-classes
+¦   ¦           ¦   application-test.yaml
+¦   ¦           ¦   
+¦   ¦           +---com
+¦   ¦               +---prototipo
+¦   ¦                   +---profile
+¦   ¦                       ¦   ProfileStatsIntegrationTest.class
+¦   ¦                       ¦   
+¦   ¦                       +---events
+¦   ¦                               MessagingTest.class
+¦   ¦                               
+¦   +---reverse-proxy
+¦   ¦   ¦   Dockerfile
+¦   ¦   ¦   
+¦   ¦   +---escenarios
+¦   ¦   ¦       medir_resistencia.py
+¦   ¦   ¦       README.md
+¦   ¦   ¦       resultados.json
+¦   ¦   ¦       
+¦   ¦   +---nginx
+¦   ¦   ¦       common.conf
+¦   ¦   ¦       mobile.conf.template
+¦   ¦   ¦       web.conf.template
+¦   ¦   ¦       
+¦   ¦   +---secure-channel
+¦   ¦           generar_certs_internos.py
+¦   ¦           resultados-canal-seguro.json
+¦   ¦           validar_config.py
+¦   ¦           verificar_canal_seguro.py
+¦   ¦           
+¦   +---timeout-worker
+¦   ¦   ¦   .dockerignore
+¦   ¦   ¦   .gitignore
+¦   ¦   ¦   build.gradle.kts
+¦   ¦   ¦   Dockerfile
+¦   ¦   ¦   gradlew
+¦   ¦   ¦   gradlew.bat
+¦   ¦   ¦   settings.gradle.kts
+¦   ¦   ¦   tree.txt
+¦   ¦   ¦   
+¦   ¦   +---docker
+¦   ¦   ¦       timeout-worker
+¦   ¦   ¦       
+¦   ¦   +---gradle
+¦   ¦   ¦   +---wrapper
+¦   ¦   ¦           gradle-wrapper.jar
+¦   ¦   ¦           gradle-wrapper.properties
+¦   ¦   ¦           
+¦   ¦   +---src
+¦   ¦       +---main
+¦   ¦       ¦   +---java
+¦   ¦       ¦   ¦   +---worker
+¦   ¦       ¦   ¦           ErrorResponse.java
+¦   ¦       ¦   ¦           ExpiredQueryResponse.java
+¦   ¦       ¦   ¦           HealthProbe.java
+¦   ¦       ¦   ¦           RestClientConfig.java
+¦   ¦       ¦   ¦           TimeoutService.java
+¦   ¦       ¦   ¦           WorkerApplication.java
+¦   ¦       ¦   ¦           WorkerController.java
+¦   ¦       ¦   ¦           WorkerHealth.java
+¦   ¦       ¦   ¦           WorkerProperties.java
+¦   ¦       ¦   ¦           
+¦   ¦       ¦   +---resources
+¦   ¦       ¦           application.properties
+¦   ¦       ¦           
+¦   ¦       +---test
+¦   ¦           +---java
+¦   ¦               +---worker
+¦   ¦                       FakeGameLogic.java
+¦   ¦                       TimeoutServiceTest.java
+¦   ¦                       WorkerApplicationTests.java
+¦   ¦                       WorkerPropertiesTest.java
+¦   ¦                       
+¦   +---tutor-component
+¦   ¦   ¦   .dockerignore
+¦   ¦   ¦   Dockerfile
+¦   ¦   ¦   main.py
+¦   ¦   ¦   pytest.ini
+¦   ¦   ¦   README.md
+¦   ¦   ¦   requirements-dev.txt
+¦   ¦   ¦   requirements.txt
+¦   ¦   ¦   
+¦   ¦   +---app
+¦   ¦   ¦       config.py
+¦   ¦   ¦       db.py
+¦   ¦   ¦       errors.py
+¦   ¦   ¦       events.py
+¦   ¦   ¦       explanation.py
+¦   ¦   ¦       models.py
+¦   ¦   ¦       repository.py
+¦   ¦   ¦       routes.py
+¦   ¦   ¦       service.py
+¦   ¦   ¦       timeutils.py
+¦   ¦   ¦       validation.py
+¦   ¦   ¦       __init__.py
+¦   ¦   ¦       
+¦   ¦   +---tests
+¦   ¦           conftest.py
+¦   ¦           helpers.py
+¦   ¦           test_analyses.py
+¦   ¦           test_delete.py
+¦   ¦           test_events.py
+¦   ¦           test_health.py
+¦   ¦           test_reads.py
+¦   ¦           __init__.py
+¦   ¦           
+¦   +---waf
+¦           real-ip.conf
+¦           
++---database
+¦   ¦   README.md
+¦   ¦   
+¦   +---auth
+¦   ¦       01-init.sql
+¦   ¦       
+¦   +---mongo
+¦   ¦       init-mongo.sh
+¦   ¦       
+¦   +---profile
+¦           01-init.sql
+¦           
++---docs
+¦   ¦   app-android-partida-local-y-borrado.pdf
+¦   ¦   escenarios-seguridad-reverse-proxy.pdf
+¦   ¦   frontend-vike.md
+¦   ¦   gateways-orquestadores-implementado.pdf
+¦   ¦   integracion-auth-profile-frontendB.md
+¦   ¦   proxy-inverso.md
+¦   ¦   pruebas-app-android-gateway-movil.pdf
+¦   ¦   rediseno-gateways-orquestadores.pdf
+¦   ¦   secure-channel-tls.md
+¦   ¦   verificacion-docker.md
+¦   ¦   
+¦   +---evidencias
+¦           evidencias-canal-seguro-waf.pdf
+¦           resultados-canal-seguro.json
+¦           
++---frontend
+¦   ¦   .dockerignore
+¦   ¦   .env.example
+¦   ¦   .gitignore
+¦   ¦   .oxlintrc.json
+¦   ¦   Dockerfile
+¦   ¦   package-lock.json
+¦   ¦   package.json
+¦   ¦   README.md
+¦   ¦   tsconfig.app.json
+¦   ¦   tsconfig.json
+¦   ¦   tsconfig.node.json
+¦   ¦   vite.config.ts
+¦   ¦   
+¦   +---desing
+¦   ¦   +---stitch_insightful_games
+¦   ¦       +---stitch_insightful_games
+¦   ¦           +---landing_page_insightful_games_rbita_3d_y_rey_de_ajedrez
+¦   ¦           ¦       code.html
+¦   ¦           ¦       screen.png
+¦   ¦           ¦       
+¦   ¦           +---logo_insightful_games.jpeg
+¦   ¦           ¦       screen.png
+¦   ¦           ¦       
+¦   ¦           +---logo_insightful_games_sin_fondo.png
+¦   ¦           ¦       screen.png
+¦   ¦           ¦       
+¦   ¦           +---terracotta_tallow
+¦   ¦                   DESIGN.md
+¦   ¦                   
+¦   +---pages
+¦   ¦   ¦   +config.ts
+¦   ¦   ¦   +Head.tsx
+¦   ¦   ¦   tailwindConfig.ts
+¦   ¦   ¦   
+¦   ¦   +---dev-partida
+¦   ¦   ¦       +config.ts
+¦   ¦   ¦       +Page.tsx
+¦   ¦   ¦       +route.ts
+¦   ¦   ¦       
+¦   ¦   +---estadisticas
+¦   ¦   ¦       +config.ts
+¦   ¦   ¦       +data.ts
+¦   ¦   ¦       +Page.tsx
+¦   ¦   ¦       
+¦   ¦   +---historial
+¦   ¦   ¦       +config.ts
+¦   ¦   ¦       +Page.tsx
+¦   ¦   ¦       
+¦   ¦   +---index
+¦   ¦   ¦       +Page.tsx
+¦   ¦   ¦       
+¦   ¦   +---login
+¦   ¦   ¦       +Page.tsx
+¦   ¦   ¦       
+¦   ¦   +---multijugador
+¦   ¦   ¦       +config.ts
+¦   ¦   ¦       +Page.tsx
+¦   ¦   ¦       
+¦   ¦   +---partida
+¦   ¦   ¦   +---@matchId
+¦   ¦   ¦           +config.ts
+¦   ¦   ¦           +Page.tsx
+¦   ¦   ¦           
+¦   ¦   +---perfil
+¦   ¦   ¦       +config.ts
+¦   ¦   ¦       +Page.tsx
+¦   ¦   ¦       
+¦   ¦   +---unirse
+¦   ¦   ¦   +---@matchId
+¦   ¦   ¦           +config.ts
+¦   ¦   ¦           +Page.tsx
+¦   ¦   ¦           
+¦   ¦   +---_error
+¦   ¦           +Page.tsx
+¦   ¦           
+¦   +---public
+¦   ¦       favicon.svg
+¦   ¦       icons.svg
+¦   ¦       
+¦   +---server
+¦   ¦       index.js
+¦   ¦       routes.js
+¦   ¦       server.test.js
+¦   ¦       
+¦   +---src
+¦   ¦   ¦   App.tsx
+¦   ¦   ¦   
+¦   ¦   +---assets
+¦   ¦   ¦       hero.png
+¦   ¦   ¦       react.svg
+¦   ¦   ¦       vite.svg
+¦   ¦   ¦       
+¦   ¦   +---auth
+¦   ¦   ¦       session.ts
+¦   ¦   ¦       
+¦   ¦   +---components
+¦   ¦   ¦       AccountMenu.tsx
+¦   ¦   ¦       AccountNav.tsx
+¦   ¦   ¦       Landing.tsx
+¦   ¦   ¦       Login.tsx
+¦   ¦   ¦       
+¦   ¦   +---game
+¦   ¦   ¦   ¦   api.ts
+¦   ¦   ¦   ¦   ChessBoard.tsx
+¦   ¦   ¦   ¦   ChessSquare.tsx
+¦   ¦   ¦   ¦   config.ts
+¦   ¦   ¦   ¦   fen.ts
+¦   ¦   ¦   ¦   GameFlow.tsx
+¦   ¦   ¦   ¦   GamePage.tsx
+¦   ¦   ¦   ¦   GameScreen.tsx
+¦   ¦   ¦   ¦   GameSetup.tsx
+¦   ¦   ¦   ¦   guards.ts
+¦   ¦   ¦   ¦   index.ts
+¦   ¦   ¦   ¦   PieceGlyph.tsx
+¦   ¦   ¦   ¦   PlayChess.tsx
+¦   ¦   ¦   ¦   session.ts
+¦   ¦   ¦   ¦   types.ts
+¦   ¦   ¦   ¦   useGameSocket.ts
+¦   ¦   ¦   ¦   useGameTransport.ts
+¦   ¦   ¦   ¦   wsTransport.ts
+¦   ¦   ¦   ¦   
+¦   ¦   ¦   +---mock
+¦   ¦   ¦           DevHarness.tsx
+¦   ¦   ¦           mockBackend.ts
+¦   ¦   ¦           mockTransport.ts
+¦   ¦   ¦           scenarios.ts
+¦   ¦   ¦           useMockGame.ts
+¦   ¦   ¦           
+¦   ¦   +---history
+¦   ¦   ¦       api.ts
+¦   ¦   ¦       HistoryPage.tsx
+¦   ¦   ¦       types.ts
+¦   ¦   ¦       
+¦   ¦   +---multiplayer
+¦   ¦   ¦       api.ts
+¦   ¦   ¦       CreateMatchPage.tsx
+¦   ¦   ¦       JoinMatchPage.tsx
+¦   ¦   ¦       MatchPage.tsx
+¦   ¦   ¦       matchSession.ts
+¦   ¦   ¦       types.ts
+¦   ¦   ¦       useIdentity.ts
+¦   ¦   ¦       useMatchSocket.ts
+¦   ¦   ¦       
+¦   ¦   +---profile
+¦   ¦   ¦       ProfilePage.tsx
+¦   ¦   ¦       
+¦   ¦   +---stats
+¦   ¦   ¦       loadStatsPage.ts
+¦   ¦   ¦       README.md
+¦   ¦   ¦       StatsView.tsx
+¦   ¦   ¦       types.ts
+¦   ¦   ¦       
+¦   ¦   +---tutor
+¦   ¦           AnalysisModal.tsx
+¦   ¦           api.ts
+¦   ¦           types.ts
+¦   ¦           
+¦   +---test
+¦           history.test.mjs
+¦           multiplayer.test.mjs
+¦           session.test.mjs
+¦           tutor.test.mjs
+¦           
++---mobile
+¦   ¦   .gitattributes
+¦   ¦   .gitignore
+¦   ¦   build.gradle.kts
+¦   ¦   gradle.properties
+¦   ¦   gradlew
+¦   ¦   gradlew.bat
+¦   ¦   README.md
+¦   ¦   settings.gradle.kts
+¦   ¦   
+¦   +---.gradle
+¦   ¦   +---8.9
+¦   ¦   ¦   ¦   gc.properties
+¦   ¦   ¦   ¦   
+¦   ¦   ¦   +---checksums
+¦   ¦   ¦   ¦       checksums.lock
+¦   ¦   ¦   ¦       
+¦   ¦   ¦   +---fileChanges
+¦   ¦   ¦   ¦       last-build.bin
+¦   ¦   ¦   ¦       
+¦   ¦   ¦   +---fileHashes
+¦   ¦   ¦   ¦       fileHashes.lock
+¦   ¦   ¦   ¦       
+¦   ¦   ¦   +---vcsMetadata
+¦   ¦   +---buildOutputCleanup
+¦   ¦   ¦       buildOutputCleanup.lock
+¦   ¦   ¦       cache.properties
+¦   ¦   ¦       
+¦   ¦   +---vcs-1
+¦   ¦           gc.properties
+¦   ¦           
+¦   +---app
+¦   ¦   ¦   build.gradle.kts
+¦   ¦   ¦   
+¦   ¦   +---src
+¦   ¦       +---debug
+¦   ¦       ¦   +---res
+¦   ¦       ¦       +---xml
+¦   ¦       ¦               network_security_config.xml
+¦   ¦       ¦               
+¦   ¦       +---main
+¦   ¦       ¦   ¦   AndroidManifest.xml
+¦   ¦       ¦   ¦   
+¦   ¦       ¦   +---java
+¦   ¦       ¦   ¦   +---com
+¦   ¦       ¦   ¦       +---insightfulgames
+¦   ¦       ¦   ¦           +---app
+¦   ¦       ¦   ¦               ¦   InsightfulApp.kt
+¦   ¦       ¦   ¦               ¦   MainActivity.kt
+¦   ¦       ¦   ¦               ¦   
+¦   ¦       ¦   ¦               +---data
+¦   ¦       ¦   ¦               ¦   +---local
+¦   ¦       ¦   ¦               ¦   ¦       SessionStore.kt
+¦   ¦       ¦   ¦               ¦   ¦       
+¦   ¦       ¦   ¦               ¦   +---model
+¦   ¦       ¦   ¦               ¦   ¦       Dtos.kt
+¦   ¦       ¦   ¦               ¦   ¦       Models.kt
+¦   ¦       ¦   ¦               ¦   ¦       
+¦   ¦       ¦   ¦               ¦   +---remote
+¦   ¦       ¦   ¦               ¦   ¦       ApiCall.kt
+¦   ¦       ¦   ¦               ¦   ¦       ApiClient.kt
+¦   ¦       ¦   ¦               ¦   ¦       ApiService.kt
+¦   ¦       ¦   ¦               ¦   ¦       
+¦   ¦       ¦   ¦               ¦   +---repository
+¦   ¦       ¦   ¦               ¦           AuthRepository.kt
+¦   ¦       ¦   ¦               ¦           GameRepository.kt
+¦   ¦       ¦   ¦               ¦           ProfileRepository.kt
+¦   ¦       ¦   ¦               ¦           
+¦   ¦       ¦   ¦               +---ui
+¦   ¦       ¦   ¦                   ¦   AppRoot.kt
+¦   ¦       ¦   ¦                   ¦   AppViewModelProvider.kt
+¦   ¦       ¦   ¦                   ¦   FenParser.kt
+¦   ¦       ¦   ¦                   ¦   Format.kt
+¦   ¦       ¦   ¦                   ¦   GameLabels.kt
+¦   ¦       ¦   ¦                   ¦   LoadState.kt
+¦   ¦       ¦   ¦                   ¦   Replay.kt
+¦   ¦       ¦   ¦                   ¦   
+¦   ¦       ¦   ¦                   +---auth
+¦   ¦       ¦   ¦                   ¦       AuthScreen.kt
+¦   ¦       ¦   ¦                   ¦       AuthViewModel.kt
+¦   ¦       ¦   ¦                   ¦       
+¦   ¦       ¦   ¦                   +---components
+¦   ¦       ¦   ¦                   ¦       Common.kt
+¦   ¦       ¦   ¦                   ¦       FenBoard.kt
+¦   ¦       ¦   ¦                   ¦       
+¦   ¦       ¦   ¦                   +---detail
+¦   ¦       ¦   ¦                   ¦       DetailScreen.kt
+¦   ¦       ¦   ¦                   ¦       DetailViewModel.kt
+¦   ¦       ¦   ¦                   ¦       
+¦   ¦       ¦   ¦                   +---history
+¦   ¦       ¦   ¦                   ¦       HistoryScreen.kt
+¦   ¦       ¦   ¦                   ¦       HistoryViewModel.kt
+¦   ¦       ¦   ¦                   ¦       
+¦   ¦       ¦   ¦                   +---home
+¦   ¦       ¦   ¦                   ¦       HomeScreen.kt
+¦   ¦       ¦   ¦                   ¦       HomeViewModel.kt
+¦   ¦       ¦   ¦                   ¦       
+¦   ¦       ¦   ¦                   +---play
+¦   ¦       ¦   ¦                   ¦       MoveInput.kt
+¦   ¦       ¦   ¦                   ¦       PlayScreen.kt
+¦   ¦       ¦   ¦                   ¦       PlayViewModel.kt
+¦   ¦       ¦   ¦                   ¦       
+¦   ¦       ¦   ¦                   +---profile
+¦   ¦       ¦   ¦                   ¦       ProfileScreen.kt
+¦   ¦       ¦   ¦                   ¦       ProfileViewModel.kt
+¦   ¦       ¦   ¦                   ¦       
+¦   ¦       ¦   ¦                   +---stats
+¦   ¦       ¦   ¦                   ¦       StatsScreen.kt
+¦   ¦       ¦   ¦                   ¦       StatsViewModel.kt
+¦   ¦       ¦   ¦                   ¦       
+¦   ¦       ¦   ¦                   +---theme
+¦   ¦       ¦   ¦                           Theme.kt
+¦   ¦       ¦   ¦                           
+¦   ¦       ¦   +---res
+¦   ¦       ¦       +---values
+¦   ¦       ¦       ¦       strings.xml
+¦   ¦       ¦       ¦       themes.xml
+¦   ¦       ¦       ¦       
+¦   ¦       ¦       +---xml
+¦   ¦       ¦               network_security_config.xml
+¦   ¦       ¦               
+¦   ¦       +---test
+¦   ¦           +---java
+¦   ¦               +---com
+¦   ¦                   +---insightfulgames
+¦   ¦                       +---app
+¦   ¦                           +---data
+¦   ¦                           ¦   +---remote
+¦   ¦                           ¦           UserMessageTest.kt
+¦   ¦                           ¦           
+¦   ¦                           +---ui
+¦   ¦                               ¦   FenParserTest.kt
+¦   ¦                               ¦   GameLabelsTest.kt
+¦   ¦                               ¦   ReplayTest.kt
+¦   ¦                               ¦   
+¦   ¦                               +---play
+¦   ¦                                       MoveInputTest.kt
+¦   ¦                                       
+¦   +---gradle
+¦       +---wrapper
+¦               gradle-wrapper.jar
+¦               gradle-wrapper.properties
+¦               
++---performance
+    ¦   ejecutar.ps1
+    ¦   informe.py
+    ¦   informe_texto.py
+    ¦   monitor.py
+    ¦   README.md
+    ¦   
+    +---k6
+    ¦   ¦   bot-ws.js
+    ¦   ¦   flujos.js
+    ¦   ¦   login-limite.js
+    ¦   ¦   preparar.js
+    ¦   ¦   
+    ¦   +---lib
+    ¦           comun.js
+    ¦           
+    +---resultados
+            .gitignore
+            bot-resumen.json
+            carga-resumen.json
+            consola.log
+            estres-resumen.json
+            humo-resumen.json
+            informe.html
+            pico-resumen.json
+            recursos.csv
+            ventanas.json
+            

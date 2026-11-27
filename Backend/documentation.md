@@ -247,6 +247,7 @@ Variables de entorno del Game Service:
 
 | Variable | Valor por defecto | Uso |
 |---|---|---|
+| `PORT` | `8083` | Puerto HTTP/WebSocket del Game Service |
 | `GAMELOGIC_URL` | `http://localhost:8082` | URL de Game Logic |
 | `BOTCITO_URL` | `http://botcito:8000` | URL de Botcito |
 | `SPRING_PROFILES_ACTIVE` | (ninguno) | Con `mock` usa `chesslib` local y no necesita Game Logic ni Mongo |
@@ -287,7 +288,7 @@ Todas manuales. **No hay pruebas automáticas todavía.** Estado: ✅ pasó · �
 | 8 | Modo LOCAL: mate del tonto | Consola del navegador: `create_game` (LOCAL) y las jugadas `f2f3`, `e7e5`, `g2g4`, `d8h4` | Cuatro `game_state` y `game_over` con `BLACK_WINS` y `CHECKMATE` | ✅ |
 | 9 | Abandono | `resign` en una partida LOCAL | `game_over` con `RESIGNATION` | ✅ |
 | 10 | Jugada después del fin | `move` tras `game_over` | `error` "La partida ya terminó" | ✅ |
-| 11 | Jugada ilegal (`e2e5`) | `move` con `e2e5` desde la posición inicial | ✅ |
+| 11 | Jugada ilegal (`e2e5`) | `move` con `e2e5` desde la posición inicial | `error` "Jugada ilegal: e2e5" (HTTP 400 en Game Logic) | ✅ |
 | 12 | Re-prueba de jugadas ilegales tras la corrección | `e2e5`, `e7e5` en turno de blancas, `a1a3`, `b1b3`, `e1e2`, `e4e5` (origen vacío) | Esperado: `error` "Jugada ilegal" en todas | ⬜ |
 | 13 | Jugada legal tras la corrección | `g1f3` | Esperado: `game_state` normal | ⬜ |
 | 14 | Mate del tonto guardado en Mongo | `GET /matches/{gameId}` de la partida de la prueba 8 | Esperado: 4 jugadas, `result: BLACK_WINS`, `resultReason: CHECKMATE`, último `boardStatusAfterMove: "White is in checkmate"` | ⬜ |

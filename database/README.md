@@ -13,9 +13,14 @@ La base y el usuario de MySQL y PostgreSQL los crea cada imagen a partir de las 
 
 `mongo/init-mongo.sh` se reutiliza en las dos instancias de MongoDB. Compose le pasa `MONGO_APP_DATABASE`, `MONGO_APP_USERNAME` y `MONGO_APP_PASSWORD` distintos en cada una, y por eso los usuarios quedan separados.
 
+El script `mongo/init-mongo.sh` requiere `mongosh` y `jq` en el entorno donde se ejecuta, ya que utiliza `jq` para escapar correctamente las variables antes de pasarlas a JavaScript.
+
+PostgreSQL utiliza `TIMESTAMP WITH TIME ZONE` (`TIMESTAMPTZ`) para almacenar los instantes de tiempo. Si se requiere trabajar y mostrar las fechas en UTC, la zona horaria debe configurarse en PostgreSQL o en las conexiones de la aplicación. El tipo de columna por sí solo no fuerza UTC.
+
 RabbitMQ no es una base de datos: no tiene scripts aquí. Cada servicio declara su topología al conectarse.
 
 Reglas:
 - No agregar datos de ejemplo, ni índices que el contrato asigne a la aplicación.
 - Los scripts de esta carpeta no borran datos.
 - Un cambio de esquema sobre un volumen con datos no se resuelve recreando el volumen. Ver `DOCKER_DEPLOYMENT.md`.
+- Las responsabilidades de creación de tablas e índices asignadas a los servicios deben mantenerse en sus respectivas implementaciones.

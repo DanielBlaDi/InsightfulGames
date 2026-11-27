@@ -1,3 +1,4 @@
+
 package httpapi
 
 import (
@@ -29,11 +30,11 @@ func New(app *service.Service, hub *realtime.Hub, allowedOrigins map[string]stru
 		hub:            hub,
 		allowedOrigins: allowedOrigins,
 		logger:         logger,
-		upgrader: websocket.Upgrader{
-			ReadBufferSize:  1024,
-			WriteBufferSize: 1024,
-			CheckOrigin:     func(*http.Request) bool { return true },
-		},
+	}
+	api.upgrader = websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+		CheckOrigin:     api.originAllowed,
 	}
 
 	mux := http.NewServeMux()
@@ -77,10 +78,6 @@ func (a *API) websocket(w http.ResponseWriter, r *http.Request) {
 	userID := r.Header.Get("X-User-Id")
 	if userID == "" {
 		closeSocket(conn, 4401, "invalid session")
-		return
-	}
-	if !a.originAllowed(r) {
-		closeSocket(conn, 4403, "origin not allowed")
 		return
 	}
 	matchID := r.PathValue("id")

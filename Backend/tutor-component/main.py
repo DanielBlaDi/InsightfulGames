@@ -129,8 +129,6 @@ def create_app(
                 try:
                     if kind == "publisher":
                         await resource.close()
-                    elif kind == "http":
-                        await resource.aclose()
                     elif kind == "mongo":
                         resource.close()
                 except Exception:  # pragma: no cover - cierre best effort

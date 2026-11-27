@@ -313,7 +313,12 @@ def relay(
 
 def games_page(payload: Any) -> dict[str, Any] | None:
     """Devuelve la página tal como la entregó Game Logic, o None si no tiene la forma { items, nextCursor }."""
-    if isinstance(payload, dict) and isinstance(payload.get("items"), list):
+    if (
+        isinstance(payload, dict)
+        and isinstance(payload.get("items"), list)
+        and "nextCursor" in payload
+        and (payload["nextCursor"] is None or isinstance(payload["nextCursor"], str))
+    ):
         return payload
     return None
 

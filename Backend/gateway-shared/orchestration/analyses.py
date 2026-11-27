@@ -46,9 +46,12 @@ def _game_id(value: Any) -> str:
     if not isinstance(value, str) or not value.strip():
         raise FlowError(400, "VALIDATION_ERROR", "El campo gameId es obligatorio.")
     try:
-        return str(uuid.UUID(value.strip()))
+        game_id = uuid.UUID(value.strip())
     except ValueError:
         raise FlowError(400, "VALIDATION_ERROR", "El campo gameId debe ser un UUID v4 válido.")
+    if game_id.version != 4:
+        raise FlowError(400, "VALIDATION_ERROR", "El campo gameId debe ser un UUID v4 válido.")
+    return str(game_id)
 
 
 async def _tutor(

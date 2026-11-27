@@ -189,8 +189,8 @@ async def create(ctx: Ctx, user_id: str, raw_body: bytes) -> dict[str, Any]:
 
     time_control = body.get("timeControl")
     if time_control is not None and not (
-        isinstance(time_control, dict) and time_control.get("minutes") == ALLOWED_MINUTES
-        and _is_int(time_control.get("minutes"))
+        isinstance(time_control, dict) and set(time_control) == {"minutes"}
+        and time_control.get("minutes") == ALLOWED_MINUTES and _is_int(time_control.get("minutes"))
     ):
         raise _validation('timeControl debe ser null o { "minutes": 10 }')
 

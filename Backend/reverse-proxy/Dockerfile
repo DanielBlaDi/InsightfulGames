@@ -1,8 +1,8 @@
 # Reverse proxy (Reverse Proxy Pattern + Secure Channel Pattern). Una imagen por entrada, elegida con ENTRY:
 #   ENTRY=web     -> reverse-proxy-web     HTTPS 8443 (navegador: frontend + gateway web, WSS)
-#                                          HTTP  8000 (solo /health y redirección a HTTPS)
+#                                          HTTP  8000 (/health, redirección HTTPS y /api/* bloqueado)
 #   ENTRY=mobile  -> reverse-proxy-mobile  HTTPS 8443 (app Android: gateway móvil)
-#                                          HTTP  8090 (solo /health interno, no se publica)
+#                                          HTTP  8090 (solo /health interno; resto bloqueado, no se publica)
 # Imagen sin privilegios: Nginx corre como usuario "nginx" (uid 101), por eso usa puertos altos.
 #
 # Certificado y clave NO van en la imagen: compose.yaml monta un directorio del host en /etc/nginx/certs

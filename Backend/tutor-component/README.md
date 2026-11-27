@@ -87,6 +87,7 @@ rutas internas no se publican hacia el exterior.
 
 - `game` es el *snapshot* que arma el gateway a partir del GameState de Game
   Logic (solo esos cuatro campos). Sin `game` → `400 VALIDATION_ERROR`.
+- `participantIds` debe contener UUIDs válidos; se normalizan y deduplican.
 - `language` y `detailLevel` son texto libre; por defecto `es` y `standard`.
 - `depth` es opcional; por defecto `ANALYSIS_DEPTH_DEFAULT` (15). Fuera de
   `1..ANALYSIS_DEPTH_MAX` → `400 VALIDATION_ERROR`.
@@ -98,15 +99,15 @@ Algoritmo (sección 16.4.1):
 1. Valida el formato. (Que la partida exista y sea visible para el usuario lo
    comprueba el gateway: sin acceso o inexistente → `404 GAME_NOT_FOUND`, antes
    de llegar al Tutor.)
-3. `game.status` distinto de `finished` → `409 GAME_NOT_FINISHED`.
-4. `game.endReason == expired` o `game.moveCount` 0 → `409 GAME_NOT_ANALYZABLE`. La
+2. `game.status` distinto de `finished` → `409 GAME_NOT_FINISHED`.
+3. `game.endReason == expired` o `game.moveCount` 0 → `409 GAME_NOT_ANALYZABLE`. La
    comprobación de `GAME_NOT_FINISHED` va antes, de modo que una partida
    `expired` nunca responde `GAME_NOT_FINISHED`.
-5. Busca la clave, protegida por el índice único.
-6. Si no existe: crea `status: pending`, publica el evento y responde `202`.
-7. Si existe y no es reactivable: responde `200` con ese análisis y **no**
+4. Busca la clave, protegida por el índice único.
+5. Si no existe: crea `status: pending`, publica el evento y responde `202`.
+6. Si existe y no es reactivable: responde `200` con ese análisis y **no**
    republica.
-8. Si existe, está `failed` y es reactivable: aplica la reactivación atómica y
+7. Si existe, está `failed` y es reactivable: aplica la reactivación atómica y
    responde `202`.
 
 Si la publicación en RabbitMQ falla, el análisis queda en `pending` y la
@@ -234,7 +235,6 @@ anónimo, la operación no hace nada. `keepGameIds` con un UUID inválido →
 | `ANALYSIS_DEPTH_MAX` | `18` | Tope; por encima → `VALIDATION_ERROR` |
 | `ANALYSIS_MAX_REACTIVATIONS` | `3` | Reactivaciones por análisis; `0` las desactiva; debe ser `>= 0` |
 | `LLM_PROVIDER` | `mock` | En esta entrega solo existe `mock` |
-| `HTTP_TIMEOUT` | `15` | Sin uso: el Tutor ya no hace llamadas HTTP salientes |
 | `LOG_LEVEL` | `INFO` | Nivel de log |
 
 `RABBITMQ_TIMEOUT` (5 s por defecto) es un ajuste interno del publicador, no una
@@ -461,7 +461,6 @@ Estos archivos son compartidos y **no se modificaron** desde este componente.
       ANALYSIS_DEPTH_MAX: "18"
       ANALYSIS_MAX_REACTIVATIONS: "3"
       LLM_PROVIDER: "mock"
-      HTTP_TIMEOUT: "15"
       LOG_LEVEL: "INFO"
     depends_on:
       mongo-analysis:

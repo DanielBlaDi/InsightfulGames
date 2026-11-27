@@ -25,14 +25,17 @@ python medir_resistencia.py
 ```
 
 - El cliente legítimo de S1 corre dentro del contenedor `api-gateway-mobile` (otra IP para nginx) y entra
-  directo a `https://reverse-proxy-mobile:8443` / `https://reverse-proxy-web:8443`. Esos proxies presentan el
-  certificado interno, que valida con `INTERNAL_TLS_CA_FILE` (por defecto `certs/internal/ca/ca.crt`).
-- En S2 cuentan como bloqueadas las respuestas 404 del proxy, 403 de las reglas del WAF y 400/405 del Nginx del
-  WAF: ninguna llega a un gateway (se comprueba en sus logs).
+  directo a `https://reverse-proxy-mobile:8443` / `https://reverse-proxy-web:8443`. Esos proxies presentan
+  el certificado interno, que valida con `INTERNAL_TLS_CA_FILE` (por defecto `certs/internal/ca/ca.crt`).
+- En S2 cuentan como bloqueadas las respuestas 404 del proxy, 403 de las reglas del WAF y 400/405 del
+  Nginx del WAF: ninguna de esas respuestas implica que la petición haya llegado a un gateway. El script
+  comprueba por separado cuántas peticiones aparecen en los logs de los gateways.
 - En S1, el límite de login lo aplica el proxy por IP. En Docker Desktop todo el tráfico del host llega al WAF
   con la IP de la red de Docker, así que el límite se comporta como global (ver `docs/secure-channel-tls.md`, 11.4).
 
 Variables opcionales: `PROXY_HOST`, `PROXY_SCHEME` (`https` por defecto; `http` solo para un stack antiguo sin
 TLS), `FRONTEND_HTTPS_PORT`, `MOBILE_HTTPS_PORT`, `TLS_CA_FILE`, `INTERNAL_TLS_CA_FILE`, `BRUTE_FORCE_ATTEMPTS`,
-`LEGIT_CONTAINER`.
+`LEGIT_CONTAINER`. Para stacks antiguos sin TLS también se pueden configurar `FRONTEND_PORT` y
+`MOBILE_GATEWAY_PORT` (sus valores por defecto son `80` y `8090`, respectivamente).
+
 El informe con los diagramas y los resultados medidos está en `docs/escenarios-seguridad-reverse-proxy.pdf`.

@@ -30,7 +30,8 @@ responde 400 `VALIDATION_ERROR`.
 Reglas:
 
 - Solo cuentan partidas `multiplayer` con `result` (`white`, `black` o `draw`). `local`, `vs_bot`
-  y `expired` se registran como procesadas sin sumar.
+  y `expired` se registran como procesadas sin sumar. Un `mode` o `result` fuera de esos valores
+  se considera inválido y va directamente a la `.dlq`.
 - Victoria si `result` coincide con el color del usuario, derrota si es el otro, tablas si es `draw`.
 - Participantes sin perfil y el `userId` anónimo (`00000000-0000-0000-0000-000000000000`) se ignoran;
   no se crean contadores huérfanos.

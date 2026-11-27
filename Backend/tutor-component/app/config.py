@@ -28,16 +28,6 @@ def _int_env(name: str, default: int) -> int:
         raise ValueError(f"{name} debe ser un entero, se recibió {raw!r}") from exc
 
 
-def _float_env(name: str, default: float) -> float:
-    raw = os.getenv(name)
-    if raw is None or not raw.strip():
-        return default
-    try:
-        return float(raw.strip())
-    except ValueError as exc:
-        raise ValueError(f"{name} debe ser un número, se recibió {raw!r}") from exc
-
-
 @dataclass(frozen=True)
 class Settings:
     """Variables de entorno del Tutor.
@@ -57,7 +47,6 @@ class Settings:
     # reactivación: retryable siempre será false.
     analysis_max_reactivations: int = 3
     llm_provider: str = "mock"
-    http_timeout: float = 15.0
     log_level: str = "INFO"
     exchange: str = TUTOR_EVENTS_EXCHANGE
     routing_key: str = ANALYSIS_REQUESTED_ROUTING_KEY
@@ -100,6 +89,5 @@ class Settings:
             analysis_depth_max=depth_max,
             analysis_max_reactivations=max_reactivations,
             llm_provider=_text_env("LLM_PROVIDER", "mock"),
-            http_timeout=_float_env("HTTP_TIMEOUT", 15.0),
             log_level=_text_env("LOG_LEVEL", "INFO").upper(),
         )

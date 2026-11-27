@@ -11,6 +11,8 @@ import java.util.Set;
 public class EventParser {
 
     private static final Set<String> COLORS = Set.of("white", "black");
+    private static final Set<String> MODES = Set.of("multiplayer", "local", "vs_bot");
+    private static final Set<String> RESULTS = Set.of("white", "black", "draw");
 
     private final JsonMapper mapper;
 
@@ -33,12 +35,15 @@ public class EventParser {
         GameFinishedEvent event = read(body, GameFinishedEvent.class);
         requireType(event.eventType(), "game.finished");
         requireUuid(event.eventId(), "eventId");
-        if (event.mode() == null) {
-            throw new InvalidEventException("Falta mode");
+        if (event.mode() == null || !MODES.contains(event.mode())) {
+            throw new InvalidEventException("mode debe ser multiplayer, local o vs_bot");
+        }
+        if (event.result() != null && !RESULTS.contains(event.result())) {
+            throw new InvalidEventException("result debe ser white, black o draw");
         }
         if (event.participants() != null) {
             for (GameFinishedEvent.Participant p : event.participants()) {
-                if (p == null || !Ids.isUuid(p.userId()) || !COLORS.contains(p.color())) {
+                if (p == null || !Ids.isUuid(p.userId()) || p.color() == null || !COLORS.contains(p.color())) {
                     throw new InvalidEventException("participants debe tener userId UUID y color white o black");
                 }
             }

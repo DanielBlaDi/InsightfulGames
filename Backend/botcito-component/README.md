@@ -1,9 +1,11 @@
 # Botcito — Kevin Rojas
 
-Servicio sin estado de ajedrez: recibe una posición FEN y un nivel de dificultad,
-consulta Stockfish y devuelve una jugada legal con su notación SAN y evaluación.
-No crea partidas ni persiste movimientos; esas responsabilidades permanecen en
-Single Player y Game Logic.
+Servicio sin estado de partida que consulta Stockfish mediante UCI.
+Botcito-juego recibe una posición FEN y un nivel de dificultad, y devuelve una
+jugada legal con su notación SAN y evaluación. Botcito-análisis recibe una
+posición FEN y una profundidad, y devuelve su evaluación y mejor jugada cuando
+corresponde. No crea partidas ni persiste movimientos; esas responsabilidades
+permanecen en Single Player y Game Logic.
 
 
 ## Arquitectura actual: Botcito-juego y Botcito-análisis

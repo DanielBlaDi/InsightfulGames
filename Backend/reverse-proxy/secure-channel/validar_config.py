@@ -91,16 +91,17 @@ ENV = {"PUBLIC_HTTPS_PORT": "8443", "HSTS_MAX_AGE": "0", "HOME": "/", "HOSTNAME"
 for entry, http_port in (("web", "8000"), ("mobile", "8090")):
     print(f"\n== Entrada {entry}")
     rendered, payload = parse(entry, ENV)
+
     # crossplane en modo estricto toma las entradas de un bloque `map` ("default upgrade;", "'' close;")
-    # por directivas: en Nginx son pares clave-valor válidos. Solo se ignoran los errores dentro de un `map`.
+    # como directivas: en Nginx son pares clave-valor válidos. Solo se ignoran los errores dentro de un `map`.
     def inside_map(error):
         if not error.get("file") or not error.get("line"):
             return False
         text = Path(error["file"]).read_text(encoding="utf-8").splitlines()
         for start, line in enumerate(text, 1):
             if re.match(r"\s*map\s", line):
-                end = next(i for i in range(start, len(text) + 1) if text[i - 1].strip() == "}")
-                if start < error["line"] < end:
+                end = next((i for i in range(start, len(text) + 1) if text[i - 1].strip() == "}"), None)
+                if end is not None and start < error["line"] < end:
                     return True
         return False
 

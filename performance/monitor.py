@@ -44,6 +44,8 @@ def sonda(url, contexto):
 
 
 def main():
+    if len(sys.argv) < 3:
+        sys.exit("Uso: python performance/monitor.py <salida.csv> <archivo-de-parada>")
     salida, parada = sys.argv[1], sys.argv[2]
     url = os.getenv("SONDA_URL", "https://localhost:8443/health")
     ca = os.getenv("SONDA_CA")
@@ -69,11 +71,12 @@ def main():
                 w.writerow([ts, "contenedor", d.get("Name"), round(cpu, 2), round(megas(d.get("MemUsage", "").split("/")[0]), 1)])
             w.writerow([ts, "host", "cpu_total", psutil.cpu_percent(None), round(psutil.virtual_memory().used / 2**20, 1)])
             k6_cpu = 0.0
+            nucleos = psutil.cpu_count() or 1
             for p in psutil.process_iter(["name"]):
                 if (p.info["name"] or "").lower().startswith("k6"):
                     proc = procesos.setdefault(p.pid, p)
                     try:
-                        k6_cpu += proc.cpu_percent(None) / psutil.cpu_count()
+                        k6_cpu += proc.cpu_percent(None) / nucleos
                     except psutil.Error:
                         pass
             w.writerow([ts, "host", "k6", round(k6_cpu, 2), ""])

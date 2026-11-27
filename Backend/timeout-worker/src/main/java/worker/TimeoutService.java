@@ -20,7 +20,8 @@ import org.springframework.web.client.RestClientResponseException;
  * vencido) o POST .../{id}/expire (espera caducada), con { expectedVersion }.
  *
  * <p>Procesa en secuencia y no guarda estado: lo que no se cierra en un ciclo vuelve a aparecer
- * en la consulta siguiente. Un error en una partida no impide procesar las demás.
+ * en la consulta siguiente. Un error en una partida no impide procesar las demás, a menos que
+ * Game Logic deje de estar disponible.
  */
 @Service
 public class TimeoutService{
@@ -114,8 +115,10 @@ public class TimeoutService{
             }
         }
 
-        if(counts.getOrDefault(Outcome.CLOSED, 0) > 0 || log.isDebugEnabled()){
+        if(counts.getOrDefault(Outcome.CLOSED, 0) > 0){
             log.info("Ciclo de cierre: {}", counts);
+        }else if(log.isDebugEnabled()){
+            log.debug("Ciclo de cierre: {}", counts);
         }
         return counts;
     }

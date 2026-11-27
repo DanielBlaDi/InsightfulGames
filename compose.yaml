@@ -1,4 +1,4 @@
-name: InsightfulGames
+name: insightfulgames
 
 x-service: &service
   restart: unless-stopped
@@ -9,7 +9,7 @@ x-waf-tls-env: &waf-tls-env
   SSL_CERT_FILE: /etc/nginx/edge-certs/tls.crt
   SSL_CERT_KEY_FILE: /etc/nginx/edge-certs/tls.key
   SSL_PROTOCOLS: "TLSv1.2 TLSv1.3"
-  # Same ECDHE + AEAD list as Backend/reverse-proxy/nginx/common.conf (the image default also allows DHE)
+  # Same ECDHE + AEAD list as backend/reverse-proxy/nginx/common.conf (the image default also allows DHE)
   SSL_CIPHERS: "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305"
   SSL_OCSP_STAPLING: "off"             # development certificates have no OCSP responder
   # Plain HTTP is never proxied: 301 to HTTPS before ModSecurity or the reverse proxy see the request
@@ -39,12 +39,19 @@ x-internal-ca: &internal-ca
   bind:
     create_host_path: false
 
+x-real-ip-conf: &real-ip-conf
+  type: bind
+  source: ./backend/waf/real-ip.conf
+  target: /etc/nginx/conf.d/real-ip.conf
+  read_only: true
+  bind:
+    create_host_path: false
+
 services:
   waf-web:
+    <<: *service
     image: owasp/modsecurity-crs:nginx
     container_name: waf-web
-    restart: unless-stopped
-
     environment:
       <<: *waf-tls-env
       BACKEND: "https://reverse-proxy-web:8443"
@@ -57,28 +64,23 @@ services:
       # gateway (DELETE /api/auth/account, PATCH /api/games|matches/{id}/visibility). Rule 911100 stays
       # active for any other method; paranoia level and anomaly thresholds unchanged.
       ALLOWED_METHODS: "GET HEAD POST OPTIONS PATCH DELETE"
-
     ports:
       - "${FRONTEND_PORT:?}:8080"          # HTTP: only 301 to HTTPS
       - "${FRONTEND_HTTPS_PORT:?}:8443"    # HTTPS + WSS
-
     volumes:
       - *edge-cert
       - *internal-ca
-
     networks:
       public_network:
         ipv4_address: 10.20.1.13
-
     depends_on:
       reverse-proxy-web:
         condition: service_healthy
 
   waf-mobile:
+    <<: *service
     image: owasp/modsecurity-crs:nginx
     container_name: waf-mobile
-    restart: unless-stopped
-
     environment:
       <<: *waf-tls-env
       BACKEND: "https://reverse-proxy-mobile:8443"
@@ -89,18 +91,14 @@ services:
       MODSEC_AUDIT_LOG: "/dev/stdout"
       # Approved by the WAF owner: CRS default + DELETE (DELETE /auth/account); the mobile gateway has no PATCH.
       ALLOWED_METHODS: "GET HEAD POST OPTIONS DELETE"
-
     ports:
       - "${MOBILE_HTTPS_PORT:?}:8443"      # HTTPS only: mobile HTTP is not published
-
     volumes:
       - *edge-cert
       - *internal-ca
-
     networks:
       public_network:
         ipv4_address: 10.20.1.14
-
     depends_on:
       reverse-proxy-mobile:
         condition: service_healthy
@@ -120,10 +118,10 @@ services:
     <<: *service
     container_name: reverse-proxy-web
     build:
-      context: ./Backend/reverse-proxy
+      context: ./backend/reverse-proxy
       dockerfile: Dockerfile
       args:
-        ENTRY: web            # nginx/common.conf + nginx/web.conf
+        ENTRY: web            # nginx/common.conf + nginx/web.conf.template
         HEALTH_PORT: "8000"
     image: reverse-proxy-web:dev
     expose:
@@ -133,7 +131,7 @@ services:
       PUBLIC_HTTPS_PORT: ${FRONTEND_HTTPS_PORT:?}   # port used in the HTTP -> HTTPS redirect
       HSTS_MAX_AGE: ${HSTS_MAX_AGE:?}
     volumes:
-      - ./Backend/waf/real-ip.conf:/etc/nginx/conf.d/real-ip.conf:ro
+      - *real-ip-conf
       - type: bind
         source: ${INTERNAL_WEB_TLS_DIR:?}      # certs/internal/reverse-proxy-web (SAN reverse-proxy-web)
         target: /etc/nginx/certs
@@ -155,10 +153,10 @@ services:
     <<: *service
     container_name: reverse-proxy-mobile
     build:
-      context: ./Backend/reverse-proxy
+      context: ./backend/reverse-proxy
       dockerfile: Dockerfile
       args:
-        ENTRY: mobile         # nginx/common.conf + nginx/mobile.conf
+        ENTRY: mobile         # nginx/common.conf + nginx/mobile.conf.template
         HEALTH_PORT: "8090"
     image: reverse-proxy-mobile:dev
     expose:
@@ -167,7 +165,7 @@ services:
     environment:
       HSTS_MAX_AGE: ${HSTS_MAX_AGE:?}
     volumes:
-      - ./Backend/waf/real-ip.conf:/etc/nginx/conf.d/real-ip.conf:ro
+      - *real-ip-conf
       - type: bind
         source: ${INTERNAL_MOBILE_TLS_DIR:?}   # certs/internal/reverse-proxy-mobile (SAN reverse-proxy-mobile)
         target: /etc/nginx/certs
@@ -190,7 +188,7 @@ services:
     <<: *service
     container_name: frontend-component
     build:
-      context: ./Frontend
+      context: ./frontend
       dockerfile: Dockerfile
     image: frontend:dev
     expose:
@@ -200,6 +198,12 @@ services:
     networks:
       private_api:
         ipv4_address: 10.20.2.12
+    healthcheck:
+      test: ["CMD", "node", "--input-type=commonjs", "-e", "require('http').get('http://127.0.0.1:80/', (r) => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     depends_on:
       api-gateway-component:
         condition: service_healthy
@@ -211,7 +215,7 @@ services:
     <<: *service
     container_name: api-gateway-mobile
     build:
-      context: ./Backend
+      context: ./backend
       dockerfile: api-gateway-mobile/Dockerfile
     image: api-gateway-mobile:dev
     expose:
@@ -233,7 +237,7 @@ services:
       private_back:
         ipv4_address: 10.20.3.10
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/health')"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -254,7 +258,7 @@ services:
     <<: *service
     container_name: api-gateway-component
     build:
-      context: ./Backend
+      context: ./backend
       dockerfile: api-gateway/Dockerfile
     image: api-gateway-component:dev
     expose:
@@ -274,14 +278,14 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:?}
       COOKIE_SECURE: ${COOKIE_SECURE:?}
       WS_ALLOWED_ORIGINS: ${WS_ALLOWED_ORIGINS:?}
-      CORS_ORIGINS: http://localhost:80,http://localhost:5173,http://localhost:3000
+      CORS_ORIGINS: https://localhost:${FRONTEND_HTTPS_PORT:?},https://127.0.0.1:${FRONTEND_HTTPS_PORT:?},http://localhost:${FRONTEND_PORT:?},http://localhost:5173,http://localhost:3000
     networks:
       private_api:
         ipv4_address: 10.20.2.14
       private_back:
         ipv4_address: 10.20.3.11
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health')"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -309,7 +313,7 @@ services:
     <<: *service
     container_name: auth-component
     build:
-      context: ./Backend/auth-component
+      context: ./backend/auth-component
       dockerfile: Dockerfile
     image: auth-component:dev
     expose:
@@ -343,7 +347,7 @@ services:
     <<: *service
     container_name: game-logic-component
     build:
-      context: ./Backend/GameLogic
+      context: ./backend/GameLogic
       dockerfile: Dockerfile
     image: game-logic-component:dev
     expose:
@@ -373,7 +377,7 @@ services:
     <<: *service
     container_name: single-player-component
     build:
-      context: ./Backend/GameService
+      context: ./backend/GameService
       dockerfile: Dockerfile
     image: single-player-component:dev
     expose:
@@ -401,7 +405,7 @@ services:
     <<: *service
     container_name: multiplayer-component
     build:
-      context: ./Backend/multiplayer-component
+      context: ./backend/multiplayer-component
       dockerfile: Dockerfile
     image: multiplayer-component:dev
     expose:
@@ -432,7 +436,7 @@ services:
     <<: *service
     container_name: tutor-component
     build:
-      context: ./Backend/tutor-component
+      context: ./backend/tutor-component
       dockerfile: Dockerfile
     image: tutor-component:dev
     expose:
@@ -468,7 +472,7 @@ services:
     <<: *service
     container_name: botcito-component
     build:
-      context: ./Backend/botcito-component
+      context: ./backend/botcito-component
       dockerfile: Dockerfile
     image: botcito-component:dev
     expose:
@@ -495,9 +499,9 @@ services:
     <<: *service
     container_name: botcito-analysis-component
     build:
-      context: ./Backend/botcito-component
+      context: ./backend/botcito-component
       dockerfile: Dockerfile
-    image: botcito-component:dev
+    image: botcito-analysis-component:dev
     expose:
       - "8091"
     environment:
@@ -523,7 +527,7 @@ services:
     <<: *service
     container_name: profile-stats-component
     build:
-      context: ./Backend/profile-stats-component
+      context: ./backend/profile-stats-component
       dockerfile: Dockerfile
     image: profile-stats-component:dev
     expose:
@@ -557,7 +561,7 @@ services:
     <<: *service
     container_name: timeout-worker
     build:
-      context: ./Backend/timeout-worker
+      context: ./backend/timeout-worker
       dockerfile: Dockerfile
     image: timeout-worker:dev
     expose:
@@ -575,8 +579,8 @@ services:
       test: ["CMD", "/app/timeout-worker", "-health"]
       interval: 15s
       timeout: 5s
-      retries: 5
-      start_period: 10s
+      retries: 10
+      start_period: 40s
     depends_on:
       game-logic-component:
         condition: service_healthy
@@ -585,7 +589,7 @@ services:
     <<: *service
     container_name: analysis-worker
     build:
-      context: ./Backend/analysis-worker
+      context: ./backend/analysis-worker
       dockerfile: Dockerfile
     image: analysis-worker:dev
     expose:
@@ -615,6 +619,10 @@ services:
       retries: 5
       start_period: 15s
     depends_on:
+      game-logic-component:
+        condition: service_healthy
+      botcito-analysis-component:
+        condition: service_healthy
       mongo-analysis:
         condition: service_healthy
       rabbitmq:
@@ -662,7 +670,7 @@ services:
     volumes:
       - mongo-data:/data/db
       - type: bind
-        source: ./Databases/mongo/init-mongo.sh
+        source: ./database/mongo/init-mongo.sh
         target: /docker-entrypoint-initdb.d/init-mongo.sh
         read_only: true
         bind:
@@ -693,7 +701,7 @@ services:
     volumes:
       - mongo-analysis-data:/data/db
       - type: bind
-        source: ./Databases/mongo/init-mongo.sh
+        source: ./database/mongo/init-mongo.sh
         target: /docker-entrypoint-initdb.d/init-mongo.sh
         read_only: true
         bind:
@@ -722,7 +730,7 @@ services:
     volumes:
       - mysql-data:/var/lib/mysql
       - type: bind
-        source: ./Databases/auth/01-init.sql
+        source: ./database/auth/01-init.sql
         target: /docker-entrypoint-initdb.d/01-init.sql
         read_only: true
         bind:
@@ -750,7 +758,7 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - type: bind
-        source: ./Databases/profile/01-init.sql
+        source: ./database/profile/01-init.sql
         target: /docker-entrypoint-initdb.d/01-init.sql
         read_only: true
         bind:
